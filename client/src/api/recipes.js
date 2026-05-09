@@ -5,7 +5,7 @@ export function getAllRecipes() {
 }
 
 export function getRecipesByProduct(productId) {
-  return api.get(`/recipes?productId=${productId}`)
+  return api.get(`/recipes/by-product/${productId}`)
 }
 
 export function getRecipeById(id) {
