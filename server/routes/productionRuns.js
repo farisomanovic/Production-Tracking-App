@@ -96,6 +96,13 @@ router.post('/', async (req, res) => {
         if (!date || !startTime || !operatorId || !machineId || !productId || !recipeId) {
             return res.status(400).json({ error: 'date, startTime, operatorId, machineId, productId and recipeId are required' })
         }
+        // Guard inactive operator
+        const operator = await prisma.operator.findUnique({
+            where: { id: operatorId }
+        })
+        if (!operator || !operator.active) {
+            return res.status(400).json({ error: 'Operator is inactive or does not exist' })
+        }
 
         const run = await prisma.productionRun.create({
             data: {
@@ -221,6 +228,22 @@ router.post('/:id/complete', async (req, res) => {
                         quantityUsed: m.quantityUsed
                     }))
                 })
+            }
+
+            // Deduct used quantities from material stock
+            if (materialUsages && materialUsages.length > 0) {
+                await Promise.all(
+                    materialUsages.map(m =>
+                        tx.material.update({
+                            where: { id: m.materialId },
+                            data: {
+                                stockQty: {
+                                    decrement: m.quantityUsed
+                                }
+                            }
+                        })
+                    )
+                )
             }
 
             // Create outputs
