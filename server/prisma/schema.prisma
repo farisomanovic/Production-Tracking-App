@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Operator {
+  id        String   @id @default(uuid())
+  name      String
+  active    Boolean  @default(true)
+
+  productionRuns ProductionRun[]
+}
+
+model Machine {
+  id       String  @id @default(uuid())
+  name     String
+  code     String?  @unique
+  active   Boolean @default(true)
+
+  machineParameters MachineParameter[]
+  machineProducts   MachineProduct[]
+  productionRuns    ProductionRun[]
+}
+
+model Parameter {
+  id          String  @id @default(uuid())
+  name        String
+  unit        String?
+  description String?
+
+  machineParameters MachineParameter[]
+}
+
+model MachineParameter {
+  id           String @id @default(uuid())
+  displayOrder Int    @default(0)
+
+  machineId   String
+  parameterId String
+
+  machine   Machine   @relation(fields: [machineId], references: [id])
+  parameter Parameter @relation(fields: [parameterId], references: [id])
+
+  runParameterValues RunParameterValue[]
+
+  @@unique([machineId, parameterId])
+  @@unique([machineId, displayOrder])
+}
+
+model Product {
+  id          String @id @default(uuid())
+  name        String
+  code        String @unique
+  widthMm     Float?
+  thicknessMm Float?
+  lengthM     Float?
+  description String?
+  unit        String
+
+  machineProducts MachineProduct[]
+  recipes         Recipe[]
+  runOutputs      RunOutput[]
+  productionRuns  ProductionRun[]
+}
+
+model MachineProduct {
+  id String @id @default(uuid())
+
+  machineId String
+  productId String
+
+  machine Machine @relation(fields: [machineId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([machineId, productId])
+}
+
+model Material {
+  id       String @id @default(uuid())
+  name     String
+  unit     String
+  supplier String?
+  stockQty Float  @default(0)
+
+  recipeItems    RecipeItem[]
+  materialUsages MaterialUsage[]
+}
+
+model Recipe {
+  id        String   @id @default(uuid())
+  name      String
+  isDefault Boolean  @default(false)
+  notes     String?
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  recipeItems    RecipeItem[]
+  productionRuns ProductionRun[]
+}
+
+model RecipeItem {
+  id           String @id @default(uuid())
+  percentage   Float
+  plannedQtyKg Float?
+
+  recipeId   String
+  materialId String
+
+  recipe   Recipe   @relation(fields: [recipeId], references: [id])
+  material Material @relation(fields: [materialId], references: [id])
+
+  @@unique([recipeId, materialId])
+}
+
+model ProductionRun {
+  id              String    @id @default(uuid())
+  date            DateTime  @db.Date
+  startTime       DateTime  @db.Timestamp
+  endTime         DateTime? @db.Timestamp
+  warmupStartTime DateTime? @db.Timestamp
+  stableStartTime DateTime? @db.Timestamp
+  energyStart     Float?
+  energyEnd       Float?
+  notes           String?
+  potentialBuyer  String?
+  status          String    @default("in_progress")
+
+  operatorId String
+  machineId  String
+  productId  String
+  recipeId   String
+
+  operator Operator @relation(fields: [operatorId], references: [id])
+  machine  Machine  @relation(fields: [machineId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+  recipe   Recipe  @relation(fields: [recipeId], references: [id])
+
+  runParameterValues RunParameterValue[]
+  materialUsages     MaterialUsage[]
+  runOutputs         RunOutput[]
+}
+
+model RunParameterValue {
+  id         String   @id @default(uuid())
+  value      Float
+  recordedAt DateTime @default(now())
+
+  productionRunId    String
+  machineParameterId String
+
+  productionRun    ProductionRun    @relation(fields: [productionRunId], references: [id])
+  machineParameter MachineParameter @relation(fields: [machineParameterId], references: [id])
+
+  @@unique([productionRunId, machineParameterId])
+}
+
+model MaterialUsage {
+  id             String @id @default(uuid())
+  quantityUsed   Float
+
+  productionRunId String
+  materialId      String
+
+  productionRun ProductionRun @relation(fields: [productionRunId], references: [id])
+  material      Material      @relation(fields: [materialId], references: [id])
+
+  @@unique([productionRunId, materialId])
+}
+
+model RunOutput {
+  id               String  @id @default(uuid())
+  quantityProduced Float
+  grossWeightKg    Float?
+  scrapKg          Float?
+
+  productionRunId String
+  productId       String
+
+  productionRun ProductionRun @relation(fields: [productionRunId], references: [id])
+  product       Product       @relation(fields: [productId], references: [id])
+}
