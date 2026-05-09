@@ -26,29 +26,25 @@ router.get('/', async (req, res) => {
 
 // GET recepies for single product
 // GET all recipes for a single product
-router.get('/', async (req, res) => {
-try {
-    const { productId } = req.query
+router.get('/by-product/:productId', async (req, res) => {
+    try {
+        const { productId } = req.params
 
-    const recipes = await prisma.recipe.findMany({
-    where: {
-        ...(productId && { productId })
-    },
-    orderBy: { name: 'asc' },
-    include: {
-        product: true,
-        recipeItems: {
-        include: {
-            material: true
-        }
-        }
+        const recipes = await prisma.recipe.findMany({
+            where: { productId },
+            orderBy: { name: 'asc' },
+            include: {
+                product: true,
+                recipeItems: {
+                    include: { material: true }
+                }
+            }
+        })
+        res.json(recipes)
+    } catch (error) {
+        console.error('GET /recipes/by-product error:', error)
+        res.status(500).json({ error: 'Failed to fetch recipes' })
     }
-    })
-    res.json(recipes)
-} catch (error) {
-    console.error('GET all /recipes error:', error)
-    res.status(500).json({ error: 'Failed to fetch recipes' })
-}
 })
 
 // GET single recipe by id
