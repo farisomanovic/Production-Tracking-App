@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAllMachines, createMachine } from '../api/machines'
+import { getAllMachines, createMachine, updateMachine } from '../api/machines'
 
 function MachinesPage() {
   const [machines, setMachines] = useState([])
@@ -7,6 +7,8 @@ function MachinesPage() {
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editingCode, setEditingCode] = useState('')
 
   async function fetchMachines() {
     try {
@@ -44,6 +46,37 @@ function MachinesPage() {
     }
   }
 
+  async function handleDeactivate(id) {
+    try {
+        await updateMachine(id, { active: false })
+        fetchMachines()
+    } catch (err) {
+        setError('Failed to deactivate machine')
+        console.error(err)
+    }
+  }
+
+  async function handleActivate(id) {
+      try {
+          await updateMachine(id, { active: true })
+          fetchMachines()
+      } catch (err) {
+          setError('Failed to activate machine')
+          console.error(err)
+      }
+  }
+
+  async function handleSaveCode(id) {
+      try {
+          await updateMachine(id, { code: editingCode })
+          setEditingId(null)
+          fetchMachines()
+      } catch (err) {
+          setError('Failed to update machine code')
+          console.error(err)
+      }
+  }
+
   if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
   if (error) return <p style={{ padding: '16px', color: 'red' }}>{error}</p>
 
@@ -74,13 +107,52 @@ function MachinesPage() {
       <div style={styles.list}>
         {machines.map((machine) => (
           <div key={machine.id} style={styles.card}>
-            <div style={styles.cardLeft}>
-              <span style={styles.cardName}>{machine.name}</span>
-              <span style={styles.cardType}>{machine.code}</span>
-            </div>
-            <span style={machine.active ? styles.badgeActive : styles.badgeInactive}>
-              {machine.active ? 'Active' : 'Inactive'}
-            </span>
+              <div style={styles.cardLeft}>
+                  <span style={styles.cardName}>{machine.name}</span>
+                  {editingId === machine.id ? (
+                      <div style={styles.editRow}>
+                          <input
+                              style={styles.editInput}
+                              value={editingCode}
+                              onChange={e => setEditingCode(e.target.value)}
+                              placeholder="Machine code"
+                          />
+                          <button style={styles.saveButton} onClick={() => handleSaveCode(machine.id)}>
+                              Save
+                          </button>
+                          <button style={styles.cancelButton} onClick={() => setEditingId(null)}>
+                              Cancel
+                          </button>
+                      </div>
+                  ) : (
+                      <div style={styles.editRow}>
+                          <span style={styles.cardType}>{machine.code}</span>
+                          <button
+                              style={styles.editButton}
+                              onClick={() => {
+                                  setEditingId(machine.id)
+                                  setEditingCode(machine.code || '')
+                              }}
+                          >
+                              Edit code
+                          </button>
+                      </div>
+                  )}
+              </div>
+              <div style={styles.cardRight}>
+                  <span style={machine.active ? styles.badgeActive : styles.badgeInactive}>
+                      {machine.active ? 'Active' : 'Inactive'}
+                  </span>
+                  {machine.active ? (
+                      <button style={styles.deactivateButton} onClick={() => handleDeactivate(machine.id)}>
+                          Deactivate
+                      </button>
+                  ) : (
+                      <button style={styles.activateButton} onClick={() => handleActivate(machine.id)}>
+                          Activate
+                      </button>
+                  )}
+              </div>
           </div>
         ))}
       </div>
@@ -162,6 +234,69 @@ const styles = {
     padding: '4px 8px',
     borderRadius: '12px',
   },
+  editRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+},
+editInput: {
+    padding: '4px 8px',
+    borderRadius: '6px',
+    border: '1px solid #333',
+    backgroundColor: '#0a0a0a',
+    color: '#ffffff',
+    fontSize: '12px',
+},
+editButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#1a1a2e',
+    color: '#888',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
+saveButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#1b3a1f',
+    color: '#4caf50',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
+cancelButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#3a1b1b',
+    color: '#f44336',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
+cardRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+},
+deactivateButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#3a1b1b',
+    color: '#f44336',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
+activateButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#1b3a1f',
+    color: '#4caf50',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
 }
 
 export default MachinesPage

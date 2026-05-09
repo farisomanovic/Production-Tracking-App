@@ -129,9 +129,9 @@ return (
         }}
         >
         <option value=''>Select machine...</option>
-        {machines.map(machine => (
+        {machines.filter(m => m.active).map(machine => (
             <option key={machine.id} value={machine.id}>
-            {machine.name}
+                {machine.name}
             </option>
         ))}
         </select>
