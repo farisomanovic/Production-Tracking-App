@@ -108,9 +108,9 @@ return (
         onChange={e => setOperatorId(e.target.value)}
         >
         <option value=''>Select operator...</option>
-        {operators.map(op => (
+        {operators.filter(op => op.active).map(op => (
             <option key={op.id} value={op.id}>
-            {op.name}
+                {op.name}
             </option>
         ))}
         </select>

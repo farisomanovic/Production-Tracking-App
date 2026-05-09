@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAllOperators, createOperator } from '../api/operators'
+import { getAllOperators, createOperator, updateOperator } from '../api/operators'
 
 function OperatorsPage() {
   const [operators, setOperators] = useState([])
@@ -39,6 +39,26 @@ function OperatorsPage() {
     }
   }
 
+  async function handleDeactivate(id) {
+    try {
+        await updateOperator(id, { active: false })
+        fetchOperators()
+    } catch (err) {
+        setError('Failed to deactivate operator')
+        console.error(err)
+    }
+  }
+
+  async function handleActivate(id) {
+    try {
+        await updateOperator(id, { active: true })
+        fetchOperators()
+    } catch (err) {
+        setError('Failed to activate operator')
+        console.error(err)
+    }
+  }
+
   if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
   if (error) return <p style={{ padding: '16px', color: 'red' }}>{error}</p>
 
@@ -62,10 +82,28 @@ function OperatorsPage() {
       <div style={styles.list}>
         {operators.map((operator) => (
           <div key={operator.id} style={styles.card}>
-            <span style={styles.cardName}>{operator.name}</span>
-            <span style={operator.active ? styles.badgeActive : styles.badgeInactive}>
-              {operator.active ? 'Active' : 'Inactive'}
-            </span>
+              <span style={styles.cardName}>{operator.name}</span>
+              <div style={styles.cardRight}>
+                  <span style={operator.active ? styles.badgeActive : styles.badgeInactive}>
+                      {operator.active ? 'Active' : 'Inactive'}
+                  </span>
+                  {operator.active && (
+                      <button
+                          style={styles.deactivateButton}
+                          onClick={() => handleDeactivate(operator.id)}
+                      >
+                          Deactivate
+                      </button>
+                  )}
+                  {!operator.active && (
+                      <button
+                          style={styles.activateButton}
+                          onClick={() => handleActivate(operator.id)}
+                      >
+                          Activate
+                      </button>
+                  )}
+              </div>
           </div>
         ))}
       </div>
@@ -138,6 +176,29 @@ const styles = {
     padding: '4px 8px',
     borderRadius: '12px',
   },
+  cardRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+},
+deactivateButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#3a1b1b',
+    color: '#f44336',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
+activateButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#1b3a1f',
+    color: '#4caf50',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
 }
 
 export default OperatorsPage
