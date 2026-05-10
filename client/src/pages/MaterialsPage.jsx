@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAllMaterials, createMaterial } from '../api/materials'
+import { getAllMaterials, createMaterial, updateMaterial } from '../api/materials'
 
 function MaterialsPage() {
   const [materials, setMaterials] = useState([])
@@ -9,6 +9,8 @@ function MaterialsPage() {
   const [stockQty, setStockQty] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editingStock, setEditingStock] = useState('')
 
   async function fetchMaterials() {
     try {
@@ -47,6 +49,23 @@ function MaterialsPage() {
     } catch (err) {
       setError('Failed to create material')
       console.error(err)
+    }
+  }
+
+  async function handleAddStock(id, currentStock) {
+    const amount = parseFloat(editingStock)
+    if (isNaN(amount) || amount <= 0) {
+        setError('Please enter a valid positive number')
+        return
+    }
+    try {
+        await updateMaterial(id, { stockQty: currentStock + amount })
+        setEditingId(null)
+        setEditingStock('')
+        fetchMaterials()
+    } catch (err) {
+        setError('Failed to update stock')
+        console.error(err)
     }
   }
 
@@ -94,16 +113,51 @@ function MaterialsPage() {
       <div style={styles.list}>
         {materials.map((material) => (
           <div key={material.id} style={styles.card}>
-            <div style={styles.cardLeft}>
-              <span style={styles.cardName}>{material.name}</span>
-              <span style={styles.cardType}>{material.unit}</span>
-              {material.supplier && (
-                <span style={styles.cardType}>{material.supplier}</span>
-              )}
-              <span style={styles.cardType}>{material.stockQty}</span>
-            </div>
+              <div style={styles.cardLeft}>
+                  <span style={styles.cardName}>{material.name}</span>
+                  <span style={styles.cardType}>{material.unit}</span>
+                  {material.supplier && (
+                      <span style={styles.cardType}>{material.supplier}</span>
+                  )}
+                  <span style={styles.cardType}>
+                      Stock: {material.stockQty ?? 0} {material.unit}
+                  </span>
+                  {editingId === material.id ? (
+                      <div style={styles.editRow}>
+                          <input
+                              style={styles.editInput}
+                              type='number'
+                              value={editingStock}
+                              onChange={e => setEditingStock(e.target.value)}
+                              placeholder={`Amount to add (${material.unit})`}
+                          />
+                          <button
+                              style={styles.saveButton}
+                              onClick={() => handleAddStock(material.id, material.stockQty ?? 0)}
+                          >
+                              Add
+                          </button>
+                          <button
+                              style={styles.cancelButton}
+                              onClick={() => {
+                                  setEditingId(null)
+                                  setEditingStock('')
+                              }}
+                          >
+                              Cancel
+                          </button>
+                      </div>
+                  ) : (
+                      <button
+                          style={styles.editButton}
+                          onClick={() => setEditingId(material.id)}
+                      >
+                          + Add delivery
+                      </button>
+                  )}
+              </div>
           </div>
-        ))}
+      ))}
       </div>
     </div>
   )
@@ -169,6 +223,49 @@ const styles = {
     color: '#888',
     fontSize: '12px',
   },
+  editRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginTop: '4px',
+},
+editInput: {
+    padding: '4px 8px',
+    borderRadius: '6px',
+    border: '1px solid #333',
+    backgroundColor: '#0a0a0a',
+    color: '#ffffff',
+    fontSize: '12px',
+    width: '140px',
+},
+editButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#1a1a2e',
+    color: '#888',
+    fontSize: '12px',
+    cursor: 'pointer',
+    marginTop: '4px',
+},
+saveButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#1b3a1f',
+    color: '#4caf50',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
+cancelButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: '#3a1b1b',
+    color: '#f44336',
+    fontSize: '12px',
+    cursor: 'pointer',
+},
 }
 
 export default MaterialsPage
