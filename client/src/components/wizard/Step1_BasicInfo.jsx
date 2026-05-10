@@ -164,10 +164,11 @@ return (
     <div style={styles.field}>
         <label style={styles.label}>Date *</label>
         <input
-        style={styles.input}
-        type='date'
-        value={date}
-        onChange={e => setDate(e.target.value)}
+            style={styles.input}
+            type='date'
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
         />
     </div>
 

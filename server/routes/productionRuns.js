@@ -98,6 +98,15 @@ router.post('/', async (req, res) => {
         const operator = await prisma.operator.findUnique({
             where: { id: operatorId }
         })
+
+        // Guard future date
+        const selectedDate = new Date(date)
+        const today = new Date()
+        today.setUTCHours(23, 59, 59, 999)
+        if (selectedDate > today) {
+            return res.status(400).json({ error: 'Production run date cannot be in the future' })
+        }
+
         if (!operator || !operator.active) {
             return res.status(400).json({ error: 'Operator is inactive or does not exist' })
         }
