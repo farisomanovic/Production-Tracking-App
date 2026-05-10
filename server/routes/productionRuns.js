@@ -12,11 +12,9 @@ router.get('/', async (req, res) => {
         if (operatorId) where.operatorId = operatorId
         if (productId) where.productId = productId
         if (date) {
-            const start = new Date(date)
-            start.setHours(0, 0, 0, 0)
-            const end = new Date(date)
-            end.setHours(23, 59, 59, 999)
-            where.date = { gte: start, lte: end }
+            const filterDate = new Date(`${date}T00:00:00.000Z`)
+            const filterDateEnd = new Date(`${date}T23:59:59.999Z`)
+            where.date = { gte: filterDate, lte: filterDateEnd }
         }
         const runs = await prisma.productionRun.findMany({
             where,
