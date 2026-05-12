@@ -1,21 +1,29 @@
-// This tells Prisma to generate a JavaScript/TypeScript client.
+// ---------------------------------------------------------
+// PRODUCTION TRACKING SCHEMA
+// ---------------------------------------------------------
+// Core Entities: Operator, Machine, Product, Material
+// Config Entities: Recipe (Product blueprint), MachineParameter (Machine setup)
+// Transactional Entity: ProductionRun (The central event)
+// ---------------------------------------------------------
+// This file defines the database schema for the production tracking application using Prisma. 
+// The schema is designed to allow for soft deletion of operators and machines, as well as tracking of material usage and run outputs.
+// The generator block specifies that Prisma should generate a JavaScript/TypeScript client, 
+// which will be used to interact with the database in the application code.
 // This tells Prisma "when I run npx prisma generate, produce a JavaScript client library." 
-// That client library is what gives you prisma.operator.findMany() and 
-// all the other methods you use in your route files. 
+// That client library is what gives prisma.operator.findMany() and all the other methods used in route files. 
 // Without this block, Prisma wouldn't know what kind of code to generate.
 generator client {
   provider = "prisma-client-js"
 }
 
-// This tells Prisma which database to connect to and how
+// This block defines the connection to the database. It specifies that we are using PostgreSQL as our database provider,
+// and that the connection URL should be taken from the DATABASE_URL environment variable.
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// Active field is for soft delete. If we hard delete an operator 
-// we would delete all the runs related to him.
-// Also its only liked to productionRun we dont need operators anywhere else.
+// Active status is for soft deletion.
 model Operator {
   id        String   @id @default(uuid())
   name      String
@@ -23,11 +31,8 @@ model Operator {
 
   productionRuns ProductionRun[]
 }
-
-// Same goes for machine. Also code is optional since some machines might not have it.
-// Its linked to machineParameter table since one parameter can be present at many machines,
-// and one machine can have many parameters. Same goes for products. And we also need it
-// in productionRun since we want to know on which machine did we create the run etc.
+ 
+// Optional code is for unique identification, and active status for soft deletion.
 model Machine {
   id       String  @id @default(uuid())
   name     String
@@ -39,7 +44,6 @@ model Machine {
   productionRuns    ProductionRun[]
 }
 
-// Unit optional since some parameters are unitless. Linked to machineParameter as explained previously.
 model Parameter {
   id          String  @id @default(uuid())
   name        String
@@ -49,12 +53,12 @@ model Parameter {
   machineParameters MachineParameter[]
 }
 
-// Joint table for machine and parameter. Has machneId and parameterId as foregin keys that point
-// to machine and parameter tables respectively. DisplayOrder is used to determine in what order 
-// to display parameters since when i am starting to log parameters i am at the top of the machine i dont want
-// to log parameter from the bottom of machine. Linked to runParameterValues that will be explained in the respected table.
-// 2 Unique constraints since one machine can not be linked to the same parameter twice and
-// one parameter cant have same displayOrder priority as another one.
+
+// displayOrder field is used to specify the order of parameters on the form.
+// We have a unique constraint on machineId and parameterId to ensure that the same 
+// parameter is not added multiple times to the same machine.
+// We also have a unique constraint on machineId and displayOrder to ensure that the same 
+// display order is not used for multiple parameters on the same machine.
 model MachineParameter {
   id           String @id @default(uuid())
   displayOrder Int    @default(0)
@@ -71,11 +75,7 @@ model MachineParameter {
   @@unique([machineId, displayOrder])
 }
 
-// All the optional fields are optional since some products have it some not.
-// Linked to machineProducts as explained previously. Linked to recepies because we need to specify
-// for what product is the recepie.
-// Linked to runOutput since the output is products. Linked to productionRun since we want to know what
-// did we want to produce that run.
+// We have a unique constraint on the code field to ensure that each product has a unique code.
 model Product {
   id          String @id @default(uuid())
   name        String
@@ -92,7 +92,8 @@ model Product {
   productionRuns  ProductionRun[]
 }
 
-// Joint table for machine and products as explained previously.
+// We have a unique constraint on machineId and productId to ensure that the same 
+// machine-product combination is not added multiple times.
 model MachineProduct {
   id String @id @default(uuid())
 
@@ -105,9 +106,6 @@ model MachineProduct {
   @@unique([machineId, productId])
 }
 
-// stockQty field to track the stock of the material. Linked to recepieItem since one recepieItem
-// is actually material and linked to materialUsages to know how much material and which material
-// was used during the run.
 model Material {
   id       String @id @default(uuid())
   name     String
@@ -119,10 +117,9 @@ model Material {
   materialUsages MaterialUsage[]
 }
 
-// One recepie can have multiple materials and one material can be in multiple recepies.
-// That is why we have recepieItem to specify to what recepie does what belong.
-// isDefault used to auto-choose it on the form.
-// Linked to productionRun since we want to know what recepie was used.
+// Recipe is a mixture of materials used in production of a product. A product can have multiple recipes, 
+// but only one can be the default recipe.
+// isDefault is used to indicate if it is the default recipe for the product.
 model Recipe {
   id        String   @id @default(uuid())
   name      String
@@ -136,7 +133,9 @@ model Recipe {
   productionRuns ProductionRun[]
 }
 
-// Table to connect materials to recepie and specify their percentage.
+// This table is used to connect recipes and materials, and specify the percentage of each material in the recipe,
+// as well as the planned quantity in kg for each material. We have a unique constraint on recipeId 
+// and materialId to ensure that the same material is not added multiple times to the same recipe
 model RecipeItem {
   id           String @id @default(uuid())
   percentage   Float
@@ -181,7 +180,9 @@ model ProductionRun {
   runOutputs         RunOutput[]
 }
 
-// Used to record the actual values of parameter each run.
+// This table is used to record the values of machine parameters during a production run. 
+// We have a unique constraint on productionRunId and machineParameterId to ensure that the same parameter 
+// value is not recorded multiple times for the same run.
 model RunParameterValue {
   id         String   @id @default(uuid())
   value      Float
@@ -196,7 +197,10 @@ model RunParameterValue {
   @@unique([productionRunId, machineParameterId])
 }
 
-// Used to record how much material was used during a run.
+// This table is used to record the quantity of each material used during a production run.
+// We have a unique constraint on productionRunId and materialId to ensure that the same material usage
+// is not recorded multiple times for the same run.
+// quantityUsed is the actual quantity used during the run, which may differ from the planned quantity in the recipe.
 model MaterialUsage {
   id             String @id @default(uuid())
   quantityUsed   Float
@@ -210,7 +214,8 @@ model MaterialUsage {
   @@unique([productionRunId, materialId])
 }
 
-// Used to track what was made during a run.
+// This table is used to record the output of a production run, including the quantity produced, 
+// gross weight, and scrap weight.
 model RunOutput {
   id               String  @id @default(uuid())
   quantityProduced Float

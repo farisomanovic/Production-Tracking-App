@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET all parameters
+// GET method to fetch all parameters, ordered by name
 router.get('/', async (req, res) => {
     try {
         const parameters = await prisma.parameter.findMany({
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
     }
 })
 
-// GET single parameter by id
+// GET method to fetch a single parameter by ID
 router.get('/:id', async (req, res) => {
     try {       
         const parameter = await prisma.parameter.findUnique({
@@ -32,7 +32,7 @@ router.get('/:id', async (req, res) => {
     }   
 })
 
-// POST create new parameter    
+// POST method to create a new parameter
 router.post('/', async (req, res) => {
     try {
         const { name, unit, description } = req.body
@@ -52,7 +52,7 @@ router.post('/', async (req, res) => {
     }       
 })
 
-// PUT update parameter
+// PUT method to update a parameter
 router.put('/:id', async (req, res) => {
     try {   
         const { name, unit, description } = req.body

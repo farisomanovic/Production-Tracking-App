@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET all machines
+// GET method to fetch all machines, ordered by name
 router.get('/', async (req, res) => {
   try {
     const machines = await prisma.machine.findMany({
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// GET single machine by id
+// GET method to fetch a single machine by ID
 router.get('/:id', async (req, res) => {
   try {
     const machine = await prisma.machine.findUnique({
@@ -32,7 +32,7 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-// POST create new machine
+// POST method to create a new machine
 router.post('/', async (req, res) => {
   try {
     const { name, code } = req.body
@@ -41,6 +41,7 @@ router.post('/', async (req, res) => {
     }
     const machine = await prisma.machine.create({
       data: { name,
+        // We are using a conditional spread to only include the code field if it is provided in the request body.
         ...(code !== undefined && { code }),
       }
     })
@@ -51,7 +52,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-// PUT update machine
+// PUT method to update a machine
 router.put('/:id', async (req, res) => {
   try {
     const { name, code, active } = req.body

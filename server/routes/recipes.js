@@ -3,12 +3,13 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET all recipes
+// GET method to fetch all recipes, ordered by name
 router.get('/', async (req, res) => {
     try {
         const recipes = await prisma.recipe.findMany({
             orderBy: { name: 'asc' },
             include: {
+                // Include product details and recipe items with material details
                 product: true,
                 recipeItems: {
                     include: {
@@ -24,8 +25,7 @@ router.get('/', async (req, res) => {
     }
 })
 
-// GET recepies for single product
-// GET all recipes for a single product
+// GET method to fetch recipes by product ID
 router.get('/by-product/:productId', async (req, res) => {
     try {
         const { productId } = req.params
@@ -47,7 +47,7 @@ router.get('/by-product/:productId', async (req, res) => {
     }
 })
 
-// GET single recipe by id
+// GET method to fetch a single recipe by ID
 router.get('/:id', async (req, res) => {
     try {
         const recipe = await prisma.recipe.findUnique({
@@ -71,12 +71,11 @@ router.get('/:id', async (req, res) => {
     }
 })
 
-// POST create recipe with items
+// POST method to create a new recipe with items that are part of RecepieItem table 
 router.post('/', async (req, res) => {
     try {
         const { name, productId, isDefault, notes, items } = req.body
 
-        // Guard required fields
         if (!name || !productId) {
             return res.status(400).json({ error: 'name and productId are required' })
         }
@@ -99,6 +98,10 @@ router.post('/', async (req, res) => {
                 ...(isDefault !== undefined && { isDefault }),
                 ...(notes !== undefined && { notes }),
                 recipeItems: {
+                    // Create related recipe items in one step using nested writes.
+                    // We are writing to the RecipeItem table, which has a many-to-one relationship with both Recipe and Material.
+                    // We are using a map to transform the items array from the request body into the format 
+                    // expected by Prisma for creating related records.
                     create: items.map(item => ({
                         materialId: item.materialId,
                         percentage: item.percentage,
@@ -122,7 +125,7 @@ router.post('/', async (req, res) => {
     }
 })
 
-// PUT update recipe
+// PUT method to update a recipe and its items
 router.put('/:id', async (req, res) => {
     try {
         const { name, isDefault, notes } = req.body

@@ -3,11 +3,14 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET all production runs
+// GET all production runs with optional filters for machine, operator, product and date
 router.get('/', async (req, res) => {
     try {
         const { machineId, operatorId, productId, date } = req.query
         const where = {}
+        // Dynamically build the where clause based on provided filters
+        // This allows us to use the same endpoint for various filter combinations without needing separate 
+        // endpoints for each filter type.
         if (machineId) where.machineId = machineId
         if (operatorId) where.operatorId = operatorId
         if (productId) where.productId = productId
@@ -17,6 +20,8 @@ router.get('/', async (req, res) => {
             where.date = { gte: filterDate, lte: filterDateEnd }
         }
         const runs = await prisma.productionRun.findMany({
+            // We are using the dynamically built where clause to filter the production runs 
+            // based on the query parameters provided in the request.
             where,
             orderBy: { date: 'desc' },
             include: {
@@ -33,7 +38,7 @@ router.get('/', async (req, res) => {
     }
 })
 
-// GET single production run by id
+// GET method to fetch a single production run by ID with all related details
 router.get('/:id', async (req, res) => {
     try {
         const run = await prisma.productionRun.findUnique({
@@ -74,7 +79,7 @@ router.get('/:id', async (req, res) => {
     }
 })
 
-// POST start a new production run
+// POST method start a new production run with required fields and optional fields
 router.post('/', async (req, res) => {
     try {
         const {
@@ -139,7 +144,7 @@ router.post('/', async (req, res) => {
     }
 })
 
-// PUT update a production run
+// PUT method to update a production run with optional fields (cannot change machine, operator, product or recipe)
 router.put('/:id', async (req, res) => {
     try {
         const {
@@ -177,12 +182,11 @@ router.put('/:id', async (req, res) => {
     }
 })
 
-// POST complete a production run
+// POST method to complete a production run with required fields and optional fields, also creates related parameter values, material usages and outputs in the same transaction
 router.post('/:id/complete', async (req, res) => {
     try {
         const { endTime, energyEnd, notes, parameterValues, materialUsages, outputs } = req.body
 
-        // Guard required fields
         if (!endTime) {
             return res.status(400).json({ error: 'endTime is required to complete a run' })
         }
@@ -210,6 +214,7 @@ router.post('/:id/complete', async (req, res) => {
             const updatedRun = await tx.productionRun.update({
                 where: { id: req.params.id },
                 data: {
+                    // When completing a run, we set the status to 'completed' 
                     status: 'completed',
                     endTime: new Date(endTime),
                     ...(energyEnd !== undefined && { energyEnd }),
@@ -219,6 +224,8 @@ router.post('/:id/complete', async (req, res) => {
 
             // Create parameter values
             await tx.runParameterValue.createMany({
+                // We are creating related parameter values in one step using createMany for efficiency.
+                // We are mapping the parameterValues array from the request body to the format expected by Prisma.
                 data: parameterValues.map(p => ({
                     productionRunId: req.params.id,
                     machineParameterId: p.machineParameterId,
@@ -245,6 +252,8 @@ router.post('/:id/complete', async (req, res) => {
                             where: { id: m.materialId },
                             data: {
                                 stockQty: {
+                                    // We are using the decrement operation to reduce the stock quantity 
+                                    // of the material by the quantity used in this production run.
                                     decrement: m.quantityUsed
                                 }
                             }

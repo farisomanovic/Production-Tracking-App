@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET all materials
+// GET method to fetch all materials, ordered by name
 router.get('/', async (req, res) => {
     try {
         const materials = await prisma.material.findMany({
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
     }
 })
 
-// GET single material by id
+// GET method to fetch a single material by ID
 router.get('/:id', async (req, res) => {
     try {
         const material = await prisma.material.findUnique({ 
@@ -32,7 +32,7 @@ router.get('/:id', async (req, res) => {
     }   
 })
 
-// POST create new material
+// POST method to create a new material
 router.post('/', async (req, res) => {
     try {
         const { name, unit, supplier, stockQty } = req.body
@@ -52,7 +52,7 @@ router.post('/', async (req, res) => {
     }       
 })
 
-// PUT update material
+// PUT method to update a material
 router.put('/:id', async (req, res) => {
     try {   
         const { name, unit, supplier, stockQty } = req.body
