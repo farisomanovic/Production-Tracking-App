@@ -1,7 +1,11 @@
-// This file is used to create a single instance of the PrismaClient and export it for use throughout the application.
-// We are simply creating a new Object of the PrismaClient class and exporting it as the default export of this module.
 import { PrismaClient } from '@prisma/client'
 
+/**
+ * Shared Prisma client instance.
+ *
+ * Route modules import this singleton so database access goes through one
+ * configured client instead of creating a new connection pool per file.
+ */
 const prisma = new PrismaClient()
 
 export default prisma

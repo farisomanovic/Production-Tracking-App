@@ -3,7 +3,11 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET method to fetch all machines, ordered by name
+/**
+ * GET /
+ *
+ * Returns all machines in display order.
+ */
 router.get('/', async (req, res) => {
   try {
     const machines = await prisma.machine.findMany({
@@ -16,7 +20,11 @@ router.get('/', async (req, res) => {
   }
 })
 
-// GET method to fetch a single machine by ID
+/**
+ * GET /:id
+ *
+ * Returns one machine by primary key.
+ */
 router.get('/:id', async (req, res) => {
   try {
     const machine = await prisma.machine.findUnique({
@@ -32,7 +40,12 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-// POST method to create a new machine
+/**
+ * POST /
+ *
+ * Creates a machine. The optional code is persisted only when supplied because
+ * the database enforces uniqueness on non-null machine codes.
+ */
 router.post('/', async (req, res) => {
   try {
     const { name, code } = req.body
@@ -41,7 +54,6 @@ router.post('/', async (req, res) => {
     }
     const machine = await prisma.machine.create({
       data: { name,
-        // We are using a conditional spread to only include the code field if it is provided in the request body.
         ...(code !== undefined && { code }),
       }
     })
@@ -52,7 +64,12 @@ router.post('/', async (req, res) => {
   }
 })
 
-// PUT method to update a machine
+/**
+ * PUT /:id
+ *
+ * Updates mutable machine fields. The active flag supports soft deletion while
+ * preserving existing production run history.
+ */
 router.put('/:id', async (req, res) => {
   try {
     const { name, code, active } = req.body

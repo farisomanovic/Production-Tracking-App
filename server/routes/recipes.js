@@ -3,13 +3,17 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET method to fetch all recipes, ordered by name
+/**
+ * GET /
+ *
+ * Returns all recipes with their product and material composition included.
+ */
 router.get('/', async (req, res) => {
     try {
         const recipes = await prisma.recipe.findMany({
             orderBy: { name: 'asc' },
             include: {
-                // Include product details and recipe items with material details
+                // Include relation data needed to display each recipe as a full material breakdown.
                 product: true,
                 recipeItems: {
                     include: {
@@ -25,7 +29,12 @@ router.get('/', async (req, res) => {
     }
 })
 
-// GET method to fetch recipes by product ID
+/**
+ * GET /by-product/:productId
+ *
+ * Returns recipes for one product, including material details for selection and
+ * review screens.
+ */
 router.get('/by-product/:productId', async (req, res) => {
     try {
         const { productId } = req.params
@@ -47,7 +56,11 @@ router.get('/by-product/:productId', async (req, res) => {
     }
 })
 
-// GET method to fetch a single recipe by ID
+/**
+ * GET /:id
+ *
+ * Returns one recipe by primary key with its product and recipe-item relations.
+ */
 router.get('/:id', async (req, res) => {
     try {
         const recipe = await prisma.recipe.findUnique({
@@ -71,7 +84,12 @@ router.get('/:id', async (req, res) => {
     }
 })
 
-// POST method to create a new recipe with items that are part of RecepieItem table 
+/**
+ * POST /
+ *
+ * Creates a recipe and its RecipeItem rows in one nested write. Recipe items
+ * must be present and total 100% so the bill of materials is complete.
+ */
 router.post('/', async (req, res) => {
     try {
         const { name, productId, isDefault, notes, items } = req.body
@@ -80,12 +98,12 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'name and productId are required' })
         }
 
-        // Guard items exist and are not empty
+        // A recipe without materials cannot drive production planning.
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ error: 'At least one recipe item is required' })
         }
 
-        // Guard percentages add up to 100
+        // Percentages must represent a complete formula before the recipe is saved.
         const total = items.reduce((sum, item) => sum + item.percentage, 0)
         if (Math.round(total) !== 100) {
             return res.status(400).json({ error: `Recipe items must add up to 100%. Currently: ${total}%` })
@@ -98,10 +116,7 @@ router.post('/', async (req, res) => {
                 ...(isDefault !== undefined && { isDefault }),
                 ...(notes !== undefined && { notes }),
                 recipeItems: {
-                    // Create related recipe items in one step using nested writes.
-                    // We are writing to the RecipeItem table, which has a many-to-one relationship with both Recipe and Material.
-                    // We are using a map to transform the items array from the request body into the format 
-                    // expected by Prisma for creating related records.
+                    // Nested writes keep the Recipe and RecipeItem rows consistent in one create call.
                     create: items.map(item => ({
                         materialId: item.materialId,
                         percentage: item.percentage,
@@ -125,7 +140,12 @@ router.post('/', async (req, res) => {
     }
 })
 
-// PUT method to update a recipe and its items
+/**
+ * PUT /:id
+ *
+ * Updates recipe metadata. Recipe items are not modified here because changing
+ * formula composition requires separate validation of the 100% total.
+ */
 router.put('/:id', async (req, res) => {
     try {
         const { name, isDefault, notes } = req.body

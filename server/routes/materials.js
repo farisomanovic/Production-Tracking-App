@@ -3,7 +3,11 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET method to fetch all materials, ordered by name
+/**
+ * GET /
+ *
+ * Returns all materials in display order, including current stock quantities.
+ */
 router.get('/', async (req, res) => {
     try {
         const materials = await prisma.material.findMany({
@@ -16,7 +20,11 @@ router.get('/', async (req, res) => {
     }
 })
 
-// GET method to fetch a single material by ID
+/**
+ * GET /:id
+ *
+ * Returns one material by primary key.
+ */
 router.get('/:id', async (req, res) => {
     try {
         const material = await prisma.material.findUnique({ 
@@ -32,7 +40,12 @@ router.get('/:id', async (req, res) => {
     }   
 })
 
-// POST method to create a new material
+/**
+ * POST /
+ *
+ * Creates a material master record. Optional supplier and stock values are
+ * stored only when supplied by the client.
+ */
 router.post('/', async (req, res) => {
     try {
         const { name, unit, supplier, stockQty } = req.body
@@ -52,7 +65,11 @@ router.post('/', async (req, res) => {
     }       
 })
 
-// PUT method to update a material
+/**
+ * PUT /:id
+ *
+ * Updates material metadata or the current stock quantity.
+ */
 router.put('/:id', async (req, res) => {
     try {   
         const { name, unit, supplier, stockQty } = req.body
@@ -72,4 +89,4 @@ router.put('/:id', async (req, res) => {
     }   
 })
 
-export default router   
+export default router

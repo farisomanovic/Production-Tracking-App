@@ -3,25 +3,28 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET all production runs with optional filters for machine, operator, product and date
+/**
+ * GET /
+ *
+ * Returns production runs with optional machine, operator, product, and date
+ * filters. Related master data is included so the client can render a complete
+ * run summary without follow-up requests.
+ */
 router.get('/', async (req, res) => {
     try {
         const { machineId, operatorId, productId, date } = req.query
         const where = {}
-        // Dynamically build the where clause based on provided filters
-        // This allows us to use the same endpoint for various filter combinations without needing separate 
-        // endpoints for each filter type.
+        // Build one Prisma where object so any combination of filters can share this endpoint.
         if (machineId) where.machineId = machineId
         if (operatorId) where.operatorId = operatorId
         if (productId) where.productId = productId
         if (date) {
+            // Convert the date-only query into an inclusive UTC day range for DateTime filtering.
             const filterDate = new Date(`${date}T00:00:00.000Z`)
             const filterDateEnd = new Date(`${date}T23:59:59.999Z`)
             where.date = { gte: filterDate, lte: filterDateEnd }
         }
         const runs = await prisma.productionRun.findMany({
-            // We are using the dynamically built where clause to filter the production runs 
-            // based on the query parameters provided in the request.
             where,
             orderBy: { date: 'desc' },
             include: {
@@ -38,7 +41,12 @@ router.get('/', async (req, res) => {
     }
 })
 
-// GET method to fetch a single production run by ID with all related details
+/**
+ * GET /:id
+ *
+ * Returns one production run with the full set of related operational details:
+ * recipe composition, recorded parameter values, material usage, and outputs.
+ */
 router.get('/:id', async (req, res) => {
     try {
         const run = await prisma.productionRun.findUnique({
@@ -79,7 +87,13 @@ router.get('/:id', async (req, res) => {
     }
 })
 
-// POST method start a new production run with required fields and optional fields
+/**
+ * POST /
+ *
+ * Starts a production run. Required foreign keys identify the operator, machine,
+ * product, and recipe being used; optional values capture setup details that
+ * may not be known at run start.
+ */
 router.post('/', async (req, res) => {
     try {
         const {
@@ -99,12 +113,12 @@ router.post('/', async (req, res) => {
         if (!date || !startTime || !operatorId || !machineId || !productId || !recipeId) {
             return res.status(400).json({ error: 'date, startTime, operatorId, machineId, productId and recipeId are required' })
         }
-        // Guard inactive operator
+        // Inactive operators remain in history, but cannot be assigned to new runs.
         const operator = await prisma.operator.findUnique({
             where: { id: operatorId }
         })
 
-        // Guard future date
+        // Reject future run dates because production runs represent actual shop-floor events.
         const selectedDate = new Date(date)
         const today = new Date()
         today.setUTCHours(23, 59, 59, 999)
@@ -144,7 +158,12 @@ router.post('/', async (req, res) => {
     }
 })
 
-// PUT method to update a production run with optional fields (cannot change machine, operator, product or recipe)
+/**
+ * PUT /:id
+ *
+ * Updates mutable run fields only. Machine, operator, product, and recipe are
+ * intentionally fixed after creation to preserve the run's production context.
+ */
 router.put('/:id', async (req, res) => {
     try {
         const {
@@ -182,7 +201,13 @@ router.put('/:id', async (req, res) => {
     }
 })
 
-// POST method to complete a production run with required fields and optional fields, also creates related parameter values, material usages and outputs in the same transaction
+/**
+ * POST /:id/complete
+ *
+ * Completes a production run and records its measured parameters, consumed
+ * materials, and outputs. All writes run inside one transaction so the run
+ * cannot be marked completed without its related production data.
+ */
 router.post('/:id/complete', async (req, res) => {
     try {
         const { endTime, energyEnd, notes, parameterValues, materialUsages, outputs } = req.body
@@ -197,7 +222,7 @@ router.post('/:id/complete', async (req, res) => {
             return res.status(400).json({ error: 'At least one output is required' })
         }
 
-        // Check run exists and is not already completed
+        // Validate state before writing related records to avoid duplicate completion data.
         const existing = await prisma.productionRun.findUnique({
             where: { id: req.params.id }
         })
@@ -208,13 +233,12 @@ router.post('/:id/complete', async (req, res) => {
             return res.status(400).json({ error: 'Production run is already completed' })
         }
 
-        // Do everything in one transaction
+        // Keep status, parameter values, material usage, stock deductions, and outputs atomic.
         const run = await prisma.$transaction(async (tx) => {
-            // Update the run itself
             const updatedRun = await tx.productionRun.update({
                 where: { id: req.params.id },
                 data: {
-                    // When completing a run, we set the status to 'completed' 
+                    // Marking status here makes completion the authoritative state transition.
                     status: 'completed',
                     endTime: new Date(endTime),
                     ...(energyEnd !== undefined && { energyEnd }),
@@ -222,10 +246,8 @@ router.post('/:id/complete', async (req, res) => {
                 }
             })
 
-            // Create parameter values
             await tx.runParameterValue.createMany({
-                // We are creating related parameter values in one step using createMany for efficiency.
-                // We are mapping the parameterValues array from the request body to the format expected by Prisma.
+                // createMany efficiently records the machine-specific measurements for this run.
                 data: parameterValues.map(p => ({
                     productionRunId: req.params.id,
                     machineParameterId: p.machineParameterId,
@@ -233,7 +255,7 @@ router.post('/:id/complete', async (req, res) => {
                 }))
             })
 
-            // Create material usages if provided
+            // Material usage is optional because some runs may only record output and parameters.
             if (materialUsages && materialUsages.length > 0) {
                 await tx.materialUsage.createMany({
                     data: materialUsages.map(m => ({
@@ -244,7 +266,7 @@ router.post('/:id/complete', async (req, res) => {
                 })
             }
 
-            // Deduct used quantities from material stock
+            // Stock is decremented in the same transaction as usage logging to keep inventory aligned.
             if (materialUsages && materialUsages.length > 0) {
                 await Promise.all(
                     materialUsages.map(m =>
@@ -252,8 +274,6 @@ router.post('/:id/complete', async (req, res) => {
                             where: { id: m.materialId },
                             data: {
                                 stockQty: {
-                                    // We are using the decrement operation to reduce the stock quantity 
-                                    // of the material by the quantity used in this production run.
                                     decrement: m.quantityUsed
                                 }
                             }
@@ -262,7 +282,7 @@ router.post('/:id/complete', async (req, res) => {
                 )
             }
 
-            // Create outputs
+            // Outputs record sellable quantity and optional weight/scrap metrics for the run.
             await tx.runOutput.createMany({
                 data: outputs.map(o => ({
                     productionRunId: req.params.id,
@@ -273,7 +293,7 @@ router.post('/:id/complete', async (req, res) => {
                 }))
             })
 
-            // Return the full completed run
+            // Return the completed aggregate shape expected by the detail view.
             return tx.productionRun.findUnique({
                 where: { id: req.params.id },
                 include: {

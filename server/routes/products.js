@@ -3,7 +3,11 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET method to fetch all products, ordered by name
+/**
+ * GET /
+ *
+ * Returns all products in display order.
+ */
 router.get('/', async (req, res) => {
     try {
         const products = await prisma.product.findMany({
@@ -16,7 +20,11 @@ router.get('/', async (req, res) => {
     }      
 })
 
-// GET method to fetch a single product by ID
+/**
+ * GET /:id
+ *
+ * Returns one product by primary key.
+ */
 router.get('/:id', async (req, res) => {
     try {
         const product = await prisma.product.findUnique({
@@ -32,7 +40,12 @@ router.get('/:id', async (req, res) => {
     }
 })  
 
-// POST method to create a new product
+/**
+ * POST /
+ *
+ * Creates a product master record. The product code is passed to Prisma because
+ * the schema enforces code uniqueness at the database level.
+ */
 router.post('/', async (req, res) => {
     try {
         const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body
@@ -54,7 +67,11 @@ router.post('/', async (req, res) => {
     }       
 })
 
-// PUT method to update a product
+/**
+ * PUT /:id
+ *
+ * Updates mutable product fields while preserving omitted values.
+ */
 router.put('/:id', async (req, res) => {
     try {
         const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body

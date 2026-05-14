@@ -3,7 +3,11 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET method to fetch all operators, ordered by name
+/**
+ * GET /
+ *
+ * Returns all operators in display order.
+ */
 router.get('/', async (req, res) => {
   try {
     const operators = await prisma.operator.findMany({
@@ -16,7 +20,11 @@ router.get('/', async (req, res) => {
   }
 })
 
-// GET method to fetch a single operator by ID
+/**
+ * GET /:id
+ *
+ * Returns one operator by primary key.
+ */
 router.get('/:id', async (req, res) => {
   try {
     const operator = await prisma.operator.findUnique({
@@ -32,7 +40,12 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-// POST method to create a new operator
+/**
+ * POST /
+ *
+ * Creates an operator. Operators are active by default according to the Prisma
+ * schema, so only the required name is accepted here.
+ */
 router.post('/', async (req, res) => {
   try {
     const { name } = req.body
@@ -49,7 +62,12 @@ router.post('/', async (req, res) => {
   }
 })
 
-// PUT method to update an operator
+/**
+ * PUT /:id
+ *
+ * Updates mutable operator fields. The active flag supports soft deletion
+ * without breaking historical production run relations.
+ */
 router.put('/:id', async (req, res) => {
   try {
     const { name, active } = req.body

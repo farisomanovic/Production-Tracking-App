@@ -3,7 +3,11 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// GET method to fetch all parameters, ordered by name
+/**
+ * GET /
+ *
+ * Returns all configurable machine parameters in display order.
+ */
 router.get('/', async (req, res) => {
     try {
         const parameters = await prisma.parameter.findMany({
@@ -16,7 +20,11 @@ router.get('/', async (req, res) => {
     }
 })
 
-// GET method to fetch a single parameter by ID
+/**
+ * GET /:id
+ *
+ * Returns one parameter definition by primary key.
+ */
 router.get('/:id', async (req, res) => {
     try {       
         const parameter = await prisma.parameter.findUnique({
@@ -32,7 +40,12 @@ router.get('/:id', async (req, res) => {
     }   
 })
 
-// POST method to create a new parameter
+/**
+ * POST /
+ *
+ * Creates a reusable parameter definition that can later be assigned to one or
+ * more machines through the machine-parameter link table.
+ */
 router.post('/', async (req, res) => {
     try {
         const { name, unit, description } = req.body
@@ -52,7 +65,11 @@ router.post('/', async (req, res) => {
     }       
 })
 
-// PUT method to update a parameter
+/**
+ * PUT /:id
+ *
+ * Updates the parameter metadata used when collecting production run values.
+ */
 router.put('/:id', async (req, res) => {
     try {   
         const { name, unit, description } = req.body
