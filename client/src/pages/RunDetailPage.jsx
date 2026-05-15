@@ -467,8 +467,8 @@ return (
         <p style={styles.sectionLabel}>Times</p>
         <div style={styles.infoCard}>
         <InfoRow label='Warmup Start' value={formatTime(run.warmupStartTime)} />
-        <InfoRow label='Stable Start' value={formatTime(run.stableStartTime)} />
         <InfoRow label='Production Start' value={formatTime(run.startTime)} />
+        <InfoRow label='Stable Start' value={formatTime(run.stableStartTime)} />
         <InfoRow label='End Time' value={formatTime(run.endTime)} />
         </div>
     </div>
