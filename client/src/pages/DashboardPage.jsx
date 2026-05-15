@@ -37,9 +37,10 @@ export default function DashboardPage() {
 
   function formatTime(dateStr) {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleTimeString('en-GB', {
+    return new Date(dateStr).toLocaleTimeString('en-US', {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: true
     })
   }
 

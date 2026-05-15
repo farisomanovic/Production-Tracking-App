@@ -52,9 +52,10 @@ function formatDate(dateStr) {
 
 function formatTime(dateStr) {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit'
+    return new Date(dateStr).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
     })
 }
 
