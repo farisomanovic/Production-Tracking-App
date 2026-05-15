@@ -262,39 +262,6 @@ return (
 
     {error && <div style={styles.errorBox}>{error}</div>}
 
-    {/* End Time */}
-    <div style={styles.section}>
-        <p style={styles.sectionLabel}>Completion</p>
-        <div style={styles.field}>
-        <label style={styles.label}>End Time *</label>
-        <input
-            style={styles.input}
-            type='time'
-            value={endTime}
-            onChange={e => setEndTime(e.target.value)}
-        />
-        </div>
-        <div style={styles.field}>
-        <label style={styles.label}>Energy Meter End (kWh)</label>
-        <input
-            style={styles.input}
-            type='number'
-            value={energyEnd}
-            onChange={e => setEnergyEnd(e.target.value)}
-            placeholder='e.g. 12500'
-        />
-        </div>
-        <div style={styles.field}>
-        <label style={styles.label}>Notes</label>
-        <textarea
-            style={styles.textarea}
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder='Any observations about this run...'
-            rows={3}
-        />
-        </div>
-    </div>
 
     {/* Parameters */}
     {machineParameters.length > 0 && (
@@ -432,6 +399,40 @@ return (
         <button style={styles.addButton} onClick={addOutput}>
         + Add Another Output
         </button>
+    </div>
+
+    {/* End Time */}
+    <div style={styles.section}>
+        <p style={styles.sectionLabel}>Completion</p>
+        <div style={styles.field}>
+        <label style={styles.label}>End Time *</label>
+        <input
+            style={styles.input}
+            type='time'
+            value={endTime}
+            onChange={e => setEndTime(e.target.value)}
+        />
+        </div>
+        <div style={styles.field}>
+        <label style={styles.label}>Energy Meter End (kWh)</label>
+        <input
+            style={styles.input}
+            type='number'
+            value={energyEnd}
+            onChange={e => setEnergyEnd(e.target.value)}
+            placeholder='e.g. 12500'
+        />
+        </div>
+        <div style={styles.field}>
+        <label style={styles.label}>Notes</label>
+        <textarea
+            style={styles.textarea}
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder='Any observations about this run...'
+            rows={3}
+        />
+        </div>
     </div>
 
     <button
