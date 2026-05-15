@@ -172,17 +172,6 @@ return (
         />
     </div>
 
-    {/* Start Time */}
-    <div style={styles.field}>
-        <label style={styles.label}>Start Time *</label>
-        <input
-        style={styles.input}
-        type='time'
-        value={startTime}
-        onChange={e => setStartTime(e.target.value)}
-        />
-    </div>
-
     {/* Warmup Start Time */}
     <div style={styles.field}>
         <label style={styles.label}>Warmup Start Time</label>
@@ -191,6 +180,17 @@ return (
         type='time'
         value={warmupStartTime}
         onChange={e => setWarmupStartTime(e.target.value)}
+        />
+    </div>
+
+    {/* Start Time */}
+    <div style={styles.field}>
+        <label style={styles.label}>Start Time *</label>
+        <input
+        style={styles.input}
+        type='time'
+        value={startTime}
+        onChange={e => setStartTime(e.target.value)}
         />
     </div>
 
