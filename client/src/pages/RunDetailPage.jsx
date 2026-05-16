@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getRunById, completeRun, getAllRuns } from '../api/productionRuns'
+import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
 
@@ -75,6 +75,16 @@ function formatDate(dateStr) {
     })
 }
 
+async function handleDelete() {
+    try {
+        await deleteRun(run.id)
+        navigate('/runs')
+    } catch (err) {
+        console.error(err)
+        setError('Failed to delete production run')
+    }
+}
+
 function formatTime(dateStr) {
     if (!dateStr) return '—'
     return new Date(dateStr).toLocaleTimeString('en-US', {
@@ -111,7 +121,12 @@ return (
             onCompleted={() => navigate('/runs')}
         />
     ) : (
-        <RunDetailView run={run} formatDate={formatDate} formatTime={formatTime} />
+        <RunDetailView
+        run={run}
+        formatDate={formatDate}
+        formatTime={formatTime}
+        onDelete={handleDelete}
+    />
     )}
 
     </div>
@@ -480,9 +495,18 @@ return (
 }
 
 // Read only detail view for completed runs
-function RunDetailView({ run, formatDate, formatTime }) {
+function RunDetailView({ run, formatDate, formatTime, onDelete }) {
 return (
     <div>
+    <button
+        style={styles.deleteButton}
+        onClick={() => {
+            const confirmed = window.confirm('Are you sure you want to delete this run? This cannot be undone.')
+            if (confirmed) onDelete()
+        }}
+    >
+        Delete Run
+    </button>
     <div style={styles.section}>
         <p style={styles.sectionLabel}>Run Info</p>
         <div style={styles.infoCard}>
@@ -804,5 +828,15 @@ completeButton: {
     cursor: 'pointer',
     width: '100%',
     marginBottom: '2rem',
+},
+deleteButton: {
+    backgroundColor: 'transparent',
+    border: '1px solid #dc2626',
+    color: '#dc2626',
+    padding: '0.5rem 1.25rem',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    marginBottom: '1.5rem',
 },
 }

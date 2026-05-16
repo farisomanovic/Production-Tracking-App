@@ -327,4 +327,57 @@ router.post('/:id/complete', async (req, res) => {
     }
 })
 
+/**
+ * DELETE /:id
+ *
+ * Deletes a production run and all its related records atomically.
+ * Material stock is restored to account for the reversed usage.
+ */
+router.delete('/:id', async (req, res) => {
+    try {
+        const run = await prisma.productionRun.findUnique({
+            where: { id: req.params.id },
+            include: {
+                materialUsages: true
+            }
+        })
+
+        if (!run) {
+            return res.status(404).json({ error: 'Production run not found' })
+        }
+
+        await prisma.$transaction(async (tx) => {
+            // Restore material stock if run was completed
+            if (run.status === 'completed' && run.materialUsages.length > 0) {
+                await Promise.all(
+                    run.materialUsages.map(m =>
+                        tx.material.update({
+                            where: { id: m.materialId },
+                            data: {
+                                stockQty: {
+                                    increment: m.quantityUsed
+                                }
+                            }
+                        })
+                    )
+                )
+            }
+
+            // Delete related records first to avoid foreign key violations
+            await tx.runParameterValue.deleteMany({ where: { productionRunId: req.params.id } })
+            await tx.materialUsage.deleteMany({ where: { productionRunId: req.params.id } })
+            await tx.runOutput.deleteMany({ where: { productionRunId: req.params.id } })
+
+            // Delete the run itself
+            await tx.productionRun.delete({ where: { id: req.params.id } })
+        })
+
+        res.json({ message: 'Production run deleted successfully' })
+
+    } catch (error) {
+        console.error('DELETE /production-runs/:id error:', error)
+        res.status(500).json({ error: 'Failed to delete production run' })
+    }
+})
+
 export default router

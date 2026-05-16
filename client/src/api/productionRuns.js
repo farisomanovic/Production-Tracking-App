@@ -19,3 +19,7 @@ export function updateRun(id, data) {
 export function completeRun(id, data) {
   return api.post(`/production-runs/${id}/complete`, data)
 }
+
+export function deleteRun(id) {
+    return api.delete(`/production-runs/${id}`)
+}
