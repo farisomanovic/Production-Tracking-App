@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getRunById, completeRun } from '../api/productionRuns'
+import { getRunById, completeRun, getAllRuns } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
 
@@ -12,6 +12,7 @@ const navigate = useNavigate()
 const [run, setRun] = useState(null)
 const [machineParameters, setMachineParameters] = useState([])
 const [products, setProducts] = useState([])
+const [lastRunParameterValues, setLastRunParameterValues] = useState([])
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState(null)
 
@@ -29,7 +30,31 @@ useEffect(() => {
         ])
         setMachineParameters(paramsRes.data)
         setProducts(productsRes.data.map(item => item.product))
+
+        // Fetch last completed run for same machine + product to pre-fill parameters
+        try {
+            const lastRunRes = await getAllRuns({
+                machineId: fetchedRun.machineId,
+                productId: fetchedRun.productId,
+                status: 'completed',
+                limit: 1
+            })
+            const lastRunSummary = lastRunRes.data[0]
+            if (lastRunSummary) {
+                const lastRunDetail = await getRunById(lastRunSummary.id)
+                const lastRun = lastRunDetail.data
+                if (lastRun.runParameterValues && lastRun.runParameterValues.length > 0) {
+                    setLastRunParameterValues(lastRun.runParameterValues.map(pv => ({
+                        machineParameterId: pv.machineParameterId,
+                        value: pv.value
+                    })))
+                }
+            }
+        } catch (err) {
+            // Pre-fill is a convenience, failure here should not block the completion form
+            console.error('Could not fetch last run for pre-fill:', err)
         }
+    }
 
     } catch (err) {
         setError('Failed to load production run')
@@ -79,10 +104,11 @@ return (
 
     {run.status === 'in_progress' ? (
         <RunCompleteView
-        run={run}
-        machineParameters={machineParameters}
-        products={products}
-        onCompleted={() => navigate('/runs')}
+            run={run}
+            machineParameters={machineParameters}
+            products={products}
+            lastRunParameterValues={lastRunParameterValues}
+            onCompleted={() => navigate('/runs')}
         />
     ) : (
         <RunDetailView run={run} formatDate={formatDate} formatTime={formatTime} />
@@ -93,7 +119,7 @@ return (
 }
 
 // Completion form for in-progress runs
-function RunCompleteView({ run, machineParameters, products, onCompleted }) {
+function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, onCompleted }) {
 
 const [endTime, setEndTime] = useState('')
 const [energyEnd, setEnergyEnd] = useState('')
@@ -102,7 +128,10 @@ const [notes, setNotes] = useState('')
 const [paramValues, setParamValues] = useState(() => {
     const initial = {}
     machineParameters.forEach(mp => {
-    initial[mp.id] = ''
+        const prefilled = lastRunParameterValues.find(
+            pv => pv.machineParameterId === mp.id
+        )
+        initial[mp.id] = prefilled ? String(prefilled.value) : ''
     })
     return initial
 })
