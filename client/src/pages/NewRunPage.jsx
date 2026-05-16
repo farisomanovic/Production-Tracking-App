@@ -4,7 +4,7 @@ import Step2_Recipe from '../components/wizard/Step2_Recipe'
 import Step3_Parameters from '../components/wizard/Step3_Parameters'
 import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
-import { createRun } from '../api/productionRuns'
+import { createRun, getAllRuns, getRunById  } from '../api/productionRuns'
 
 function toLocalISO(dateStr, timeStr) {
   return `${dateStr}T${timeStr}:00.000`
@@ -81,7 +81,43 @@ function NewRunPage() {
       
       const response = await createRun(payload)
       setRunId(response.data.id)
-      setCurrentStep(3) // Move to parameters step
+
+      // Fetch the last completed run for this machine + product
+      // We use limit 1 and order by date desc so we get the most recent one
+      // We also filter by status=completed so in-progress runs are ignored
+      try {
+      const lastRunRes = await getAllRuns({
+    machineId: data.machineId,
+    productId: data.productId,
+    status: 'completed',
+    limit: 1
+})
+
+const lastRunSummary = lastRunRes.data[0]
+
+if (lastRunSummary) {
+    // Fetch the full run detail which includes runParameterValues
+    const lastRunDetail = await getRunById(lastRunSummary.id)
+    const lastRun = lastRunDetail.data
+
+    console.log('runParameterValues:', lastRun.runParameterValues)
+
+    if (lastRun.runParameterValues && lastRun.runParameterValues.length > 0) {
+        const prefilled = lastRun.runParameterValues.map(pv => ({
+            machineParameterId: pv.machineParameterId,
+            value: pv.value
+        }))
+        console.log('prefilled array:', prefilled)
+        setFormData(prev => ({ ...prev, parameterValues: prefilled }))
+    }
+}
+    } catch (err) {
+        // If the fetch fails for any reason, just continue normally
+        // Pre-filling is a convenience, not a requirement
+        console.error('Could not fetch last run for pre-fill:', err)
+    }
+
+    setCurrentStep(3)
 
     } catch (err) {
       console.error(err)
