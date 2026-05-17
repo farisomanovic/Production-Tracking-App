@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAllRuns } from '../api/productionRuns'
+import { getAllRuns, getRunById } from '../api/productionRuns'
 import { getAllMachines } from '../api/machines'
 import { getAllOperators } from '../api/operators'
 import { getAllProducts } from '../api/products'
@@ -86,6 +86,144 @@ export default function ProductionRunsPage() {
     })
   }
 
+  async function handleExport() {
+      if (!filterMachineId) {
+          alert('Please select a machine before exporting.')
+          return
+      }
+
+      try {
+          // Fetch full detail for each completed run
+          const fullRuns = await Promise.all(
+              completedRuns.map(run => getRunById(run.id).then(res => res.data))
+          )
+
+          if (fullRuns.length === 0) {
+              alert('No completed runs to export with current filters.')
+              return
+          }
+
+          // Collect all unique parameter names for this machine
+          const paramNames = []
+          fullRuns.forEach(run => {
+              run.runParameterValues.forEach(pv => {
+                  const name = `${pv.machineParameter.parameter.name}${pv.machineParameter.parameter.unit ? ` (${pv.machineParameter.parameter.unit})` : ''}`
+                  if (!paramNames.includes(name)) paramNames.push(name)
+              })
+          })
+
+          // Collect all unique material names
+          const materialNames = []
+          fullRuns.forEach(run => {
+              run.materialUsages.forEach(mu => {
+                  if (!materialNames.includes(mu.material.name)) materialNames.push(mu.material.name)
+              })
+          })
+
+          // Build CSV header row
+          const headers = [
+              'Date',
+              'Machine',
+              'Operator',
+              'Product',
+              'Recipe',
+              'Warmup Start',
+              'Start Time',
+              'Stable Start',
+              'End Time',
+              'Energy Start (kWh)',
+              'Energy End (kWh)',
+              'Energy Consumed (kWh)',
+              ...paramNames,
+              ...materialNames.map(n => `${n} Used (kg)`),
+              'Quantity Produced',
+              'Gross Weight (kg)',
+              'Scrap (kg)',
+              'Notes'
+          ]
+
+          // Build one row per run
+          const rows = fullRuns.map(run => {
+              const formatCSVTime = (dateStr) => {
+                  if (!dateStr) return ''
+                  return new Date(dateStr).toLocaleTimeString('en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true
+                  })
+              }
+
+              const energyConsumed = run.energyStart && run.energyEnd
+                  ? (run.energyEnd - run.energyStart).toFixed(1)
+                  : ''
+
+              // Parameter values — match by parameter name
+              const paramValues = paramNames.map(name => {
+                  const match = run.runParameterValues.find(pv => {
+                      const pvName = `${pv.machineParameter.parameter.name}${pv.machineParameter.parameter.unit ? ` (${pv.machineParameter.parameter.unit})` : ''}`
+                      return pvName === name
+                  })
+                  return match ? match.value : ''
+              })
+
+              // Material values — match by material name
+              const materialValues = materialNames.map(name => {
+                  const match = run.materialUsages.find(mu => mu.material.name === name)
+                  return match ? match.quantityUsed : ''
+              })
+
+              // Outputs — flatten into single row (sum if multiple outputs)
+              const totalQty = run.runOutputs.reduce((sum, o) => sum + o.quantityProduced, 0)
+              const totalGross = run.runOutputs.reduce((sum, o) => sum + (o.grossWeightKg || 0), 0)
+              const totalScrap = run.runOutputs.reduce((sum, o) => sum + (o.scrapKg || 0), 0)
+
+              return [
+                  new Date(run.date).toLocaleDateString('en-GB'),
+                  run.machine.name,
+                  run.operator.name,
+                  run.product.name,
+                  run.recipe.name,
+                  formatCSVTime(run.warmupStartTime),
+                  formatCSVTime(run.startTime),
+                  formatCSVTime(run.stableStartTime),
+                  formatCSVTime(run.endTime),
+                  run.energyStart || '',
+                  run.energyEnd || '',
+                  energyConsumed,
+                  ...paramValues,
+                  ...materialValues,
+                  totalQty,
+                  totalGross.toFixed(1),
+                  totalScrap.toFixed(1),
+                  run.notes || ''
+              ]
+          })
+
+          // Convert to CSV string
+          const csvContent = [headers, ...rows]
+              .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+              .join('\n')
+
+          // Trigger download
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          const selectedMachine = machines.find(m => m.id === filterMachineId)
+          const machineCode = selectedMachine?.code || selectedMachine?.name || filterMachineId
+          const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
+          const from = filterDateFrom ? new Date(filterDateFrom).toLocaleDateString('en-GB').replace(/\//g, '-') : today
+          const to = filterDateTo ? new Date(filterDateTo).toLocaleDateString('en-GB').replace(/\//g, '-') : today
+          link.download = `pakom_${from}_${to}_${machineCode}.csv`
+          link.click()
+          URL.revokeObjectURL(url)
+
+      } catch (err) {
+          console.error(err)
+          alert('Export failed. Please try again.')
+      }
+  }
+
   return (
     <div style={styles.container}>
       <h1 style={styles.heading}>Production Runs</h1>
@@ -93,7 +231,7 @@ export default function ProductionRunsPage() {
       {/* Filters */}
       <div style={styles.filtersSection}>
         <p style={styles.filtersLabel}>Filter</p>
-        <div className="filters-grid">
+        <div style={styles.filtersGrid}>
 
           <div style={styles.dateRangeField}>
               <span style={styles.dateLabel}>Machine</span>
@@ -145,21 +283,27 @@ export default function ProductionRunsPage() {
               />
           </div>
 
-      </div>
+          <div style={styles.dateRangeField}>
+              <span style={styles.dateLabel}>Operator</span>
+              <select
+                  style={styles.filterInput}
+                  value={filterOperatorId}
+                  onChange={e => setFilterOperatorId(e.target.value)}
+              >
+                  <option value=''>All Operators</option>
+                  {operators.map(o => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+              </select>
+          </div>
 
-      {/* Operator centered below */}
-      <div className="operator-field">
-          <span style={styles.dateLabel}>Operator</span>
-          <select
-              style={styles.filterInput}
-              value={filterOperatorId}
-              onChange={e => setFilterOperatorId(e.target.value)}
-          >
-              <option value=''>All Operators</option>
-              {operators.map(o => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
-              ))}
-          </select>
+          <div style={styles.dateRangeField}>
+              <span style={styles.dateLabel}>Export</span>
+              <button style={styles.exportButton} onClick={handleExport}>
+                  Export CSV
+              </button>
+          </div>
+
       </div>
 
         {/* Clear filters button — only shown when any filter is active */}
@@ -267,6 +411,11 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
+  filtersGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '0.5rem',
+  },
   filterInput: {
     padding: '0.5rem 0.75rem',
     borderRadius: '8px',
@@ -373,5 +522,14 @@ dateLabel: {
     fontSize: '0.75rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
+},
+exportButton: {
+    padding: '0.5rem 0.75rem',
+    borderRadius: '8px',
+    border: 'none',
+    backgroundColor: '#4f46e5',
+    color: '#ffffff',
+    fontSize: '0.85rem',
+    cursor: 'pointer',
 },
 }
