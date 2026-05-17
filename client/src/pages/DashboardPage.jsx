@@ -14,7 +14,7 @@ export default function DashboardPage() {
       try {
         // Get today's date in YYYY-MM-DD format for the filter
         const today = new Date().toISOString().split('T')[0]
-        const response = await getAllRuns({ date: today })
+        const response = await getAllRuns({ dateFrom: today, dateTo: today })
         setRuns(response.data)
       } catch (err) {
         setError('Failed to load dashboard data')

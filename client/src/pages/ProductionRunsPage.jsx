@@ -22,7 +22,8 @@ export default function ProductionRunsPage() {
   const [filterMachineId, setFilterMachineId] = useState('')
   const [filterOperatorId, setFilterOperatorId] = useState('')
   const [filterProductId, setFilterProductId] = useState('')
-  const [filterDate, setFilterDate] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -56,7 +57,8 @@ export default function ProductionRunsPage() {
         if (filterMachineId) params.machineId = filterMachineId
         if (filterOperatorId) params.operatorId = filterOperatorId
         if (filterProductId) params.productId = filterProductId
-        if (filterDate) params.date = filterDate
+        if (filterDateFrom) params.dateFrom = filterDateFrom
+        if (filterDateTo) params.dateTo = filterDateTo      
 
         const response = await getAllRuns(params)
         const allRuns = response.data
@@ -72,7 +74,7 @@ export default function ProductionRunsPage() {
       }
     }
     loadRuns()
-  }, [filterMachineId, filterOperatorId, filterProductId, filterDate])
+  }, [filterMachineId, filterOperatorId, filterProductId, filterDateFrom, filterDateTo])
 
   // Format a date string for display
   function formatDate(dateStr) {
@@ -91,61 +93,85 @@ export default function ProductionRunsPage() {
       {/* Filters */}
       <div style={styles.filtersSection}>
         <p style={styles.filtersLabel}>Filter</p>
-        <div style={styles.filtersGrid}>
+        <div className="filters-grid">
 
+          <div style={styles.dateRangeField}>
+              <span style={styles.dateLabel}>Machine</span>
+              <select
+                  style={styles.filterInput}
+                  value={filterMachineId}
+                  onChange={e => setFilterMachineId(e.target.value)}
+              >
+                  <option value=''>All Machines</option>
+                  {machines.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+              </select>
+          </div>
+
+          <div style={styles.dateRangeField}>
+              <span style={styles.dateLabel}>Product</span>
+              <select
+                  style={styles.filterInput}
+                  value={filterProductId}
+                  onChange={e => setFilterProductId(e.target.value)}
+              >
+                  <option value=''>All Products</option>
+                  {products.map(p => (
+                      <option key={p.id} value={p.id}>
+                          {p.name}{p.code ? ` — ${p.code}` : ''}
+                      </option>
+                  ))}
+              </select>
+          </div>
+
+          <div style={styles.dateRangeField}>
+              <span style={styles.dateLabel}>From</span>
+              <input
+                  style={styles.filterInput}
+                  type='date'
+                  value={filterDateFrom}
+                  onChange={e => setFilterDateFrom(e.target.value)}
+              />
+          </div>
+
+          <div style={styles.dateRangeField}>
+              <span style={styles.dateLabel}>To</span>
+              <input
+                  style={styles.filterInput}
+                  type='date'
+                  value={filterDateTo}
+                  onChange={e => setFilterDateTo(e.target.value)}
+              />
+          </div>
+
+      </div>
+
+      {/* Operator centered below */}
+      <div className="operator-field">
+          <span style={styles.dateLabel}>Operator</span>
           <select
-            style={styles.filterInput}
-            value={filterMachineId}
-            onChange={e => setFilterMachineId(e.target.value)}
+              style={styles.filterInput}
+              value={filterOperatorId}
+              onChange={e => setFilterOperatorId(e.target.value)}
           >
-            <option value=''>All Machines</option>
-            {machines.map(m => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
+              <option value=''>All Operators</option>
+              {operators.map(o => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
           </select>
-
-          <select
-            style={styles.filterInput}
-            value={filterOperatorId}
-            onChange={e => setFilterOperatorId(e.target.value)}
-          >
-            <option value=''>All Operators</option>
-            {operators.map(o => (
-              <option key={o.id} value={o.id}>{o.name}</option>
-            ))}
-          </select>
-
-          <select
-            style={styles.filterInput}
-            value={filterProductId}
-            onChange={e => setFilterProductId(e.target.value)}
-          >
-            <option value=''>All Products</option>
-            {products.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.code ? ` — ${p.code}` : ''}
-              </option>
-            ))}
-          </select>
-
-          <input
-            style={styles.filterInput}
-            type='date'
-            value={filterDate}
-            onChange={e => setFilterDate(e.target.value)}
-          />
-
-        </div>
+      </div>
 
         {/* Clear filters button — only shown when any filter is active */}
-        {(filterMachineId || filterOperatorId || filterProductId || filterDate) && (
+        {(filterMachineId || filterOperatorId || filterProductId || filterDateFrom || filterDateTo) && (
           <button
             style={styles.clearButton}
             onClick={() => {
               setFilterMachineId('')
               setFilterOperatorId('')
               setFilterProductId('')
-              setFilterDate('')
+              setFilterDateFrom('')
+              setFilterDateTo('')
             }}
           >
             Clear Filters
@@ -240,11 +266,6 @@ const styles = {
     marginBottom: '0.5rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
-  },
-  filtersGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '0.5rem',
   },
   filterInput: {
     padding: '0.5rem 0.75rem',
@@ -342,4 +363,15 @@ const styles = {
     color: '#888',
     fontSize: '0.9rem',
   },
+  dateRangeField: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.25rem',
+},
+dateLabel: {
+    color: '#888',
+    fontSize: '0.75rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+},
 }

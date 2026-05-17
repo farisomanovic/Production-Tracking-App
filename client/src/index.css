@@ -2,3 +2,28 @@ body {
     background-color: #0a0a0a;
     margin: 0;
 }
+
+.filters-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.operator-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 50%;
+    margin: 0.5rem auto 0 auto;
+}
+
+@media (max-width: 600px) {
+    .filters-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .operator-field {
+        width: 100%;
+        margin: 0.5rem 0 0 0;
+    }
+}

@@ -12,18 +12,18 @@ const router = Router()
  */
 router.get('/', async (req, res) => {
     try {
-        const { machineId, operatorId, productId, date, limit, status } = req.query
+        const { machineId, operatorId, productId, dateFrom, dateTo, limit, status } = req.query
         const where = {}
         // Build one Prisma where object so any combination of filters can share this endpoint.
         if (machineId) where.machineId = machineId
         if (operatorId) where.operatorId = operatorId
         if (productId) where.productId = productId
         if (status) where.status = status 
-        if (date) {
-            // Convert the date-only query into an inclusive UTC day range for DateTime filtering.
-            const filterDate = new Date(`${date}T00:00:00.000Z`)
-            const filterDateEnd = new Date(`${date}T23:59:59.999Z`)
-            where.date = { gte: filterDate, lte: filterDateEnd }
+        if (dateFrom || dateTo) {
+            where.date = {
+                ...(dateFrom && { gte: new Date(`${dateFrom}T00:00:00.000Z`) }),
+                ...(dateTo && { lte: new Date(`${dateTo}T23:59:59.999Z`) })
+            }
         }
         const runs = await prisma.productionRun.findMany({
             where,
