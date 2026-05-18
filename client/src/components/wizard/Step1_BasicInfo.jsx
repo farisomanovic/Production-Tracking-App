@@ -1,3 +1,8 @@
+/**
+ * Renders step 1 of the production-run wizard.
+ * Collects operator, machine, product, date, and setup timing fields.
+ * Filters product choices through machine-product compatibility links.
+ */
 import { useState, useEffect } from 'react'
 import { getAllOperators } from '../../api/operators'
 import { getAllMachines } from '../../api/machines'
@@ -108,6 +113,7 @@ return (
         onChange={e => setOperatorId(e.target.value)}
         >
         <option value=''>Select operator...</option>
+        {/* Soft deletion: inactive operators stay in historical runs but are hidden from new-run entry. */}
         {operators.filter(op => op.active).map(op => (
             <option key={op.id} value={op.id}>
                 {op.name}
@@ -129,6 +135,7 @@ return (
         }}
         >
         <option value=''>Select machine...</option>
+        {/* Soft deletion: inactive machines remain traceable but cannot be selected for new production. */}
         {machines.filter(m => m.active).map(machine => (
             <option key={machine.id} value={machine.id}>
                 {machine.name}

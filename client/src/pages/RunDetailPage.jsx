@@ -1,3 +1,8 @@
+/**
+ * Renders production-run detail, completion, editing, and deletion workflows.
+ * Displays related parameters, material usage, outputs, and traceability data.
+ * Completes in-progress runs using machine-specific configuration and outputs.
+ */
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
@@ -66,6 +71,12 @@ useEffect(() => {
     loadRun()
 }, [id])
 
+/**
+ * Formats a production-run date for detail display.
+ *
+ * @param {string} dateStr - Date string returned by the API.
+ * @returns {string} Human-readable date or a fallback dash.
+ */
 function formatDate(dateStr) {
     if (!dateStr) return '—'
     return new Date(dateStr).toLocaleDateString('en-GB', {
@@ -85,6 +96,12 @@ async function handleDelete() {
     }
 }
 
+/**
+ * Formats a production-run timestamp for detail display.
+ *
+ * @param {string} dateStr - Timestamp string returned by the API.
+ * @returns {string} Human-readable time or a fallback dash.
+ */
 function formatTime(dateStr) {
     if (!dateStr) return '—'
     return new Date(dateStr).toLocaleTimeString('en-US', {

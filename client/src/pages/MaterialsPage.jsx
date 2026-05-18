@@ -1,3 +1,8 @@
+/**
+ * Renders material master-data administration.
+ * Supports material creation, editing, and stock quantity updates.
+ * Supplies input materials used by recipes and completed production runs.
+ */
 import { useState, useEffect } from 'react'
 import { getAllMaterials, createMaterial, updateMaterial } from '../api/materials'
 

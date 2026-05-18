@@ -1,3 +1,8 @@
+/**
+ * Renders the administrative hub for master-data maintenance.
+ * Presents setup entry points and machine configuration links.
+ * Keeps configuration workflows separate from production-run entry.
+ */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllMachines } from '../api/machines'

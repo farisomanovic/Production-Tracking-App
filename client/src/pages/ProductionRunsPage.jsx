@@ -1,3 +1,8 @@
+/**
+ * Renders the production-run list, filters, and CSV export workflow.
+ * Separates in-progress and completed runs for operational review.
+ * Fetches related master data needed for filtering and export enrichment.
+ */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllRuns, getRunById } from '../api/productionRuns'
@@ -76,7 +81,12 @@ export default function ProductionRunsPage() {
     loadRuns()
   }, [filterMachineId, filterOperatorId, filterProductId, filterDateFrom, filterDateTo])
 
-  // Format a date string for display
+  /**
+   * Formats an API date string for list display.
+   *
+   * @param {string} dateStr - Date string returned by the API.
+   * @returns {string} Human-readable date or a fallback dash.
+   */
   function formatDate(dateStr) {
     if (!dateStr) return '—'
     return new Date(dateStr).toLocaleDateString('en-GB', {

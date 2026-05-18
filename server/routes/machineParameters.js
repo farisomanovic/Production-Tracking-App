@@ -1,8 +1,7 @@
 /**
- * Machine-parameter assignment routes.
- *
- * Manages the link table that defines which process parameters are collected
- * for each machine. Mounted at /api/machine-parameters.
+ * Handles MachineParameter assignment routes for machine forms.
+ * Defines which process parameters are collected per machine.
+ * Maintains displayOrder values used by the production-run wizard.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -14,11 +13,16 @@ const router = Router()
  *
  * Returns the parameter links for a machine, including parameter metadata.
  * displayOrder controls the order in which fields appear on production forms.
+ *
+ * @param {import('express').Request} req - Express request containing params.machineId.
+ * @param {import('express').Response} res - Express response returning machine-parameter links.
+ * @returns {Promise<void>} Sends 200 with ordered links or 500 on Prisma read failure.
  */
 router.get('/machine/:machineId', async (req, res) => {
     try {
         const links = await prisma.machineParameter.findMany({
             where: { machineId: req.params.machineId },
+            // displayOrder is the persisted UI order used by setup forms and run entry.
             orderBy: { displayOrder: 'asc' },
             include: {
                 parameter: true
@@ -36,6 +40,11 @@ router.get('/machine/:machineId', async (req, res) => {
  *
  * Links a parameter to a machine. If displayOrder is omitted, the next available
  * order is derived from the current highest value for that machine.
+ *
+ * @param {import('express').Request} req - Express request with machineId, parameterId, and optional displayOrder.
+ * @param {import('express').Response} res - Express response returning the created link.
+ * @returns {Promise<void>} Sends 201, 400 for validation/duplicate links, or 500 on Prisma failure.
+ * @throws {Prisma.PrismaClientKnownRequestError} P2002 when machineId/parameterId or machineId/displayOrder is duplicated.
  */
 router.post('/', async (req, res) => {
     try {
@@ -83,6 +92,11 @@ router.post('/', async (req, res) => {
  * PUT /:id
  *
  * Updates the display order for one machine-parameter link.
+ *
+ * @param {import('express').Request} req - Express request containing params.id and body.displayOrder.
+ * @param {import('express').Response} res - Express response returning the updated link.
+ * @returns {Promise<void>} Sends 200, 400 when displayOrder is missing, or 500 on Prisma failure.
+ * @throws {Prisma.PrismaClientKnownRequestError} P2002 when the target displayOrder is already used for the machine.
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -108,6 +122,10 @@ router.put('/:id', async (req, res) => {
  * DELETE /:id
  *
  * Removes one machine-parameter link by link-table primary key.
+ *
+ * @param {import('express').Request} req - Express request containing params.id.
+ * @param {import('express').Response} res - Express response returning a deletion message.
+ * @returns {Promise<void>} Sends 200 or 500 on Prisma deletion failure.
  */
 router.delete('/:id', async (req, res) => {
     try {

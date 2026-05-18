@@ -1,3 +1,8 @@
+/**
+ * Renders machine master-data administration.
+ * Supports machine creation, editing, and active-flag soft deletion.
+ * Preserves machine records needed by historical production runs.
+ */
 import { useState, useEffect } from 'react'
 import { getAllMachines, createMachine, updateMachine } from '../api/machines'
 
@@ -48,6 +53,7 @@ function MachinesPage() {
 
   async function handleDeactivate(id) {
     try {
+        // Soft deletion: active=false removes this machine from new workflows while preserving run history.
         await updateMachine(id, { active: false })
         fetchMachines()
     } catch (err) {
@@ -58,6 +64,7 @@ function MachinesPage() {
 
   async function handleActivate(id) {
       try {
+          // Reactivation makes a previously soft-deleted machine available for future runs again.
           await updateMachine(id, { active: true })
           fetchMachines()
       } catch (err) {

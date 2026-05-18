@@ -1,3 +1,8 @@
+/**
+ * Renders the operational dashboard for recent production activity.
+ * Highlights in-progress and recent completed production runs.
+ * Provides the primary entry point for starting or reviewing runs.
+ */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllRuns } from '../api/productionRuns'
@@ -35,6 +40,12 @@ export default function DashboardPage() {
     runs.map(r => [r.machineId, r.machine])
   ).values()]
 
+  /**
+   * Formats an API timestamp for compact dashboard display.
+   *
+   * @param {string} dateStr - Timestamp string returned by the API.
+   * @returns {string} Locale-formatted time or a fallback dash.
+   */
   function formatTime(dateStr) {
     if (!dateStr) return '—'
     return new Date(dateStr).toLocaleTimeString('en-US', {

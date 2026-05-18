@@ -1,55 +1,69 @@
 # PakOm Production Tracker
 
-PakOm Production Tracker is a full-stack web application for logging and tracking daily production runs at a packaging materials firm. Built for PakOm d.o.o., a small manufacturer of PP strap and LDPE foil packaging materials, the app replaces manual paper-based logging with a structured digital workflow.
+PakOm Production Tracker is a full-stack production logging application for PP strap and LDPE foil manufacturing operations. It replaces paper-based shop-floor logs with a structured workflow for creating, completing, filtering, exporting, and reviewing production runs.
 
-Each production run is fully traceable — who operated the machine, which machine and product were used, which recipe and materials were consumed, which machine parameters were recorded, and what output was produced. The application is designed to be simple enough for factory floor use while giving management a clear view of daily production activity.
+The system is designed around traceability. Each production run links the operator, machine, product, recipe, collected machine parameters, material consumption, output quantities, energy readings, timing data, and notes into one auditable record.
 
-## Tech Stack
+## Project Overview
 
-- **Frontend:** React, Vite, React Router, Axios
-- **Backend:** Node.js, Express, ES Modules
-- **Database:** PostgreSQL
-- **ORM:** Prisma
-- **Development tooling:** Nodemon, ESLint
-
-## Repository Structure
+The repository is split into two application boundaries:
 
 ```text
 production-tracker/
 |-- client/                 # React + Vite frontend
+|   |-- public/             # Static browser assets
 |   |-- src/
-|   |   |-- api/            # Axios API clients
-|   |   |-- components/     # Shared UI and production-run wizard components
-|   |   `-- pages/          # Route-level React pages
+|   |   |-- api/            # Axios wrappers for Express endpoints
+|   |   |-- components/     # Shared UI and production-run wizard steps
+|   |   |-- pages/          # Route-level React screens
+|   |   |-- App.jsx         # Browser route map
+|   |   `-- main.jsx        # React mount point
 |   `-- package.json
-|-- server/                 # Express + Prisma backend
-|   |-- lib/prisma.js       # Shared Prisma client instance
-|   |-- prisma/schema.prisma
-|   |-- routes/             # Modular Express routers
+|-- server/                 # Node.js + Express + Prisma backend
+|   |-- index.js            # API server entry point and router mounts
+|   |-- lib/prisma.js       # Shared Prisma Client singleton
+|   |-- prisma/             # Prisma schema and migration history
+|   |-- routes/             # Domain-specific Express routers
 |   `-- package.json
 `-- README.md
 ```
 
-## Database Schema Overview
+The `client` folder owns the browser experience. It renders the production dashboard, admin screens, production-run list/detail pages, and multi-step run creation wizard. API access is centralized in `client/src/api`, where Axios helpers call the backend using the `/api` route prefix.
 
-The database is modeled around `ProductionRun`, the transactional record that ties the rest of the system together.
+The `server` folder owns persistence and business transactions. Express routers validate incoming requests, call Prisma, and return JSON responses to the React client. Prisma maps JavaScript operations to PostgreSQL tables, relations, constraints, and migrations.
 
-- **Operators** represent the people responsible for production runs. Operators use UUID primary keys and include an `active` field for soft deletion.
-- **Machines** represent production equipment. Machines also use UUID primary keys and include an `active` field so historical runs remain linked even when a machine is no longer available for new work.
-- **Parameters** define reusable machine setup or measurement fields, such as temperature, pressure, speed, or other process-specific values.
-- **MachineParameter** links machines to parameters. This join model supports machine-specific parameter configuration and includes `displayOrder`, which controls the order parameters appear in the run form.
-- **Products** represent the items being manufactured. Products can be linked to machines through `MachineProduct`, allowing the application to define which products each machine can produce.
-- **Recipes** define the planned material composition for a product. Each recipe contains one or more `RecipeItem` records that link materials to planned percentages and quantities.
-- **Materials** track input materials, units, suppliers, and stock quantities. During run completion, actual usage is captured in `MaterialUsage`.
-- **ProductionRun** links one operator, machine, product, and recipe. It stores timing, energy, notes, buyer information, status, recorded parameter values, material usage, and output.
+## Project Architecture
 
-All main entities use Prisma-generated UUIDs (`@default(uuid())`) as primary keys. Soft deletion is implemented through the `active` Boolean field on `Operator` and `Machine`, preserving historical relationships while allowing inactive records to be excluded from operational workflows.
+The runtime flow is:
 
-## API Architecture
+```text
+React UI -> Axios API helper -> Express route -> Prisma Client -> PostgreSQL
+```
 
-The backend uses Express with ES Modules and a modular routing structure. Each domain area is implemented as its own Express Router under `server/routes`, then mounted from `server/index.js`.
+1. **React**
+   Users interact with route-level pages in `client/src/pages` and wizard components in `client/src/components/wizard`.
 
-All application API routes are exposed under the `/api` prefix:
+2. **Axios**
+   Client helpers in `client/src/api` call backend endpoints through the shared Axios instance in `axiosInstance.js`.
+
+3. **Express API**
+   `server/index.js` mounts domain routers under `/api`, including operators, machines, products, materials, recipes, machine parameters, machine products, and production runs.
+
+4. **Prisma**
+   Route handlers import the shared Prisma Client from `server/lib/prisma.js` and execute typed database operations.
+
+5. **PostgreSQL**
+   PostgreSQL stores master data, configuration links, and transactional production-run records. The schema is defined in `server/prisma/schema.prisma` and versioned through Prisma migrations.
+
+## Backend API Areas
+
+All application APIs are mounted under:
+
+```text
+http://localhost:3000/api
+```
+
+Primary route groups:
 
 ```text
 /api/operators
@@ -63,30 +77,35 @@ All application API routes are exposed under the `/api` prefix:
 /api/production-runs
 ```
 
-The frontend API client is configured with Axios in `client/src/api/axiosInstance.js` and targets:
-
-```text
-http://localhost:3000/api
-```
-
-The backend also exposes a simple health check endpoint:
+Health check:
 
 ```text
 GET /ping
 ```
 
-## Key Features
+## Data Model Summary
 
-- **Production run tracking:** Start and complete production runs with operator, machine, product, recipe, timing, energy, parameter, material, and output data.
-- **Run status workflow:** New production runs default to `in_progress`; completing a run updates the status to `completed`.
-- **Machine-specific parameters:** Parameters are reusable globally but assigned per machine through `MachineParameter`.
-- **Drag-and-drop parameter ordering:** Machine parameter order is persisted with the `displayOrder` field and returned in ascending order for form rendering.
-- **Recipe and material usage management:** Recipes define planned material composition, while completed runs capture actual material usage.
-- **Material stock adjustment:** Completing a production run records material usage and decrements material stock quantities.
-- **Soft deletion:** Operators and machines can be deactivated through the `active` field without breaking historical production records.
-- **Relational traceability:** Production runs include linked operator, machine, product, recipe, parameter values, material usage, and output records.
+The schema is centered on `ProductionRun`, the transactional record that connects factory activity to master data.
 
-## Getting Started
+- `Operator` stores production staff. Operators use `active: boolean` for soft deletion so historical runs remain valid.
+- `Machine` stores production equipment. Machines also use `active: boolean` to prevent deletion from breaking traceability.
+- `Product` stores manufactured items and dimensional metadata.
+- `Material` stores consumed input materials, suppliers, units, and stock quantities.
+- `Parameter` stores reusable machine measurements, such as speed, temperature, pressure, or process-specific values.
+- `MachineParameter` links machines to parameters and uses `displayOrder` to control form order in the UI.
+- `MachineProduct` links machines to products that can be produced on that equipment.
+- `Recipe` and `RecipeItem` define planned material composition for a product.
+- `ProductionRun` records operator, machine, product, recipe, timing, energy, status, buyer, notes, parameter values, material usage, and outputs.
+
+## Operational Rules
+
+- **Soft deletion:** Operators and machines are deactivated with `active: false` instead of being deleted. This protects historical `ProductionRun` relationships while hiding inactive records from new-run workflows.
+- **Display ordering:** Machine-specific parameters are ordered by `MachineParameter.displayOrder`. The wizard uses that order when collecting process measurements.
+- **Run completion:** Completing a run updates status, records parameter values, records material usage, decrements stock, and creates output rows inside one Prisma transaction.
+- **Run deletion:** Deleting a completed run restores material stock and removes dependent run records transactionally.
+- **Recipe validation:** Recipe item percentages must total 100 before a recipe can be created.
+
+## Setup
 
 ### Prerequisites
 
@@ -94,51 +113,42 @@ GET /ping
 - npm
 - PostgreSQL
 
-### 1. Install Dependencies
-
-Install backend dependencies:
+### 1. Install Backend Dependencies
 
 ```bash
 cd server
 npm install
 ```
 
-Install frontend dependencies:
+### 2. Configure Backend Environment
 
-```bash
-cd ../client
-npm install
-```
-
-### 2. Configure Environment Variables
-
-Create `server/.env` and define `DATABASE_URL` for your PostgreSQL database:
+Create `server/.env` with a PostgreSQL connection string:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
 ```
 
-Example for a local database:
+Example local configuration:
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/production_tracker?schema=public"
 ```
 
-### 3. Generate the Prisma Client
+### 3. Generate Prisma Client
 
-From the `server` directory, generate the Prisma client:
+From the `server` directory:
 
 ```bash
 npx prisma generate
 ```
 
-If you are setting up a new local database, apply the existing Prisma migrations:
+For a new local database, apply migrations:
 
 ```bash
 npx prisma migrate dev
 ```
 
-### 4. Start the Backend
+### 4. Start Backend
 
 From the `server` directory:
 
@@ -146,31 +156,62 @@ From the `server` directory:
 npm run dev
 ```
 
-The API server runs at:
+The backend runs at:
 
 ```text
 http://localhost:3000
 ```
 
-### 5. Start the Frontend
+### 5. Install Frontend Dependencies
 
-In a separate terminal, from the `client` directory:
+In a separate terminal:
+
+```bash
+cd client
+npm install
+```
+
+### 6. Start Frontend
+
+From the `client` directory:
 
 ```bash
 npm run dev
 ```
 
-Vite will print the local frontend URL, typically:
+Vite will print the local URL, typically:
 
 ```text
 http://localhost:5173
 ```
 
-## Development Notes
+## Development Commands
 
-- Keep route handlers grouped by domain in `server/routes`.
-- Use the shared Prisma client from `server/lib/prisma.js` for database access.
-- Preserve UUID relationships when changing schema models or route behavior.
-- Use `active: false` for machine/operator removal workflows instead of deleting records that may be referenced by historical production runs.
-- When adding machine parameters, maintain unique `machineId`/`parameterId` and `machineId`/`displayOrder` combinations.
-- Production run completion is transactional: run status, parameter values, material usage, stock updates, and outputs are saved together.
+Backend:
+
+```bash
+cd server
+npm run dev
+npm start
+npx prisma generate
+npx prisma migrate dev
+```
+
+Frontend:
+
+```bash
+cd client
+npm run dev
+npm run lint
+npm run build
+npm run preview
+```
+
+## Engineering Notes
+
+- Keep API access in `client/src/api` instead of calling Axios directly from pages.
+- Keep backend database access through `server/lib/prisma.js`.
+- Prefer soft deletion for operators and machines to preserve historical data integrity.
+- Maintain `displayOrder` carefully when changing machine parameter workflows.
+- Treat production-run completion as a transaction because it affects run state, measurements, material usage, inventory, and outputs.
+- Avoid deleting master data that may be referenced by historical production runs.

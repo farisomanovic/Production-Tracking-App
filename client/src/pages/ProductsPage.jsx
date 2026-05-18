@@ -1,3 +1,8 @@
+/**
+ * Renders product master-data administration.
+ * Supports product creation and display of manufacturing metadata.
+ * Supplies product records to recipes, machine compatibility, and run outputs.
+ */
 import { useState, useEffect } from 'react'
 import { getAllProducts, createProduct } from '../api/products'
 

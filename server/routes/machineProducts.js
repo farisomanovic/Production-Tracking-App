@@ -1,8 +1,7 @@
 /**
- * Machine-product compatibility routes.
- *
- * Manages the link table that defines which products can be produced on each
- * machine. Mounted at /api/machine-products.
+ * Handles MachineProduct compatibility routes for production setup.
+ * Defines which products can be manufactured on each machine.
+ * Prevents duplicate machine-product links with Prisma uniqueness.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -14,6 +13,10 @@ const router = Router()
  *
  * Returns all product links for a machine with product details included for UI
  * display. Results are ordered by product name for predictable selection lists.
+ *
+ * @param {import('express').Request} req - Express request containing params.machineId.
+ * @param {import('express').Response} res - Express response returning machine-product links.
+ * @returns {Promise<void>} Sends 200 with links or 500 on Prisma read failure.
  */
 router.get('/machine/:machineId', async (req, res) => {
     try {
@@ -35,6 +38,11 @@ router.get('/machine/:machineId', async (req, res) => {
  * Links a product to a machine. Prisma error P2002 is handled explicitly
  * because @@unique([machineId, productId]) prevents duplicate compatibility
  * links.
+ *
+ * @param {import('express').Request} req - Express request with body.machineId and body.productId.
+ * @param {import('express').Response} res - Express response returning the created link.
+ * @returns {Promise<void>} Sends 201, 400 for missing/duplicate values, or 500 on Prisma failure.
+ * @throws {Prisma.PrismaClientKnownRequestError} P2002 when the machine-product link already exists.
  */
 router.post('/', async (req, res) => {
     try {
@@ -63,6 +71,10 @@ router.post('/', async (req, res) => {
  * DELETE /:id
  *
  * Removes one machine-product compatibility link by link-table primary key.
+ *
+ * @param {import('express').Request} req - Express request containing params.id.
+ * @param {import('express').Response} res - Express response returning a deletion message.
+ * @returns {Promise<void>} Sends 200 or 500 on Prisma deletion failure.
  */
 router.delete('/:id', async (req, res) => { 
     try {

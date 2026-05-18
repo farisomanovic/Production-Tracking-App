@@ -1,3 +1,8 @@
+/**
+ * Renders step 5 of the production-run wizard.
+ * Captures final output, energy, scrap, and completion details.
+ * Submits the transactional completion payload to the backend.
+ */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { completeRun } from '../../api/productionRuns'

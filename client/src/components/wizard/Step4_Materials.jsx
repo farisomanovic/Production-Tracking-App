@@ -1,3 +1,8 @@
+/**
+ * Renders step 4 of the production-run wizard.
+ * Collects actual material usage against the selected recipe composition.
+ * Carries usage values forward for transactional run completion.
+ */
 import { useState, useEffect } from 'react'
 import { getRecipeById } from '../../api/recipes'
 

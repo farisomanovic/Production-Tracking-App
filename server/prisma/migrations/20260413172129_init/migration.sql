@@ -1,3 +1,7 @@
+-- Initializes the Production Tracker relational schema.
+-- Creates master, configuration, and transactional tables.
+-- Establishes indexes and foreign keys for Prisma-managed PostgreSQL data.
+
 -- CreateTable
 CREATE TABLE "Operator" (
     "id" TEXT NOT NULL,

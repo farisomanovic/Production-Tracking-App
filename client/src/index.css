@@ -1,3 +1,8 @@
+/*
+ * Defines global color tokens for dark and light themes.
+ * Supplies shared CSS variables consumed by inline React styles.
+ * Establishes document-level background and default text color.
+ */
 :root {
     --color-background: #0a0a0a;
     --color-surface: #1a1a2e;

@@ -1,3 +1,8 @@
+/**
+ * Renders recipe administration for product material formulas.
+ * Validates recipe composition totals before submitting to the API.
+ * Displays recipe material breakdowns used by production-run setup.
+ */
 import { useState, useEffect } from 'react'
 import { getAllRecipes, createRecipe } from '../api/recipes'
 import { getAllMaterials } from '../api/materials'
@@ -63,6 +68,11 @@ function RecipesPage() {
     setItems(items.filter((i) => i.materialId !== materialId))
   }
 
+  /**
+   * Calculates the total material percentage for the current recipe draft.
+   *
+   * @returns {number} Sum of all recipe item percentages.
+   */
   function getTotalPercentage() {
     return items.reduce((sum, item) => sum + item.percentage, 0)
   }

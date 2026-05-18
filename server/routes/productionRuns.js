@@ -1,3 +1,8 @@
+/**
+ * Handles ProductionRun API routes for transactional shop-floor records.
+ * Coordinates run creation, completion, detail reads, and deletion.
+ * Uses Prisma transactions for completion and inventory consistency.
+ */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 
@@ -9,6 +14,10 @@ const router = Router()
  * Returns production runs with optional machine, operator, product, and date
  * filters. Related master data is included so the client can render a complete
  * run summary without follow-up requests.
+ *
+ * @param {import('express').Request} req - Express request with optional filter query parameters.
+ * @param {import('express').Response} res - Express response returning production run summaries.
+ * @returns {Promise<void>} Sends 200 with runs or 500 on Prisma read failure.
  */
 router.get('/', async (req, res) => {
     try {
@@ -48,6 +57,10 @@ router.get('/', async (req, res) => {
  *
  * Returns one production run with the full set of related operational details:
  * recipe composition, recorded parameter values, material usage, and outputs.
+ *
+ * @param {import('express').Request} req - Express request containing params.id.
+ * @param {import('express').Response} res - Express response returning a production run aggregate.
+ * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
  */
 router.get('/:id', async (req, res) => {
     try {
@@ -95,6 +108,11 @@ router.get('/:id', async (req, res) => {
  * Starts a production run. Required foreign keys identify the operator, machine,
  * product, and recipe being used; optional values capture setup details that
  * may not be known at run start.
+ *
+ * @param {import('express').Request} req - Express request with required run header fields.
+ * @param {import('express').Response} res - Express response returning the created run summary.
+ * @returns {Promise<void>} Sends 201, 400 for validation failures, or 500 on Prisma failure.
+ * @throws {Prisma.PrismaClientKnownRequestError} P2003 when referenced foreign keys do not exist.
  */
 router.post('/', async (req, res) => {
     try {
@@ -165,6 +183,10 @@ router.post('/', async (req, res) => {
  *
  * Updates mutable run fields only. Machine, operator, product, and recipe are
  * intentionally fixed after creation to preserve the run's production context.
+ *
+ * @param {import('express').Request} req - Express request containing params.id and mutable run fields.
+ * @param {import('express').Response} res - Express response returning the updated run summary.
+ * @returns {Promise<void>} Sends 200 or 500 on update failure.
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -209,6 +231,11 @@ router.put('/:id', async (req, res) => {
  * Completes a production run and records its measured parameters, consumed
  * materials, and outputs. All writes run inside one transaction so the run
  * cannot be marked completed without its related production data.
+ *
+ * @param {import('express').Request} req - Express request containing params.id and completion payload arrays.
+ * @param {import('express').Response} res - Express response returning the completed run aggregate.
+ * @returns {Promise<void>} Sends 200, 400/404 for invalid completion state, or 500 on transaction failure.
+ * @throws {Prisma.PrismaClientKnownRequestError} P2003 when related material, output, or parameter IDs are invalid.
  */
 router.post('/:id/complete', async (req, res) => {
     try {
@@ -332,6 +359,10 @@ router.post('/:id/complete', async (req, res) => {
  *
  * Deletes a production run and all its related records atomically.
  * Material stock is restored to account for the reversed usage.
+ *
+ * @param {import('express').Request} req - Express request containing params.id.
+ * @param {import('express').Response} res - Express response returning a deletion message.
+ * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on transaction failure.
  */
 router.delete('/:id', async (req, res) => {
     try {
@@ -347,7 +378,8 @@ router.delete('/:id', async (req, res) => {
         }
 
         await prisma.$transaction(async (tx) => {
-            // Restore material stock if run was completed
+            // Restore material stock if the run was completed so deleting a run
+            // reverses the inventory movement recorded during completion.
             if (run.status === 'completed' && run.materialUsages.length > 0) {
                 await Promise.all(
                     run.materialUsages.map(m =>

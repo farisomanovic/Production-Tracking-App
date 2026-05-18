@@ -1,10 +1,6 @@
-// ---------------------------------------------------------
-// Production Tracking Schema
-// ---------------------------------------------------------
-// Core entities: Operator, Machine, Product, Material
-// Configuration entities: Recipe, MachineParameter, MachineProduct
-// Transactional entity: ProductionRun
-// ---------------------------------------------------------
+// Defines the PostgreSQL data model for Production Tracker.
+// Separates master data, configuration links, and transactional run records.
+// Preserves operational history through soft deletion and relational traceability.
 // Defines the relational model used by the backend. Operators and machines use
 // soft deletion through active flags so historical production runs remain valid.
 // Prisma generates the JavaScript client consumed by the route handlers.

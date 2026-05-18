@@ -1,3 +1,8 @@
+/**
+ * Renders step 3 of the production-run wizard.
+ * Collects machine-specific parameter measurements in displayOrder order.
+ * Supports prefilled values from the last completed matching run.
+ */
 import { useState, useEffect } from 'react'
 import { getMachineParameters } from '../../api/machineParameters'
 

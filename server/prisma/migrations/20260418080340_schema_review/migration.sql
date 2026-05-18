@@ -1,3 +1,7 @@
+-- Applies the schema review changes to the production-tracking model.
+-- Removes legacy columns and aligns tables with the current Prisma schema.
+-- Updates constraints required by soft deletion and traceability workflows.
+
 /*
   Warnings:
 

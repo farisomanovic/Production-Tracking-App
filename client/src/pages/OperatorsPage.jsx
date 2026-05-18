@@ -1,3 +1,8 @@
+/**
+ * Renders operator master-data administration.
+ * Supports operator creation, editing, and active-flag soft deletion.
+ * Keeps inactive operators available for historical run traceability.
+ */
 import { useState, useEffect } from 'react'
 import { getAllOperators, createOperator, updateOperator } from '../api/operators'
 
@@ -41,6 +46,7 @@ function OperatorsPage() {
 
   async function handleDeactivate(id) {
     try {
+        // Soft deletion: active=false removes this operator from new runs while retaining historical links.
         await updateOperator(id, { active: false })
         fetchOperators()
     } catch (err) {
@@ -51,6 +57,7 @@ function OperatorsPage() {
 
   async function handleActivate(id) {
     try {
+        // Reactivation restores the operator to selection lists for future production runs.
         await updateOperator(id, { active: true })
         fetchOperators()
     } catch (err) {

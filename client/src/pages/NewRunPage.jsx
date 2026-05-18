@@ -1,3 +1,8 @@
+/**
+ * Renders the multi-step production-run creation wizard.
+ * Creates the run after recipe selection and then records operational details.
+ * Pre-fills parameter values from the last completed matching run when available.
+ */
 import { useState } from 'react'
 import Step1_BasicInfo from '../components/wizard/Step1_BasicInfo'
 import Step2_Recipe from '../components/wizard/Step2_Recipe'
@@ -6,6 +11,13 @@ import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
 import { createRun, getAllRuns, getRunById  } from '../api/productionRuns'
 
+/**
+ * Converts separate local date and time inputs into the timestamp shape expected by the API.
+ *
+ * @param {string} dateStr - Date input value in YYYY-MM-DD format.
+ * @param {string} timeStr - Time input value in HH:mm format.
+ * @returns {string} Local ISO-like timestamp without timezone conversion.
+ */
 function toLocalISO(dateStr, timeStr) {
   return `${dateStr}T${timeStr}:00.000`
 }

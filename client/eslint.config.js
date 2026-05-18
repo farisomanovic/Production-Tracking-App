@@ -1,3 +1,8 @@
+/**
+ * Configures ESLint for the React frontend source tree.
+ * Combines JavaScript, React Hooks, and Vite React Refresh rules.
+ * Ignores generated build output while linting application files.
+ */
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'

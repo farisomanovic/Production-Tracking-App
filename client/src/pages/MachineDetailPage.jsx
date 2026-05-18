@@ -1,3 +1,8 @@
+/**
+ * Renders detailed machine setup for parameters and products.
+ * Manages machine-specific parameter assignments and product compatibility.
+ * Persists displayOrder-sensitive configuration used by run entry forms.
+ */
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getMachineById } from '../api/machines'

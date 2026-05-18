@@ -1,3 +1,8 @@
+/**
+ * Handles Recipe API routes for product material formulas.
+ * Persists recipe headers with nested material composition rows.
+ * Enforces complete 100 percent formulas before production use.
+ */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 
@@ -7,6 +12,10 @@ const router = Router()
  * GET /
  *
  * Returns all recipes with their product and material composition included.
+ *
+ * @param {import('express').Request} req - Express request; no query parameters are required.
+ * @param {import('express').Response} res - Express response returning recipes with relations.
+ * @returns {Promise<void>} Sends 200 with recipes or 500 on Prisma read failure.
  */
 router.get('/', async (req, res) => {
     try {
@@ -34,6 +43,10 @@ router.get('/', async (req, res) => {
  *
  * Returns recipes for one product, including material details for selection and
  * review screens.
+ *
+ * @param {import('express').Request} req - Express request containing params.productId.
+ * @param {import('express').Response} res - Express response returning product-specific recipes.
+ * @returns {Promise<void>} Sends 200 with recipes or 500 on Prisma read failure.
  */
 router.get('/by-product/:productId', async (req, res) => {
     try {
@@ -60,6 +73,10 @@ router.get('/by-product/:productId', async (req, res) => {
  * GET /:id
  *
  * Returns one recipe by primary key with its product and recipe-item relations.
+ *
+ * @param {import('express').Request} req - Express request containing params.id.
+ * @param {import('express').Response} res - Express response returning a recipe aggregate.
+ * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
  */
 router.get('/:id', async (req, res) => {
     try {
@@ -89,6 +106,11 @@ router.get('/:id', async (req, res) => {
  *
  * Creates a recipe and its RecipeItem rows in one nested write. Recipe items
  * must be present and total 100% so the bill of materials is complete.
+ *
+ * @param {import('express').Request} req - Express request with recipe metadata and items array.
+ * @param {import('express').Response} res - Express response returning the created recipe aggregate.
+ * @returns {Promise<void>} Sends 201, 400 for invalid formulas, or 500 on Prisma failure.
+ * @throws {Prisma.PrismaClientKnownRequestError} P2002 when schema-level uniqueness constraints are violated.
  */
 router.post('/', async (req, res) => {
     try {
@@ -145,6 +167,10 @@ router.post('/', async (req, res) => {
  *
  * Updates recipe metadata. Recipe items are not modified here because changing
  * formula composition requires separate validation of the 100% total.
+ *
+ * @param {import('express').Request} req - Express request containing params.id and mutable recipe fields.
+ * @param {import('express').Response} res - Express response returning the updated recipe aggregate.
+ * @returns {Promise<void>} Sends 200 or 500 on update failure.
  */
 router.put('/:id', async (req, res) => {
     try {

@@ -1,8 +1,7 @@
 /**
- * Application entry point.
- *
- * Configures the Express HTTP server, shared middleware, and API route mounts for
- * the production tracking backend.
+ * Boots the Express API process for Production Tracker.
+ * Registers global middleware and domain-specific routers.
+ * Exposes the backend boundary consumed by the React client.
  */
 import express from 'express'
 import cors from 'cors'
@@ -39,6 +38,10 @@ app.use('/api/production-runs', productionRunsRouter)
  * GET /ping
  *
  * Lightweight health check used to verify that the API process is reachable.
+ *
+ * @param {import('express').Request} req - Express request object; no parameters are required.
+ * @param {import('express').Response} res - Express response object used to return service status.
+ * @returns {void} JSON payload confirming the server process is alive.
  */
 app.get('/ping', (req, res) => {
   res.json({ message: 'Server is alive!' })

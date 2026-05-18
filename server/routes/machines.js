@@ -1,3 +1,8 @@
+/**
+ * Handles Machine API routes for production equipment records.
+ * Supports operational reads and admin maintenance updates.
+ * Uses active-flag soft deletion to protect historical run traceability.
+ */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 
@@ -7,6 +12,10 @@ const router = Router()
  * GET /
  *
  * Returns all machines in display order.
+ *
+ * @param {import('express').Request} req - Express request; no query parameters are required.
+ * @param {import('express').Response} res - Express response returning machine records.
+ * @returns {Promise<void>} Sends 200 with machines or 500 on Prisma read failure.
  */
 router.get('/', async (req, res) => {
   try {
@@ -24,6 +33,10 @@ router.get('/', async (req, res) => {
  * GET /:id
  *
  * Returns one machine by primary key.
+ *
+ * @param {import('express').Request} req - Express request containing params.id.
+ * @param {import('express').Response} res - Express response returning the machine payload.
+ * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
  */
 router.get('/:id', async (req, res) => {
   try {
@@ -45,6 +58,11 @@ router.get('/:id', async (req, res) => {
  *
  * Creates a machine. The optional code is persisted only when supplied because
  * the database enforces uniqueness on non-null machine codes.
+ *
+ * @param {import('express').Request} req - Express request with body.name and optional body.code.
+ * @param {import('express').Response} res - Express response returning the created machine.
+ * @returns {Promise<void>} Sends 201, 400 when name is missing, or 500 on Prisma failure.
+ * @throws {Prisma.PrismaClientKnownRequestError} P2002 when a unique machine code is duplicated.
  */
 router.post('/', async (req, res) => {
   try {
@@ -69,6 +87,11 @@ router.post('/', async (req, res) => {
  *
  * Updates mutable machine fields. The active flag supports soft deletion while
  * preserving existing production run history.
+ *
+ * @param {import('express').Request} req - Express request containing params.id and mutable machine fields.
+ * @param {import('express').Response} res - Express response returning the updated machine.
+ * @returns {Promise<void>} Sends 200 or 500 on update failure.
+ * @throws {Prisma.PrismaClientKnownRequestError} P2002 when an updated machine code conflicts.
  */
 router.put('/:id', async (req, res) => {
   try {
@@ -78,6 +101,8 @@ router.put('/:id', async (req, res) => {
       data: {
         ...(name !== undefined && { name }),
         ...(code !== undefined && { code }),
+        // Soft deletion: active=false removes the machine from new work without
+        // deleting rows referenced by historical ProductionRun records.
         ...(active !== undefined && { active }),
       }
     })

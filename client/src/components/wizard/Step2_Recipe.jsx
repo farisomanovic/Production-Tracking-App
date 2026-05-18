@@ -1,3 +1,8 @@
+/**
+ * Renders step 2 of the production-run wizard.
+ * Loads and selects recipes available for the chosen product.
+ * Advances run creation once the production formula is selected.
+ */
 import { useState, useEffect } from 'react'
 import { getRecipesByProduct } from '../../api/recipes'
 

@@ -1,3 +1,8 @@
+/**
+ * Defines the React router tree for the frontend application.
+ * Maps URL paths to page-level components and shared bottom navigation.
+ * Keeps client-side navigation separate from individual page workflows.
+ */
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
 import BottomNav from './components/BottomNav'

@@ -1,3 +1,8 @@
+/**
+ * Renders persistent bottom navigation and theme switching.
+ * Computes active route styling for dashboard, run, and admin flows.
+ * Applies the saved light/dark theme through root CSS variables.
+ */
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 

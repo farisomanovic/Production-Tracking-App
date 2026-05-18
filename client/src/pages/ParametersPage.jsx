@@ -1,3 +1,8 @@
+/**
+ * Renders reusable parameter master-data administration.
+ * Allows parameters to be created before assignment to machines.
+ * Feeds machine setup and production-run measurement workflows.
+ */
 import { useState, useEffect } from 'react'
 import { getAllParameters, createParameter } from '../api/parameters'
 
