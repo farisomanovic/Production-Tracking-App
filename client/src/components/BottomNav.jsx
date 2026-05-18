@@ -1,6 +1,9 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 
 function BottomNav() {
+const { pathname } = useLocation();
+const isRunsActive = pathname === "/runs" || /^\/runs\/(?!new$)[^/]+$/.test(pathname);
+
 return (
     <nav style={styles.nav}>
     <NavLink
@@ -16,8 +19,8 @@ return (
 
     <NavLink
         to="/runs"
-        style={({ isActive }) =>
-        isActive ? { ...styles.link, ...styles.activeLink } : styles.link
+        style={() =>
+        isRunsActive ? { ...styles.link, ...styles.activeLink } : styles.link
         }
     >
         <span style={styles.icon}>📋</span>
