@@ -392,11 +392,6 @@ export default function ProductionRunsPage() {
 }
 
 const styles = {
-  container: {
-    padding: '16px',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
   heading: {
     color: '#ffffff',
     marginBottom: '1.5rem',
@@ -410,19 +405,6 @@ const styles = {
     marginBottom: '0.5rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
-  },
-  filtersGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '0.5rem',
-  },
-  filterInput: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: '8px',
-    border: '1px solid #333',
-    backgroundColor: '#1a1a2e',
-    color: '#ffffff',
-    fontSize: '0.85rem',
   },
   clearButton: {
     marginTop: '0.5rem',
@@ -512,11 +494,6 @@ const styles = {
     color: '#888',
     fontSize: '0.9rem',
   },
-  dateRangeField: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.25rem',
-},
 dateLabel: {
     color: '#888',
     fontSize: '0.75rem',
@@ -531,5 +508,38 @@ exportButton: {
     color: '#ffffff',
     fontSize: '0.85rem',
     cursor: 'pointer',
+},
+container: {
+    padding: '16px',
+    maxWidth: '600px',
+    width: '100%',              // ← new: be exactly as wide as parent
+    boxSizing: 'border-box',   // ← new: padding included in that width
+    margin: '0 auto',
+},
+
+filtersGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '0.5rem',
+    width: '100%',             // ← new: fill the container
+    minWidth: 0,               // ← new: allow columns to shrink below content size
+},
+
+filterInput: {
+    padding: '0.5rem 0.75rem',
+    borderRadius: '8px',
+    border: '1px solid #333',
+    backgroundColor: '#1a1a2e',
+    color: '#ffffff',
+    fontSize: '0.85rem',
+    width: '100%',             // ← new: fill the grid cell
+    boxSizing: 'border-box',   // ← new: padding included in that width
+},
+
+dateRangeField: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.25rem',
+    minWidth: 0,               // ← new: allow this wrapper to shrink inside the grid
 },
 }
