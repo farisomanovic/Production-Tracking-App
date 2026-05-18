@@ -93,11 +93,11 @@ const styles = {
     margin: '0 auto',
   },
   heading: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     marginBottom: '1.5rem',
   },
   sectionLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.75rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
@@ -105,7 +105,7 @@ const styles = {
     marginTop: '1.5rem',
   },
   sectionSub: {
-    color: '#555',
+    color: 'var(--color-text-muted)',
     fontSize: '0.8rem',
     marginBottom: '0.75rem',
     marginTop: '-0.5rem',
@@ -121,13 +121,13 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '14px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
     cursor: 'pointer',
   },
   gridCardLabel: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '0.9rem',
   },
   list: {
@@ -140,9 +140,9 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
     cursor: 'pointer',
   },
   cardLeft: {
@@ -151,23 +151,24 @@ const styles = {
     gap: '4px',
   },
   cardName: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '0.9rem',
   },
   cardCode: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.75rem',
   },
   arrow: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '20px',
   },
   loadingText: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.9rem',
   },
   errorText: {
-    color: '#dc2626',
+    color: 'var(--color-danger)',
     fontSize: '0.9rem',
   },
 }
+

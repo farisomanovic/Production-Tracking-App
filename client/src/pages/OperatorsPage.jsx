@@ -60,7 +60,7 @@ function OperatorsPage() {
   }
 
   if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'red' }}>{error}</p>
+  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
 
   return (
     <div style={styles.container}>
@@ -118,7 +118,7 @@ const styles = {
     margin: '0 auto',
   },
   heading: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     marginBottom: '24px',
   },
   form: {
@@ -130,17 +130,17 @@ const styles = {
     flex: 1,
     padding: '10px 12px',
     borderRadius: '8px',
-    border: '1px solid #333',
-    backgroundColor: '#1a1a2e',
-    color: '#ffffff',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
   button: {
     padding: '10px 16px',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: '#4f8ef7',
-    color: '#ffffff',
+    backgroundColor: 'var(--color-accent-link)',
+    color: 'var(--color-on-accent)',
     fontSize: '14px',
     cursor: 'pointer',
   },
@@ -154,25 +154,25 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
   },
   cardName: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
   badgeActive: {
     fontSize: '12px',
-    color: '#4caf50',
-    backgroundColor: '#1b3a1f',
+    color: 'var(--color-success-strong)',
+    backgroundColor: 'var(--color-success-surface)',
     padding: '4px 8px',
     borderRadius: '12px',
   },
   badgeInactive: {
     fontSize: '12px',
-    color: '#f44336',
-    backgroundColor: '#3a1b1b',
+    color: 'var(--color-danger-strong)',
+    backgroundColor: 'var(--color-danger-surface)',
     padding: '4px 8px',
     borderRadius: '12px',
   },
@@ -185,8 +185,8 @@ deactivateButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
-    backgroundColor: '#3a1b1b',
-    color: '#f44336',
+    backgroundColor: 'var(--color-danger-surface)',
+    color: 'var(--color-danger-strong)',
     fontSize: '12px',
     cursor: 'pointer',
 },
@@ -194,11 +194,12 @@ activateButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
-    backgroundColor: '#1b3a1f',
-    color: '#4caf50',
+    backgroundColor: 'var(--color-success-surface)',
+    color: 'var(--color-success-strong)',
     fontSize: '12px',
     cursor: 'pointer',
 },
 }
 
 export default OperatorsPage
+

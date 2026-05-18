@@ -103,7 +103,7 @@ function RecipesPage() {
   const totalPercentage = getTotalPercentage()
 
   if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'red' }}>{error}</p>
+  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
 
   return (
     <div style={styles.container}>
@@ -146,7 +146,7 @@ function RecipesPage() {
             onChange={(e) => setNotes(e.target.value)}
           />
 
-          <label style={{ color: '#888', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{ color: 'var(--color-text-secondary)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
               type="checkbox"
               checked={isDefault}
@@ -255,7 +255,7 @@ const styles = {
     marginBottom: '24px',
   },
   heading: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     margin: 0,
   },
   form: {
@@ -264,20 +264,20 @@ const styles = {
     gap: '8px',
     marginBottom: '24px',
     padding: '16px',
-    backgroundColor: '#12122a',
+    backgroundColor: 'var(--color-surface-alt)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
   },
   input: {
     padding: '10px 12px',
     borderRadius: '8px',
-    border: '1px solid #333',
-    backgroundColor: '#1a1a2e',
-    color: '#ffffff',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
   sectionLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '12px',
     margin: '8px 0 4px 0',
   },
@@ -289,26 +289,26 @@ const styles = {
     flex: 1,
     padding: '10px 12px',
     borderRadius: '8px',
-    border: '1px solid #333',
-    backgroundColor: '#1a1a2e',
-    color: '#ffffff',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
   percentageInput: {
     width: '60px',
     padding: '10px 8px',
     borderRadius: '8px',
-    border: '1px solid #333',
-    backgroundColor: '#1a1a2e',
-    color: '#ffffff',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
   addItemButton: {
     padding: '10px 14px',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: '#2a2a4a',
-    color: '#ffffff',
+    backgroundColor: 'var(--color-surface-alt)',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
     cursor: 'pointer',
   },
@@ -323,12 +323,12 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '8px 12px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '6px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
   },
   itemName: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '13px',
   },
   itemRight: {
@@ -337,13 +337,13 @@ const styles = {
     gap: '8px',
   },
   itemPercentage: {
-    color: '#4f8ef7',
+    color: 'var(--color-accent-link)',
     fontSize: '13px',
   },
   removeButton: {
     background: 'none',
     border: 'none',
-    color: '#f44336',
+    color: 'var(--color-danger-strong)',
     cursor: 'pointer',
     fontSize: '12px',
     padding: '2px 4px',
@@ -352,20 +352,20 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     padding: '8px 12px',
-    borderTop: '1px solid #333',
+    borderTop: '1px solid var(--color-border)',
     marginTop: '4px',
   },
   totalLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '13px',
   },
   totalGood: {
-    color: '#4caf50',
+    color: 'var(--color-success-strong)',
     fontSize: '13px',
     fontWeight: 'bold',
   },
   totalBad: {
-    color: '#f44336',
+    color: 'var(--color-danger-strong)',
     fontSize: '13px',
     fontWeight: 'bold',
   },
@@ -373,8 +373,8 @@ const styles = {
     padding: '10px 16px',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: '#4f8ef7',
-    color: '#ffffff',
+    backgroundColor: 'var(--color-accent-link)',
+    color: 'var(--color-on-accent)',
     fontSize: '14px',
     cursor: 'pointer',
   },
@@ -388,9 +388,9 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
   },
   cardLeft: {
     display: 'flex',
@@ -398,13 +398,14 @@ const styles = {
     gap: '4px',
   },
   cardName: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
   cardType: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '12px',
   },
 }
 
 export default RecipesPage
+

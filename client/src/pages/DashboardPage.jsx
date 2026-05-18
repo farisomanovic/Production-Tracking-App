@@ -154,20 +154,20 @@ const styles = {
     margin: '0 auto',
   },
   heading: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     marginBottom: '4px',
   },
   subheading: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.85rem',
     marginBottom: '1.5rem',
   },
   loadingText: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     padding: '16px',
   },
   errorText: {
-    color: '#dc2626',
+    color: 'var(--color-danger)',
     padding: '16px',
   },
   statsGrid: {
@@ -177,8 +177,8 @@ const styles = {
     marginBottom: '2rem',
   },
   statCard: {
-    backgroundColor: '#1a1a2e',
-    border: '1px solid #333',
+    backgroundColor: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
     borderRadius: '8px',
     padding: '1rem',
     display: 'flex',
@@ -186,24 +186,24 @@ const styles = {
     gap: '4px',
   },
   statCardLive: {
-    border: '1px solid #4f46e5',
-    backgroundColor: '#1e1b4b',
+    border: '1px solid var(--color-accent)',
+    backgroundColor: 'var(--color-selected-surface)',
   },
   statNumber: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '2rem',
     fontWeight: 'bold',
     lineHeight: 1,
   },
   statLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.75rem',
   },
   section: {
     marginBottom: '1.5rem',
   },
   sectionLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.75rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
@@ -219,9 +219,9 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '2px solid #4f46e5',
+    border: '2px solid var(--color-accent)',
     cursor: 'pointer',
   },
   cardLeft: {
@@ -230,25 +230,25 @@ const styles = {
     gap: '3px',
   },
   liveDot: {
-    color: '#4f46e5',
+    color: 'var(--color-accent)',
     fontSize: '0.75rem',
     fontWeight: 'bold',
   },
   cardMachine: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '0.95rem',
     fontWeight: 'bold',
   },
   cardSub: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.8rem',
   },
   cardTime: {
-    color: '#555',
+    color: 'var(--color-text-muted)',
     fontSize: '0.75rem',
   },
   arrow: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '20px',
   },
   machineList: {
@@ -261,16 +261,16 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
   },
   machineName: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '0.9rem',
   },
   machineCount: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.8rem',
   },
   emptyBox: {
@@ -278,16 +278,17 @@ const styles = {
     padding: '3rem 1rem',
   },
   emptyText: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     marginBottom: '1rem',
   },
   newRunButton: {
     padding: '0.75rem 1.5rem',
-    backgroundColor: '#4f46e5',
-    color: '#ffffff',
+    backgroundColor: 'var(--color-accent)',
+    color: 'var(--color-on-accent)',
     border: 'none',
     borderRadius: '8px',
     fontSize: '0.95rem',
     cursor: 'pointer',
   },
 }
+

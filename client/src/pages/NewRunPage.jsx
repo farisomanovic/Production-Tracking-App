@@ -194,7 +194,7 @@ function NewRunPage() {
               key={step}
               style={{
                 ...styles.progressSegment,
-                backgroundColor: step <= currentStep ? '#4f46e5' : '#e5e7eb'
+                backgroundColor: step <= currentStep ? 'var(--color-accent)' : 'var(--color-progress-empty)'
               }}
             />
           ))}
@@ -233,7 +233,7 @@ const styles = {
     marginBottom: '1.5rem',
   },
   stepLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.9rem',
     marginBottom: '0.5rem',
   },
@@ -247,25 +247,26 @@ const styles = {
     borderRadius: '3px',
   },
   errorBox: {
-    backgroundColor: '#fee2e2',
-    color: '#dc2626',
+    backgroundColor: 'var(--color-danger-soft)',
+    color: 'var(--color-danger)',
     padding: '0.75rem',
     borderRadius: '8px',
     marginBottom: '1rem',
   },
   loadingText: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     marginBottom: '1rem',
   },
   backButton: {
     marginTop: '1rem',
     padding: '0.5rem 1.25rem',
-    backgroundColor: '#1a1a2e',
-    border: '1px solid #333',
+    backgroundColor: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
     borderRadius: '8px',
     cursor: 'pointer',
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
   },
 }
 
 export default NewRunPage
+

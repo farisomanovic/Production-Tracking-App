@@ -60,7 +60,7 @@ function ProductsPage() {
   }
 
   if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'red' }}>{error}</p>
+  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
 
   return (
     <div style={styles.container}>
@@ -146,7 +146,7 @@ const styles = {
     margin: '0 auto',
   },
   heading: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     marginBottom: '24px',
   },
   form: {
@@ -158,17 +158,17 @@ const styles = {
   input: {
     padding: '10px 12px',
     borderRadius: '8px',
-    border: '1px solid #333',
-    backgroundColor: '#1a1a2e',
-    color: '#ffffff',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
   button: {
     padding: '10px 16px',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: '#4f8ef7',
-    color: '#ffffff',
+    backgroundColor: 'var(--color-accent-link)',
+    color: 'var(--color-on-accent)',
     fontSize: '14px',
     cursor: 'pointer',
   },
@@ -182,9 +182,9 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
   },
   cardLeft: {
     display: 'flex',
@@ -192,13 +192,14 @@ const styles = {
     gap: '4px',
   },
   cardName: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
   cardType: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '12px',
   },
 }
 
 export default ProductsPage
+

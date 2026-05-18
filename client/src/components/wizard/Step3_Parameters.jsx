@@ -119,16 +119,16 @@ container: {
     gap: '0rem',
 },
 heading: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     marginBottom: '1.5rem',
 },
 loadingText: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.9rem',
 },
 errorBox: {
-    backgroundColor: '#fee2e2',
-    color: '#dc2626',
+    backgroundColor: 'var(--color-danger-soft)',
+    color: 'var(--color-danger)',
     padding: '0.75rem',
     borderRadius: '8px',
     marginBottom: '1rem',
@@ -136,17 +136,17 @@ errorBox: {
 emptyBox: {
     padding: '2rem',
     textAlign: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
     marginBottom: '1rem',
 },
 emptyText: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     marginBottom: '0.5rem',
 },
 emptySubtext: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.85rem',
 },
 list: {
@@ -162,22 +162,22 @@ field: {
     marginBottom: '1rem',
 },
 label: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.85rem',
 },
 input: {
     padding: '0.6rem 0.75rem',
     borderRadius: '8px',
-    border: '1px solid #333',
-    backgroundColor: '#1a1a2e',
-    color: '#ffffff',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
     fontSize: '0.95rem',
 },
 nextButton: {
     marginTop: '1rem',
     padding: '0.75rem',
-    backgroundColor: '#4f46e5',
-    color: '#ffffff',
+    backgroundColor: 'var(--color-accent)',
+    color: 'var(--color-on-accent)',
     border: 'none',
     borderRadius: '8px',
     fontSize: '1rem',
@@ -185,3 +185,4 @@ nextButton: {
     width: '100%',
 },
 }
+

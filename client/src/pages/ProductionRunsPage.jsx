@@ -393,14 +393,14 @@ export default function ProductionRunsPage() {
 
 const styles = {
   heading: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     marginBottom: '1.5rem',
   },
   filtersSection: {
     marginBottom: '1.5rem',
   },
   filtersLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.8rem',
     marginBottom: '0.5rem',
     textTransform: 'uppercase',
@@ -410,28 +410,28 @@ const styles = {
     marginTop: '0.5rem',
     padding: '0.4rem 1rem',
     backgroundColor: 'transparent',
-    border: '1px solid #555',
-    color: '#888',
+    border: '1px solid var(--color-text-muted)',
+    color: 'var(--color-text-secondary)',
     borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '0.8rem',
   },
   errorBox: {
-    backgroundColor: '#fee2e2',
-    color: '#dc2626',
+    backgroundColor: 'var(--color-danger-soft)',
+    color: 'var(--color-danger)',
     padding: '0.75rem',
     borderRadius: '8px',
     marginBottom: '1rem',
   },
   loadingText: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.9rem',
   },
   section: {
     marginBottom: '2rem',
   },
   sectionLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.8rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
@@ -447,9 +447,9 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: '1px solid var(--color-border)',
     cursor: 'pointer',
   },
   inProgressCard: {
@@ -457,9 +457,9 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
-    border: '2px solid #4f46e5',
+    border: '2px solid var(--color-accent)',
     cursor: 'pointer',
   },
   cardLeft: {
@@ -468,34 +468,34 @@ const styles = {
     gap: '3px',
   },
   inProgressBadge: {
-    color: '#4f46e5',
+    color: 'var(--color-accent)',
     fontSize: '0.75rem',
     fontWeight: 'bold',
     marginBottom: '2px',
   },
   cardMachine: {
-    color: '#ffffff',
+    color: 'var(--color-text-primary)',
     fontSize: '0.95rem',
     fontWeight: 'bold',
   },
   cardSub: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.8rem',
   },
   cardDate: {
-    color: '#555',
+    color: 'var(--color-text-muted)',
     fontSize: '0.75rem',
   },
   arrow: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '20px',
   },
   emptyText: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.9rem',
   },
 dateLabel: {
-    color: '#888',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.75rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
@@ -504,8 +504,8 @@ exportButton: {
     padding: '0.5rem 0.75rem',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: '#4f46e5',
-    color: '#ffffff',
+    backgroundColor: 'var(--color-accent)',
+    color: 'var(--color-on-accent)',
     fontSize: '0.85rem',
     cursor: 'pointer',
 },
@@ -528,9 +528,9 @@ filtersGrid: {
 filterInput: {
     padding: '0.5rem 0.75rem',
     borderRadius: '8px',
-    border: '1px solid #333',
-    backgroundColor: '#1a1a2e',
-    color: '#ffffff',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
     fontSize: '0.85rem',
     width: '100%',             // ← new: fill the grid cell
     boxSizing: 'border-box',   // ← new: padding included in that width
@@ -543,3 +543,4 @@ dateRangeField: {
     minWidth: 0,               // ← new: allow this wrapper to shrink inside the grid
 },
 }
+
