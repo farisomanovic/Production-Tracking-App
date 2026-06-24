@@ -1,10 +1,11 @@
 /**
- * Renders the production-run list, filters, and CSV export workflow.
+ * Renders the production-run list, filters, and XLSX export workflow.
  * Separates in-progress and completed runs for operational review.
  * Fetches related master data needed for filtering and export enrichment.
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import * as XLSX from 'xlsx'
 import { getAllRuns, getRunById } from '../api/productionRuns'
 import { getAllMachines } from '../api/machines'
 import { getAllOperators } from '../api/operators'
@@ -96,6 +97,30 @@ export default function ProductionRunsPage() {
     })
   }
 
+  function formatFileDate(dateStr) {
+      return new Date(dateStr).toLocaleDateString('en-GB').replace(/\//g, '.')
+  }
+
+  function sanitizeFileNamePart(value) {
+      return String(value || '')
+          .trim()
+          .replace(/[<>:"/\\|?*]+/g, '-')
+          .replace(/\s+/g, '_')
+  }
+
+  function getExcelColumnName(columnIndex) {
+      let columnName = ''
+      let index = columnIndex + 1
+
+      while (index > 0) {
+          const remainder = (index - 1) % 26
+          columnName = String.fromCharCode(65 + remainder) + columnName
+          index = Math.floor((index - 1) / 26)
+      }
+
+      return columnName
+  }
+
   async function handleExport() {
       if (!filterMachineId) {
           alert('Please select a machine before exporting.')
@@ -130,7 +155,7 @@ export default function ProductionRunsPage() {
               })
           })
 
-          // Build CSV header row
+          // Build XLSX header row
           const headers = [
               'Date',
               'Machine',
@@ -152,19 +177,24 @@ export default function ProductionRunsPage() {
               'Notes'
           ]
 
+          const formatExportDate = (dateStr) => {
+              if (!dateStr) return ''
+              return new Date(dateStr).toLocaleDateString('en-GB')
+          }
+
+          const formatExportTime = (dateStr) => {
+              if (!dateStr) return ''
+              return new Date(dateStr).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+              })
+          }
+
           // Build one row per run
           const rows = fullRuns.map(run => {
-              const formatCSVTime = (dateStr) => {
-                  if (!dateStr) return ''
-                  return new Date(dateStr).toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true
-                  })
-              }
-
               const energyConsumed = run.energyStart && run.energyEnd
-                  ? (run.energyEnd - run.energyStart).toFixed(1)
+                  ? Number((run.energyEnd - run.energyStart).toFixed(1))
                   : ''
 
               // Parameter values — match by parameter name
@@ -179,54 +209,85 @@ export default function ProductionRunsPage() {
               // Material values — match by material name
               const materialValues = materialNames.map(name => {
                   const match = run.materialUsages.find(mu => mu.material.name === name)
-                  return match ? match.quantityUsed : ''
+                  return match ? Number(match.quantityUsed) : ''
               })
 
               // Outputs — flatten into single row (sum if multiple outputs)
-              const totalQty = run.runOutputs.reduce((sum, o) => sum + o.quantityProduced, 0)
-              const totalGross = run.runOutputs.reduce((sum, o) => sum + (o.grossWeightKg || 0), 0)
-              const totalScrap = run.runOutputs.reduce((sum, o) => sum + (o.scrapKg || 0), 0)
+              const totalQty = run.runOutputs.reduce((sum, o) => sum + Number(o.quantityProduced || 0), 0)
+              const totalGross = run.runOutputs.reduce((sum, o) => sum + Number(o.grossWeightKg || 0), 0)
+              const totalScrap = run.runOutputs.reduce((sum, o) => sum + Number(o.scrapKg || 0), 0)
 
               return [
-                  new Date(run.date).toLocaleDateString('en-GB'),
+                  formatExportDate(run.date),
                   run.machine.name,
                   run.operator.name,
                   run.product.name,
                   run.recipe.name,
-                  formatCSVTime(run.warmupStartTime),
-                  formatCSVTime(run.startTime),
-                  formatCSVTime(run.stableStartTime),
-                  formatCSVTime(run.endTime),
+                  formatExportTime(run.warmupStartTime),
+                  formatExportTime(run.startTime),
+                  formatExportTime(run.stableStartTime),
+                  formatExportTime(run.endTime),
                   run.energyStart || '',
                   run.energyEnd || '',
                   energyConsumed,
                   ...paramValues,
                   ...materialValues,
                   totalQty,
-                  totalGross.toFixed(1),
-                  totalScrap.toFixed(1),
+                  Number(totalGross.toFixed(1)),
+                  Number(totalScrap.toFixed(1)),
                   run.notes || ''
               ]
           })
 
-          // Convert to CSV string
-          const csvContent = [headers, ...rows]
-              .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-              .join('\n')
-
-          // Trigger download
-          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
           const selectedMachine = machines.find(m => m.id === filterMachineId)
-          const machineCode = selectedMachine?.code || selectedMachine?.name || filterMachineId
-          const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
-          const from = filterDateFrom ? new Date(filterDateFrom).toLocaleDateString('en-GB').replace(/\//g, '-') : today
-          const to = filterDateTo ? new Date(filterDateTo).toLocaleDateString('en-GB').replace(/\//g, '-') : today
-          link.download = `pakom_${from}_${to}_${machineCode}.csv`
-          link.click()
-          URL.revokeObjectURL(url)
+          const machineName = selectedMachine?.name || fullRuns[0]?.machine?.name || filterMachineId
+          const runDates = fullRuns
+              .map(run => new Date(run.date))
+              .filter(date => !Number.isNaN(date.getTime()))
+          const oldestDate = new Date(Math.min(...runDates))
+          const newestDate = new Date(Math.max(...runDates))
+          const fileName = `${sanitizeFileNamePart(machineName)}_${formatFileDate(oldestDate)}-${formatFileDate(newestDate)}.xlsx`
+
+          const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+          const workbook = XLSX.utils.book_new()
+          workbook.Workbook = { CalcPr: { fullCalcOnLoad: true } }
+          const lastDataRowNumber = rows.length + 1
+          const summaryRowNumber = lastDataRowNumber + 1
+          const materialStartIndex = headers.findIndex(header => header === `${materialNames[0]} Used (kg)`)
+          const totalColumnHeaders = ['Quantity Produced', 'Gross Weight (kg)', 'Scrap (kg)']
+
+          worksheet[`A${summaryRowNumber}`] = {
+              t: 's',
+              f: `"Broj radnih dana: "&(COUNTA(A1:A${lastDataRowNumber})-1)`,
+          }
+
+          materialNames.forEach((_, index) => {
+              const columnName = getExcelColumnName(materialStartIndex + index)
+              worksheet[`${columnName}${summaryRowNumber}`] = {
+                  t: 's',
+                  f: `"Sum: "&SUM(${columnName}2:${columnName}${lastDataRowNumber})`,
+              }
+          })
+
+          totalColumnHeaders.forEach(header => {
+              const columnIndex = headers.findIndex(columnHeader => columnHeader === header)
+              const columnName = getExcelColumnName(columnIndex)
+              worksheet[`${columnName}${summaryRowNumber}`] = {
+                  t: 's',
+                  f: `"Sum: "&SUM(${columnName}2:${columnName}${lastDataRowNumber})`,
+              }
+          })
+
+          worksheet['!ref'] = `A1:${getExcelColumnName(headers.length - 1)}${summaryRowNumber}`
+          worksheet['!cols'] = headers.map((header, columnIndex) => {
+              const columnValues = [header, ...rows.map(row => row[columnIndex] ?? '')]
+              const maxLength = Math.max(...columnValues.map(value => String(value).length))
+
+              return { wch: Math.min(Math.max(maxLength + 2, 14), 60) }
+          })
+
+          XLSX.utils.book_append_sheet(workbook, worksheet, 'Production Runs')
+          XLSX.writeFile(workbook, fileName)
 
       } catch (err) {
           console.error(err)
@@ -310,7 +371,7 @@ export default function ProductionRunsPage() {
           <div style={styles.dateRangeField}>
               <span style={styles.dateLabel}>Export</span>
               <button style={styles.exportButton} onClick={handleExport}>
-                  Export CSV
+                  Export XLSX
               </button>
           </div>
 
