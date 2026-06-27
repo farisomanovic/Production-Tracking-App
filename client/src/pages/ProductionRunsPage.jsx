@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as XLSX from 'xlsx'
+import JSZip from 'jszip'
 import { getAllRuns, getRunById } from '../api/productionRuns'
 import { getAllMachines } from '../api/machines'
 import { getAllOperators } from '../api/operators'
@@ -119,6 +120,100 @@ export default function ProductionRunsPage() {
       }
 
       return columnName
+  }
+
+  function insertAfterOpeningTag(xml, tagName, content) {
+      return xml.replace(new RegExp(`(<${tagName}[^>]*>)`), `$1${content}`)
+  }
+
+  function insertBeforeTag(xml, tagName, content) {
+      const tagPattern = new RegExp(`(<${tagName}\\b[^>]*>)`)
+
+      if (tagPattern.test(xml)) {
+          return xml.replace(tagPattern, `${content}$1`)
+      }
+
+      return insertAfterOpeningTag(xml, 'worksheet', content)
+  }
+
+  function insertAfterTag(xml, tagName, content) {
+      const tagPattern = new RegExp(`(<${tagName}\\b[^>]*/>)`)
+
+      if (tagPattern.test(xml)) {
+          return xml.replace(tagPattern, `$1${content}`)
+      }
+
+      return insertBeforeTag(xml, 'ignoredErrors', content)
+  }
+
+  function replaceXmlTag(xml, tagName, tagXml) {
+      const tagPattern = new RegExp(`<${tagName}[^>]*/>`)
+
+      if (tagPattern.test(xml)) {
+          return xml.replace(tagPattern, tagXml)
+      }
+
+      return null
+  }
+
+  function replaceXmlBlock(xml, tagName, tagXml) {
+      const tagPattern = new RegExp(`<${tagName}\\b[\\s\\S]*?</${tagName}>|<${tagName}[^>]*/>`)
+
+      if (tagPattern.test(xml)) {
+          return xml.replace(tagPattern, tagXml)
+      }
+
+      return null
+  }
+
+  async function applyPrintLayout(workbook, notesColumnIndex) {
+      const xlsxData = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+      const zip = await JSZip.loadAsync(xlsxData)
+      const sheet = zip.file('xl/worksheets/sheet1.xml')
+
+      if (!sheet) return new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+
+      let sheetXml = await sheet.async('string')
+
+      if (/<sheetPr[^>]*>/.test(sheetXml)) {
+          sheetXml = replaceXmlTag(sheetXml, 'pageSetUpPr', '<pageSetUpPr fitToPage="1"/>')
+              || insertAfterOpeningTag(sheetXml, 'sheetPr', '<pageSetUpPr fitToPage="1"/>')
+      } else {
+          sheetXml = insertAfterOpeningTag(sheetXml, 'worksheet', '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>')
+      }
+
+      const printOptionsXml = '<printOptions horizontalCentered="1"/>'
+      const pageMarginsXml = '<pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>'
+      const pageSetupXml = '<pageSetup paperSize="9" orientation="landscape" fitToWidth="0" fitToHeight="1"/>'
+
+      sheetXml = replaceXmlTag(sheetXml, 'pageMargins', pageMarginsXml)
+          || insertBeforeTag(sheetXml, 'ignoredErrors', pageMarginsXml)
+      sheetXml = replaceXmlTag(sheetXml, 'printOptions', printOptionsXml)
+          || insertBeforeTag(sheetXml, 'pageMargins', printOptionsXml)
+      sheetXml = replaceXmlTag(sheetXml, 'pageSetup', pageSetupXml)
+          || insertAfterTag(sheetXml, 'pageMargins', pageSetupXml)
+
+      if (notesColumnIndex > 0) {
+          const columnBreakXml = `<colBreaks count="1" manualBreakCount="1"><brk id="${notesColumnIndex}" max="1048575" man="1"/></colBreaks>`
+          sheetXml = replaceXmlBlock(sheetXml, 'colBreaks', columnBreakXml)
+              || insertAfterTag(sheetXml, 'pageSetup', columnBreakXml)
+      }
+
+      zip.file('xl/worksheets/sheet1.xml', sheetXml)
+
+      return zip.generateAsync({
+          type: 'blob',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+  }
+
+  function downloadBlob(blob, fileName) {
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      link.click()
+      URL.revokeObjectURL(url)
   }
 
   async function handleExport() {
@@ -287,7 +382,8 @@ export default function ProductionRunsPage() {
           })
 
           XLSX.utils.book_append_sheet(workbook, worksheet, 'Production Runs')
-          XLSX.writeFile(workbook, fileName)
+          const workbookBlob = await applyPrintLayout(workbook, headers.findIndex(header => header === 'Notes'))
+          downloadBlob(workbookBlob, fileName)
 
       } catch (err) {
           console.error(err)
