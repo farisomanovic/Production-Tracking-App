@@ -8,6 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
+import { common } from '../styles/common'
 
 export default function RunDetailPage() {
 
@@ -321,16 +322,16 @@ return (
         } />
     </div>
 
-    {error && <div style={styles.errorBox}>{error}</div>}
+    {error && <div style={common.errorBox}>{error}</div>}
 
 
     {/* Parameters */}
     {machineParameters.length > 0 && (
         <div style={styles.section}>
-        <p style={styles.sectionLabel}>Parameters</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Parameters</p>
         {machineParameters.map(mp => (
-            <div key={mp.id} style={styles.field}>
-            <label style={styles.label}>
+            <div key={mp.id} style={common.field}>
+            <label style={common.label}>
                 {mp.parameter.name}
                 {mp.parameter.unit ? ` (${mp.parameter.unit})` : ''}
             </label>
@@ -349,17 +350,17 @@ return (
     {/* Materials */}
     {run.recipe.recipeItems.length > 0 && (
         <div style={styles.section}>
-        <p style={styles.sectionLabel}>Material Usage</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Material Usage</p>
         {run.recipe.recipeItems.map(item => (
-            <div key={item.materialId} style={styles.field}>
-            <label style={styles.label}>
+            <div key={item.materialId} style={common.field}>
+            <label style={common.label}>
                 {item.material.name}
                 <span style={styles.hint}>
                 {' '}— {item.percentage}% planned
                 {item.plannedQtyKg ? ` (${item.plannedQtyKg} kg)` : ''}
                 </span>
             </label>
-            <div style={styles.inputRow}>
+            <div style={common.inputRow}>
                 <input
                 style={styles.input}
                 type='number'
@@ -369,7 +370,7 @@ return (
                 min='0'
                 step='0.1'
                 />
-                <span style={styles.unit}>kg</span>
+                <span style={common.unit}>kg</span>
             </div>
             </div>
         ))}
@@ -378,7 +379,7 @@ return (
 
     {/* Outputs */}
     <div style={styles.section}>
-        <p style={styles.sectionLabel}>Production Outputs</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Production Outputs</p>
         {outputs.map((output, index) => (
         <div key={output.id} style={styles.outputCard}>
             <div style={styles.outputCardHeader}>
@@ -393,8 +394,8 @@ return (
             )}
             </div>
 
-            <div style={styles.field}>
-            <label style={styles.label}>Product *</label>
+            <div style={common.field}>
+            <label style={common.label}>Product *</label>
             <select
                 style={styles.input}
                 value={output.productId}
@@ -409,8 +410,8 @@ return (
             </select>
             </div>
 
-            <div style={styles.field}>
-            <label style={styles.label}>Quantity Produced *</label>
+            <div style={common.field}>
+            <label style={common.label}>Quantity Produced *</label>
             <input
                 style={styles.input}
                 type='number'
@@ -422,9 +423,9 @@ return (
             />
             </div>
 
-            <div style={styles.field}>
-            <label style={styles.label}>Gross Weight *</label>
-            <div style={styles.inputRow}>
+            <div style={common.field}>
+            <label style={common.label}>Gross Weight *</label>
+            <div style={common.inputRow}>
                 <input
                 style={styles.input}
                 type='number'
@@ -434,13 +435,13 @@ return (
                 min='0'
                 step='0.1'
                 />
-                <span style={styles.unit}>kg</span>
+                <span style={common.unit}>kg</span>
             </div>
             </div>
 
-            <div style={styles.field}>
-            <label style={styles.label}>Scrap *</label>
-            <div style={styles.inputRow}>
+            <div style={common.field}>
+            <label style={common.label}>Scrap *</label>
+            <div style={common.inputRow}>
                 <input
                 style={styles.input}
                 type='number'
@@ -450,7 +451,7 @@ return (
                 min='0'
                 step='0.1'
                 />
-                <span style={styles.unit}>kg</span>
+                <span style={common.unit}>kg</span>
             </div>
             </div>
 
@@ -464,9 +465,9 @@ return (
 
     {/* End Time */}
     <div style={styles.section}>
-        <p style={styles.sectionLabel}>Completion</p>
-        <div style={styles.field}>
-        <label style={styles.label}>End Time *</label>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Completion</p>
+        <div style={common.field}>
+        <label style={common.label}>End Time *</label>
         <input
             style={styles.input}
             type='time'
@@ -474,8 +475,8 @@ return (
             onChange={e => setEndTime(e.target.value)}
         />
         </div>
-        <div style={styles.field}>
-        <label style={styles.label}>Energy Meter End (kWh)</label>
+        <div style={common.field}>
+        <label style={common.label}>Energy Meter End (kWh)</label>
         <input
             style={styles.input}
             type='number'
@@ -484,8 +485,8 @@ return (
             placeholder='e.g. 12500'
         />
         </div>
-        <div style={styles.field}>
-        <label style={styles.label}>Notes</label>
+        <div style={common.field}>
+        <label style={common.label}>Notes</label>
         <textarea
             style={styles.textarea}
             value={notes}
@@ -525,7 +526,7 @@ return (
         Delete Run
     </button>
     <div style={styles.section}>
-        <p style={styles.sectionLabel}>Run Info</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Run Info</p>
         <div style={styles.infoCard}>
         <InfoRow label='Date' value={formatDate(run.date)} />
         <InfoRow label='Operator' value={run.operator.name} />
@@ -535,7 +536,7 @@ return (
     </div>
 
     <div style={styles.section}>
-        <p style={styles.sectionLabel}>Times</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Times</p>
         <div style={styles.infoCard}>
         <InfoRow label='Warmup Start' value={formatTime(run.warmupStartTime)} />
         <InfoRow label='Production Start' value={formatTime(run.startTime)} />
@@ -546,7 +547,7 @@ return (
 
     {(run.energyStart || run.energyEnd) && (
         <div style={styles.section}>
-        <p style={styles.sectionLabel}>Energy</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Energy</p>
         <div style={styles.infoCard}>
             <InfoRow
             label='Start Reading'
@@ -568,7 +569,7 @@ return (
 
     {run.runParameterValues.length > 0 && (
         <div style={styles.section}>
-        <p style={styles.sectionLabel}>Parameters</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Parameters</p>
         <div style={styles.infoCard}>
             {run.runParameterValues.map(pv => (
             <InfoRow
@@ -587,7 +588,7 @@ return (
 
     {run.materialUsages.length > 0 && (
         <div style={styles.section}>
-        <p style={styles.sectionLabel}>Materials Used</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Materials Used</p>
         <div style={styles.infoCard}>
             {run.materialUsages.map(mu => (
             <InfoRow
@@ -602,7 +603,7 @@ return (
 
     {run.runOutputs.length > 0 && (
         <div style={styles.section}>
-        <p style={styles.sectionLabel}>Outputs</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Outputs</p>
         {run.runOutputs.map((output, index) => (
             <div key={output.id} style={styles.outputCard}>
             <p style={styles.outputTitle}>Output {index + 1}</p>
@@ -617,7 +618,7 @@ return (
 
     {run.notes && (
         <div style={styles.section}>
-        <p style={styles.sectionLabel}>Notes</p>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Notes</p>
         <div style={styles.infoCard}>
             <p style={styles.notesText}>{run.notes}</p>
         </div>
@@ -707,13 +708,6 @@ summaryCard: {
 section: {
     marginBottom: '1.5rem',
 },
-sectionLabel: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.75rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    marginBottom: '0.5rem',
-},
 infoCard: {
     backgroundColor: 'var(--color-surface)',
     borderRadius: '8px',
@@ -768,16 +762,6 @@ notesText: {
     padding: '10px 16px',
     lineHeight: '1.5',
 },
-field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.4rem',
-    marginBottom: '1rem',
-},
-label: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
-},
 hint: {
     color: 'var(--color-text-muted)',
     fontSize: '0.8rem',
@@ -803,16 +787,6 @@ textarea: {
     fontFamily: 'inherit',
     width: '100%',
     boxSizing: 'border-box',
-},
-inputRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-},
-unit: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
-    minWidth: '2rem',
 },
 removeButton: {
     backgroundColor: 'transparent',

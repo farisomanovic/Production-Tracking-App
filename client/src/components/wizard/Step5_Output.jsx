@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { completeRun } from '../../api/productionRuns'
 import { getMachineProducts } from '../../api/machineProducts'
+import { common } from '../../styles/common'
 
 export default function Step5_Output({ data, runId }) {
 
@@ -141,20 +142,20 @@ async function handleComplete() {
     }
 }
 
-if (loading) return <p style={styles.loadingText}>Loading...</p>
+if (loading) return <p style={common.loadingText}>Loading...</p>
 
 return (
-    <div style={styles.container}>
+    <div style={common.wizardContainer}>
     <h2 style={styles.heading}>Output & Completion</h2>
-    <p style={styles.subheading}>
+    <p style={common.subheading}>
         Record what was produced and close out the run.
     </p>
 
-    {error && <div style={styles.errorBox}>{error}</div>}
+    {error && <div style={common.errorBox}>{error}</div>}
 
     {/* End Time */}
-    <div style={styles.field}>
-        <label style={styles.label}>End Time *</label>
+    <div style={common.field}>
+        <label style={common.label}>End Time *</label>
         <input
         style={styles.input}
         type='time'
@@ -164,8 +165,8 @@ return (
     </div>
 
     {/* Energy End */}
-    <div style={styles.field}>
-        <label style={styles.label}>Energy Meter End (kWh)</label>
+    <div style={common.field}>
+        <label style={common.label}>Energy Meter End (kWh)</label>
         <input
         style={styles.input}
         type='number'
@@ -176,8 +177,8 @@ return (
     </div>
 
     {/* Notes */}
-    <div style={styles.field}>
-        <label style={styles.label}>Notes</label>
+    <div style={common.field}>
+        <label style={common.label}>Notes</label>
         <textarea
         style={styles.textarea}
         value={notes}
@@ -207,8 +208,8 @@ return (
         </div>
 
         {/* Product */}
-        <div style={styles.field}>
-            <label style={styles.label}>Product *</label>
+        <div style={common.field}>
+            <label style={common.label}>Product *</label>
             <select
             style={styles.input}
             value={output.productId}
@@ -224,9 +225,9 @@ return (
         </div>
 
         {/* Quantity Produced */}
-        <div style={styles.field}>
-            <label style={styles.label}>Quantity Produced *</label>
-            <div style={styles.inputRow}>
+        <div style={common.field}>
+            <label style={common.label}>Quantity Produced *</label>
+            <div style={common.inputRow}>
             <input
                 style={styles.input}
                 type='number'
@@ -240,9 +241,9 @@ return (
         </div>
 
         {/* Gross Weight */}
-        <div style={styles.field}>
-            <label style={styles.label}>Gross Weight *</label>
-            <div style={styles.inputRow}>
+        <div style={common.field}>
+            <label style={common.label}>Gross Weight *</label>
+            <div style={common.inputRow}>
             <input
                 style={styles.input}
                 type='number'
@@ -252,14 +253,14 @@ return (
                 min='0'
                 step='0.1'
             />
-            <span style={styles.unit}>kg</span>
+            <span style={common.unit}>kg</span>
             </div>
         </div>
 
         {/* Scrap */}
-        <div style={styles.field}>
-            <label style={styles.label}>Scrap *</label>
-            <div style={styles.inputRow}>
+        <div style={common.field}>
+            <label style={common.label}>Scrap *</label>
+            <div style={common.inputRow}>
             <input
                 style={styles.input}
                 type='number'
@@ -269,7 +270,7 @@ return (
                 min='0'
                 step='0.1'
             />
-            <span style={styles.unit}>kg</span>
+            <span style={common.unit}>kg</span>
             </div>
         </div>
 
@@ -298,46 +299,15 @@ return (
 }
 
 const styles = {
-container: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0rem',
-},
 heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '0.5rem',
-},
-subheading: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
-    marginBottom: '1.5rem',
 },
 sectionHeading: {
     color: 'var(--color-text-primary)',
     fontSize: '1rem',
     marginBottom: '1rem',
     marginTop: '0.5rem',
-},
-loadingText: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.9rem',
-},
-errorBox: {
-    backgroundColor: 'var(--color-danger-soft)',
-    color: 'var(--color-danger)',
-    padding: '0.75rem',
-    borderRadius: '8px',
-    marginBottom: '1rem',
-},
-field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.4rem',
-    marginBottom: '1rem',
-},
-label: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
 },
 input: {
     padding: '0.6rem 0.75rem',
@@ -358,16 +328,6 @@ textarea: {
     fontSize: '0.95rem',
     resize: 'vertical',
     fontFamily: 'inherit',
-},
-inputRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-},
-unit: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
-    minWidth: '2rem',
 },
 outputCard: {
     backgroundColor: 'var(--color-surface)',

@@ -5,6 +5,7 @@
  */
 import { useState, useEffect } from 'react'
 import { getAllMachines, createMachine, updateMachine } from '../api/machines'
+import { common } from '../styles/common'
 
 function MachinesPage() {
   const [machines, setMachines] = useState([])
@@ -38,8 +39,8 @@ function MachinesPage() {
   async function handleSubmit() {
     if (!name.trim()) return
     try {
-      await createMachine({ 
-        name, 
+      await createMachine({
+        name,
         ...(code.trim() && { code })
       })
       setName('')
@@ -88,34 +89,34 @@ function MachinesPage() {
   if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
 
   return (
-    <div style={styles.container}>
+    <div style={common.container}>
       <h1 style={styles.heading}>Machines</h1>
 
-      <div style={styles.form}>
+      <div style={common.form}>
         <input
-          style={styles.input}
+          style={common.input}
           type="text"
           placeholder="Machine name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <input
-          style={styles.input}
+          style={common.input}
           type="text"
           placeholder="Machine code (optional)"
           value={code}
           onChange={(e) => setCode(e.target.value)}
         />
-        <button style={styles.button} onClick={handleSubmit}>
+        <button style={common.button} onClick={handleSubmit}>
           Add Machine
         </button>
       </div>
 
-      <div style={styles.list}>
+      <div style={common.list}>
         {machines.map((machine) => (
-          <div key={machine.id} style={styles.card}>
-              <div style={styles.cardLeft}>
-                  <span style={styles.cardName}>{machine.name}</span>
+          <div key={machine.id} style={common.card}>
+              <div style={common.cardLeft}>
+                  <span style={common.cardName}>{machine.name}</span>
                   {editingId === machine.id ? (
                       <div style={styles.editRow}>
                           <input
@@ -133,7 +134,7 @@ function MachinesPage() {
                       </div>
                   ) : (
                       <div style={styles.editRow}>
-                          <span style={styles.cardType}>{machine.code}</span>
+                          <span style={common.cardType}>{machine.code}</span>
                           <button
                               style={styles.editButton}
                               onClick={() => {
@@ -168,64 +169,9 @@ function MachinesPage() {
 }
 
 const styles = {
-  container: {
-    padding: '16px',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
   heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '24px',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    marginBottom: '24px',
-  },
-  input: {
-    padding: '10px 12px',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
-  },
-  button: {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: 'var(--color-accent-link)',
-    color: 'var(--color-on-accent)',
-    fontSize: '14px',
-    cursor: 'pointer',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  card: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-  },
-  cardLeft: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  cardName: {
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
-  },
-  cardType: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '12px',
   },
   badgeActive: {
     fontSize: '12px',
@@ -245,16 +191,16 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-},
-editInput: {
+  },
+  editInput: {
     padding: '4px 8px',
     borderRadius: '6px',
     border: '1px solid var(--color-border)',
     backgroundColor: 'var(--color-background)',
     color: 'var(--color-text-primary)',
     fontSize: '12px',
-},
-editButton: {
+  },
+  editButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -262,8 +208,8 @@ editButton: {
     color: 'var(--color-text-secondary)',
     fontSize: '12px',
     cursor: 'pointer',
-},
-saveButton: {
+  },
+  saveButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -271,8 +217,8 @@ saveButton: {
     color: 'var(--color-success-strong)',
     fontSize: '12px',
     cursor: 'pointer',
-},
-cancelButton: {
+  },
+  cancelButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -280,13 +226,13 @@ cancelButton: {
     color: 'var(--color-danger-strong)',
     fontSize: '12px',
     cursor: 'pointer',
-},
-cardRight: {
+  },
+  cardRight: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-},
-deactivateButton: {
+  },
+  deactivateButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -294,8 +240,8 @@ deactivateButton: {
     color: 'var(--color-danger-strong)',
     fontSize: '12px',
     cursor: 'pointer',
-},
-activateButton: {
+  },
+  activateButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -303,8 +249,7 @@ activateButton: {
     color: 'var(--color-success-strong)',
     fontSize: '12px',
     cursor: 'pointer',
-},
+  },
 }
 
 export default MachinesPage
-

@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { getAllOperators } from '../../api/operators'
 import { getAllMachines } from '../../api/machines'
 import { getMachineProducts } from '../../api/machineProducts'
+import { common } from '../../styles/common'
 
 export default function Step1_BasicInfo({ data, onNext }) {
 
@@ -96,19 +97,19 @@ function handleNext() {
     onNext(stepData)
 }
 
-if (loadingInitial) return <p style={styles.loadingText}>Loading...</p>
+if (loadingInitial) return <p style={common.loadingText}>Loading...</p>
 
 return (
-    <div style={styles.container}>
+    <div style={common.wizardContainer}>
     <h2 style={styles.heading}>Basic Information</h2>
 
-    {error && <div style={styles.errorBox}>{error}</div>}
+    {error && <div style={common.errorBox}>{error}</div>}
 
     {/* Operator */}
-    <div style={styles.field}>
-        <label style={styles.label}>Operator *</label>
+    <div style={common.field}>
+        <label style={common.label}>Operator *</label>
         <select
-        style={styles.input}
+        style={common.wizardInput}
         value={operatorId}
         onChange={e => setOperatorId(e.target.value)}
         >
@@ -123,10 +124,10 @@ return (
     </div>
 
     {/* Machine */}
-    <div style={styles.field}>
-        <label style={styles.label}>Machine *</label>
+    <div style={common.field}>
+        <label style={common.label}>Machine *</label>
         <select
-        style={styles.input}
+        style={common.wizardInput}
         value={machineId}
         onChange={e => {
             setMachineId(e.target.value)
@@ -146,13 +147,13 @@ return (
 
     {/* Product — only shown after machine is selected */}
     {machineId && (
-        <div style={styles.field}>
-        <label style={styles.label}>Product *</label>
+        <div style={common.field}>
+        <label style={common.label}>Product *</label>
         {loadingProducts ? (
-            <p style={styles.loadingText}>Loading products...</p>
+            <p style={common.loadingText}>Loading products...</p>
         ) : (
             <select
-            style={styles.input}
+            style={common.wizardInput}
             value={productId}
             onChange={e => setProductId(e.target.value)}
             >
@@ -168,10 +169,10 @@ return (
     )}
 
     {/* Date */}
-    <div style={styles.field}>
-        <label style={styles.label}>Date *</label>
+    <div style={common.field}>
+        <label style={common.label}>Date *</label>
         <input
-            style={styles.input}
+            style={common.wizardInput}
             type='date'
             value={date}
             onChange={e => setDate(e.target.value)}
@@ -180,10 +181,10 @@ return (
     </div>
 
     {/* Warmup Start Time */}
-    <div style={styles.field}>
-        <label style={styles.label}>Warmup Start Time</label>
+    <div style={common.field}>
+        <label style={common.label}>Warmup Start Time</label>
         <input
-        style={styles.input}
+        style={common.wizardInput}
         type='time'
         value={warmupStartTime}
         onChange={e => setWarmupStartTime(e.target.value)}
@@ -191,10 +192,10 @@ return (
     </div>
 
     {/* Start Time */}
-    <div style={styles.field}>
-        <label style={styles.label}>Start Time *</label>
+    <div style={common.field}>
+        <label style={common.label}>Start Time *</label>
         <input
-        style={styles.input}
+        style={common.wizardInput}
         type='time'
         value={startTime}
         onChange={e => setStartTime(e.target.value)}
@@ -202,10 +203,10 @@ return (
     </div>
 
     {/* Stable Start Time */}
-    <div style={styles.field}>
-        <label style={styles.label}>Stable Start Time</label>
+    <div style={common.field}>
+        <label style={common.label}>Stable Start Time</label>
         <input
-        style={styles.input}
+        style={common.wizardInput}
         type='time'
         value={stableStartTime}
         onChange={e => setStableStartTime(e.target.value)}
@@ -213,10 +214,10 @@ return (
     </div>
 
     {/* Energy Start */}
-    <div style={styles.field}>
-        <label style={styles.label}>Energy Meter Start (kWh)</label>
+    <div style={common.field}>
+        <label style={common.label}>Energy Meter Start (kWh)</label>
         <input
-        style={styles.input}
+        style={common.wizardInput}
         type='number'
         value={energyStart}
         onChange={e => setEnergyStart(e.target.value)}
@@ -225,10 +226,10 @@ return (
     </div>
 
     {/* Potential Buyer */}
-    <div style={styles.field}>
-        <label style={styles.label}>Potential Buyer</label>
+    <div style={common.field}>
+        <label style={common.label}>Potential Buyer</label>
         <input
-        style={styles.input}
+        style={common.wizardInput}
         type='text'
         value={potentialBuyer}
         onChange={e => setPotentialBuyer(e.target.value)}
@@ -236,7 +237,7 @@ return (
         />
     </div>
 
-    <button style={styles.nextButton} onClick={handleNext}>
+    <button style={common.nextButton} onClick={handleNext}>
         Next →
     </button>
 
@@ -245,54 +246,8 @@ return (
 }
 
 const styles = {
-container: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0rem',
-},
 heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '1.5rem',
 },
-field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.4rem',
-    marginBottom: '1rem',
-},
-label: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
-},
-input: {
-    padding: '0.6rem 0.75rem',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-primary)',
-    fontSize: '0.95rem',
-},
-errorBox: {
-    backgroundColor: 'var(--color-danger-soft)',
-    color: 'var(--color-danger)',
-    padding: '0.75rem',
-    borderRadius: '8px',
-    marginBottom: '1rem',
-},
-loadingText: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.9rem',
-},
-nextButton: {
-    marginTop: '1rem',
-    padding: '0.75rem',
-    backgroundColor: 'var(--color-accent)',
-    color: 'var(--color-on-accent)',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    width: '100%',
-},
 }
-

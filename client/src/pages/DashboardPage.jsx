@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllRuns } from '../api/productionRuns'
+import { common } from '../styles/common'
 
 export default function DashboardPage() {
 
@@ -59,9 +60,9 @@ export default function DashboardPage() {
   if (error) return <p style={styles.errorText}>{error}</p>
 
   return (
-    <div style={styles.container}>
+    <div style={common.container}>
       <h1 style={styles.heading}>Dashboard</h1>
-      <p style={styles.subheading}>
+      <p style={common.subheading}>
         {new Date().toLocaleDateString('en-GB', {
           weekday: 'long',
           day: '2-digit',
@@ -96,7 +97,7 @@ export default function DashboardPage() {
       {/* In progress runs — shown prominently if any exist */}
       {inProgressRuns.length > 0 && (
         <div style={styles.section}>
-          <p style={styles.sectionLabel}>Live Now</p>
+          <p style={common.sectionLabel}>Live Now</p>
           <div style={styles.list}>
             {inProgressRuns.map(run => (
               <div
@@ -114,7 +115,7 @@ export default function DashboardPage() {
                     Started {formatTime(run.startTime)}
                   </span>
                 </div>
-                <span style={styles.arrow}>›</span>
+                <span style={common.arrow}>›</span>
               </div>
             ))}
           </div>
@@ -124,7 +125,7 @@ export default function DashboardPage() {
       {/* Active machines today */}
       {activeMachines.length > 0 && (
         <div style={styles.section}>
-          <p style={styles.sectionLabel}>Machines Active Today</p>
+          <p style={common.sectionLabel}>Machines Active Today</p>
           <div style={styles.machineList}>
             {activeMachines.map(machine => {
               const machineRuns = runs.filter(r => r.machineId === machine.id)
@@ -159,19 +160,9 @@ export default function DashboardPage() {
 }
 
 const styles = {
-  container: {
-    padding: '16px',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
   heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '4px',
-  },
-  subheading: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
-    marginBottom: '1.5rem',
   },
   loadingText: {
     color: 'var(--color-text-secondary)',
@@ -213,13 +204,6 @@ const styles = {
   section: {
     marginBottom: '1.5rem',
   },
-  sectionLabel: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.75rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    marginBottom: '0.75rem',
-  },
   list: {
     display: 'flex',
     flexDirection: 'column',
@@ -257,10 +241,6 @@ const styles = {
   cardTime: {
     color: 'var(--color-text-muted)',
     fontSize: '0.75rem',
-  },
-  arrow: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '20px',
   },
   machineList: {
     display: 'flex',
@@ -302,4 +282,3 @@ const styles = {
     cursor: 'pointer',
   },
 }
-

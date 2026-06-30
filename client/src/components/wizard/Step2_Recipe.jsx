@@ -5,6 +5,7 @@
  */
 import { useState, useEffect } from 'react'
 import { getRecipesByProduct } from '../../api/recipes'
+import { common } from '../../styles/common'
 
 export default function Step2_Recipe({ data, onNext }) {
 
@@ -48,18 +49,18 @@ function handleNext() {
     onNext({ recipeId })
 }
 
-if (loading) return <p style={styles.loadingText}>Loading recipes...</p>
+if (loading) return <p style={common.loadingText}>Loading recipes...</p>
 
 return (
-    <div style={styles.container}>
+    <div style={common.wizardContainer}>
     <h2 style={styles.heading}>Select Recipe</h2>
 
-    {error && <div style={styles.errorBox}>{error}</div>}
+    {error && <div style={common.errorBox}>{error}</div>}
 
     {recipes.length === 0 ? (
-        <div style={styles.emptyBox}>
-        <p style={styles.emptyText}>No recipes found for this product.</p>
-        <p style={styles.emptySubtext}>Go to Admin → Recipes and create one first.</p>
+        <div style={common.emptyBox}>
+        <p style={common.emptyText}>No recipes found for this product.</p>
+        <p style={common.emptySubtext}>Go to Admin → Recipes and create one first.</p>
         </div>
     ) : (
         <div style={styles.list}>
@@ -95,7 +96,7 @@ return (
         </div>
     )}
 
-    <button style={styles.nextButton} onClick={handleNext}>
+    <button style={common.nextButton} onClick={handleNext}>
         Next →
     </button>
     </div>
@@ -103,41 +104,9 @@ return (
 }
 
 const styles = {
-container: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0rem',
-},
 heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '1.5rem',
-},
-loadingText: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.9rem',
-},
-errorBox: {
-    backgroundColor: 'var(--color-danger-soft)',
-    color: 'var(--color-danger)',
-    padding: '0.75rem',
-    borderRadius: '8px',
-    marginBottom: '1rem',
-},
-emptyBox: {
-    padding: '2rem',
-    textAlign: 'center',
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    marginBottom: '1rem',
-},
-emptyText: {
-    color: 'var(--color-text-primary)',
-    marginBottom: '0.5rem',
-},
-emptySubtext: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
 },
 list: {
     display: 'flex',
@@ -191,17 +160,6 @@ itemName: {
 itemPercent: {
     color: 'var(--color-text-secondary)',
     fontSize: '0.85rem',
-},
-nextButton: {
-    marginTop: '1rem',
-    padding: '0.75rem',
-    backgroundColor: 'var(--color-accent)',
-    color: 'var(--color-on-accent)',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    width: '100%',
 },
 }
 

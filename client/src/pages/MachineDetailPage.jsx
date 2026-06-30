@@ -10,6 +10,7 @@ import { getMachineParameters, linkParameterToMachine, unlinkParameterFromMachin
 import { getMachineProducts, linkProductToMachine, unlinkProductFromMachine } from '../api/machineProducts'
 import { getAllParameters } from '../api/parameters'
 import { getAllProducts } from '../api/products'
+import { common } from '../styles/common'
 
 function MachineDetailPage() {
   const { machineId } = useParams()
@@ -111,7 +112,7 @@ function MachineDetailPage() {
   if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
 
   return (
-    <div style={styles.container}>
+    <div style={common.container}>
       <button style={styles.backButton} onClick={() => navigate('/admin')}>
         ← Back
       </button>
@@ -135,21 +136,21 @@ function MachineDetailPage() {
               </option>
             ))}
           </select>
-          <button style={styles.button} onClick={handleLinkParameter}>
+          <button style={common.button} onClick={handleLinkParameter}>
             Link
           </button>
         </div>
 
-        <div style={styles.list}>
+        <div style={common.list}>
           {linkedParameters.length === 0 && (
             <p style={styles.empty}>No parameters linked yet</p>
           )}
           {linkedParameters.map((lp) => (
-            <div key={lp.id} style={styles.card}>
-              <div style={styles.cardLeft}>
-                <span style={styles.cardName}>{lp.parameter.name}</span>
+            <div key={lp.id} style={common.card}>
+              <div style={common.cardLeft}>
+                <span style={common.cardName}>{lp.parameter.name}</span>
                 {lp.parameter.unit && (
-                  <span style={styles.cardType}>{lp.parameter.unit}</span>
+                  <span style={common.cardType}>{lp.parameter.unit}</span>
                 )}
               </div>
               <button
@@ -179,21 +180,21 @@ function MachineDetailPage() {
               </option>
             ))}
           </select>
-          <button style={styles.button} onClick={handleLinkProduct}>
+          <button style={common.button} onClick={handleLinkProduct}>
             Link
           </button>
         </div>
 
-        <div style={styles.list}>
+        <div style={common.list}>
           {linkedProducts.length === 0 && (
             <p style={styles.empty}>No products linked yet</p>
           )}
           {linkedProducts.map((lp) => (
-            <div key={lp.id} style={styles.card}>
-              <div style={styles.cardLeft}>
-                <span style={styles.cardName}>{lp.product.name}</span>
+            <div key={lp.id} style={common.card}>
+              <div style={common.cardLeft}>
+                <span style={common.cardName}>{lp.product.name}</span>
                 {lp.product.code && (
-                  <span style={styles.cardType}>{lp.product.code}</span>
+                  <span style={common.cardType}>{lp.product.code}</span>
                 )}
               </div>
               <button
@@ -211,11 +212,6 @@ function MachineDetailPage() {
 }
 
 const styles = {
-  container: {
-    padding: '16px',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
   backButton: {
     background: 'none',
     border: 'none',
@@ -258,42 +254,6 @@ const styles = {
     color: 'var(--color-text-primary)',
     fontSize: '14px',
   },
-  button: {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: 'var(--color-accent-link)',
-    color: 'var(--color-on-accent)',
-    fontSize: '14px',
-    cursor: 'pointer',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  card: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-  },
-  cardLeft: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  cardName: {
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
-  },
-  cardType: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '12px',
-  },
   unlinkButton: {
     padding: '6px 12px',
     borderRadius: '6px',
@@ -311,4 +271,3 @@ const styles = {
 }
 
 export default MachineDetailPage
-

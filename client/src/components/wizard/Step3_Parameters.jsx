@@ -5,6 +5,7 @@
  */
 import { useState, useEffect } from 'react'
 import { getMachineParameters } from '../../api/machineParameters'
+import { common } from '../../styles/common'
 
 export default function Step3_Parameters({ data, onNext }) {
 
@@ -75,31 +76,31 @@ function handleNext() {
     onNext({ parameterValues })
 }
 
-if (loading) return <p style={styles.loadingText}>Loading parameters...</p>
+if (loading) return <p style={common.loadingText}>Loading parameters...</p>
 
 return (
-    <div style={styles.container}>
+    <div style={common.wizardContainer}>
     <h2 style={styles.heading}>Machine Parameters</h2>
 
-    {error && <div style={styles.errorBox}>{error}</div>}
+    {error && <div style={common.errorBox}>{error}</div>}
 
     {machineParameters.length === 0 ? (
-        <div style={styles.emptyBox}>
-        <p style={styles.emptyText}>No parameters linked to this machine.</p>
-        <p style={styles.emptySubtext}>
+        <div style={common.emptyBox}>
+        <p style={common.emptyText}>No parameters linked to this machine.</p>
+        <p style={common.emptySubtext}>
             Go to Admin → Machines → select machine to add parameters.
         </p>
         </div>
     ) : (
         <div style={styles.list}>
         {machineParameters.map(mp => (
-            <div key={mp.id} style={styles.field}>
-            <label style={styles.label}>
+            <div key={mp.id} style={common.field}>
+            <label style={common.label}>
                 {mp.parameter.name}
                 {mp.parameter.unit ? ` (${mp.parameter.unit})` : ''}
             </label>
             <input
-                style={styles.input}
+                style={common.wizardInput}
                 type='number'
                 value={values[mp.id] ?? ''}
                 onChange={e => handleChange(mp.id, e.target.value)}
@@ -110,7 +111,7 @@ return (
         </div>
     )}
 
-    <button style={styles.nextButton} onClick={handleNext}>
+    <button style={common.nextButton} onClick={handleNext}>
         Next →
     </button>
     </div>
@@ -118,76 +119,15 @@ return (
 }
 
 const styles = {
-container: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0rem',
-},
 heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '1.5rem',
-},
-loadingText: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.9rem',
-},
-errorBox: {
-    backgroundColor: 'var(--color-danger-soft)',
-    color: 'var(--color-danger)',
-    padding: '0.75rem',
-    borderRadius: '8px',
-    marginBottom: '1rem',
-},
-emptyBox: {
-    padding: '2rem',
-    textAlign: 'center',
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    marginBottom: '1rem',
-},
-emptyText: {
-    color: 'var(--color-text-primary)',
-    marginBottom: '0.5rem',
-},
-emptySubtext: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
 },
 list: {
     display: 'flex',
     flexDirection: 'column',
     gap: '0rem',
     marginBottom: '1.5rem',
-},
-field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.4rem',
-    marginBottom: '1rem',
-},
-label: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
-},
-input: {
-    padding: '0.6rem 0.75rem',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-primary)',
-    fontSize: '0.95rem',
-},
-nextButton: {
-    marginTop: '1rem',
-    padding: '0.75rem',
-    backgroundColor: 'var(--color-accent)',
-    color: 'var(--color-on-accent)',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    width: '100%',
 },
 }
 

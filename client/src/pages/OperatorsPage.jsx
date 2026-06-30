@@ -5,6 +5,7 @@
  */
 import { useState, useEffect } from 'react'
 import { getAllOperators, createOperator, updateOperator } from '../api/operators'
+import { common } from '../styles/common'
 
 function OperatorsPage() {
   const [operators, setOperators] = useState([])
@@ -70,26 +71,26 @@ function OperatorsPage() {
   if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
 
   return (
-    <div style={styles.container}>
+    <div style={common.container}>
       <h1 style={styles.heading}>Operators</h1>
 
       <div style={styles.form}>
         <input
-          style={styles.input}
+          style={{ ...common.input, flex: 1 }}
           type="text"
           placeholder="Operator name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <button style={styles.button} onClick={handleSubmit}>
+        <button style={common.button} onClick={handleSubmit}>
           Add Operator
         </button>
       </div>
 
-      <div style={styles.list}>
+      <div style={common.list}>
         {operators.map((operator) => (
-          <div key={operator.id} style={styles.card}>
-              <span style={styles.cardName}>{operator.name}</span>
+          <div key={operator.id} style={common.card}>
+              <span style={common.cardName}>{operator.name}</span>
               <div style={styles.cardRight}>
                   <span style={operator.active ? styles.badgeActive : styles.badgeInactive}>
                       {operator.active ? 'Active' : 'Inactive'}
@@ -119,11 +120,6 @@ function OperatorsPage() {
 }
 
 const styles = {
-  container: {
-    padding: '16px',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
   heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '24px',
@@ -132,42 +128,6 @@ const styles = {
     display: 'flex',
     gap: '8px',
     marginBottom: '24px',
-  },
-  input: {
-    flex: 1,
-    padding: '10px 12px',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
-  },
-  button: {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: 'var(--color-accent-link)',
-    color: 'var(--color-on-accent)',
-    fontSize: '14px',
-    cursor: 'pointer',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  card: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-  },
-  cardName: {
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
   },
   badgeActive: {
     fontSize: '12px',
@@ -187,8 +147,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-},
-deactivateButton: {
+  },
+  deactivateButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -196,8 +156,8 @@ deactivateButton: {
     color: 'var(--color-danger-strong)',
     fontSize: '12px',
     cursor: 'pointer',
-},
-activateButton: {
+  },
+  activateButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -205,8 +165,7 @@ activateButton: {
     color: 'var(--color-success-strong)',
     fontSize: '12px',
     cursor: 'pointer',
-},
+  },
 }
 
 export default OperatorsPage
-

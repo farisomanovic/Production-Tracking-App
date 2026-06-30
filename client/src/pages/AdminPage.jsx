@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllMachines } from '../api/machines'
+import { common } from '../styles/common'
 
 export default function AdminPage() {
 
@@ -39,11 +40,11 @@ export default function AdminPage() {
   ]
 
   return (
-    <div style={styles.container}>
+    <div style={common.container}>
       <h1 style={styles.heading}>Admin</h1>
 
       {/* Data Management Section */}
-      <p style={styles.sectionLabel}>Data Management</p>
+      <p style={{ ...common.sectionLabel, marginTop: '1.5rem' }}>Data Management</p>
       <div style={styles.grid}>
         {dataPages.map(page => (
           <div
@@ -52,13 +53,13 @@ export default function AdminPage() {
             onClick={() => navigate(page.path)}
           >
             <span style={styles.gridCardLabel}>{page.label}</span>
-            <span style={styles.arrow}>›</span>
+            <span style={common.arrow}>›</span>
           </div>
         ))}
       </div>
 
       {/* Machine Setup Section */}
-      <p style={styles.sectionLabel}>Machine Setup</p>
+      <p style={{ ...common.sectionLabel, marginTop: '1.5rem' }}>Machine Setup</p>
       <p style={styles.sectionSub}>
         Link parameters and products to each machine.
       </p>
@@ -66,22 +67,22 @@ export default function AdminPage() {
       {error && <p style={styles.errorText}>{error}</p>}
 
       {loading ? (
-        <p style={styles.loadingText}>Loading machines...</p>
+        <p style={common.loadingText}>Loading machines...</p>
       ) : (
         <div style={styles.list}>
           {machines.map(machine => (
             <div
               key={machine.id}
-              style={styles.card}
+              style={{ ...common.card, cursor: 'pointer' }}
               onClick={() => navigate(`/admin/machines/${machine.id}`)}
             >
-              <div style={styles.cardLeft}>
+              <div style={common.cardLeft}>
                 <span style={styles.cardName}>{machine.name}</span>
                 {machine.code && (
                   <span style={styles.cardCode}>{machine.code}</span>
                 )}
               </div>
-              <span style={styles.arrow}>›</span>
+              <span style={common.arrow}>›</span>
             </div>
           ))}
         </div>
@@ -92,22 +93,9 @@ export default function AdminPage() {
 }
 
 const styles = {
-  container: {
-    padding: '16px',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
   heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '1.5rem',
-  },
-  sectionLabel: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.75rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    marginBottom: '0.75rem',
-    marginTop: '1.5rem',
   },
   sectionSub: {
     color: 'var(--color-text-muted)',
@@ -140,21 +128,6 @@ const styles = {
     flexDirection: 'column',
     gap: '0.5rem',
   },
-  card: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    cursor: 'pointer',
-  },
-  cardLeft: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
   cardName: {
     color: 'var(--color-text-primary)',
     fontSize: '0.9rem',
@@ -163,17 +136,8 @@ const styles = {
     color: 'var(--color-text-secondary)',
     fontSize: '0.75rem',
   },
-  arrow: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '20px',
-  },
-  loadingText: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.9rem',
-  },
   errorText: {
     color: 'var(--color-danger)',
     fontSize: '0.9rem',
   },
 }
-

@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { getAllRecipes, createRecipe } from '../api/recipes'
 import { getAllMaterials } from '../api/materials'
 import { getAllProducts } from '../api/products'
+import { common } from '../styles/common'
 
 function RecipesPage() {
   const [recipes, setRecipes] = useState([])
@@ -116,11 +117,11 @@ function RecipesPage() {
   if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
 
   return (
-    <div style={styles.container}>
+    <div style={common.container}>
       <div style={styles.header}>
         <h1 style={styles.heading}>Recipes</h1>
         <button
-          style={styles.button}
+          style={common.button}
           onClick={() => setShowForm(!showForm)}
         >
           {showForm ? 'Cancel' : '+ New Recipe'}
@@ -130,7 +131,7 @@ function RecipesPage() {
       {showForm && (
         <div style={styles.form}>
           <input
-            style={styles.input}
+            style={common.input}
             type="text"
             placeholder="Recipe name"
             value={name}
@@ -149,7 +150,7 @@ function RecipesPage() {
             ))}
           </select>
           <input
-            style={styles.input}
+            style={common.input}
             type="text"
             placeholder="Notes (optional)"
             value={notes}
@@ -219,7 +220,7 @@ function RecipesPage() {
 
           <button
             style={{
-              ...styles.button,
+              ...common.button,
               opacity: totalPercentage === 100 && name.trim() ? 1 : 0.4,
               cursor: totalPercentage === 100 && name.trim() ? 'pointer' : 'not-allowed'
             }}
@@ -230,17 +231,17 @@ function RecipesPage() {
         </div>
       )}
 
-      <div style={styles.list}>
+      <div style={common.list}>
         {recipes.map((recipe) => (
-          <div key={recipe.id} style={styles.card}>
-            <div style={styles.cardLeft}>
-              <span style={styles.cardName}>{recipe.name}</span>
-              <span style={styles.cardType}>{recipe.product.name}</span>
+          <div key={recipe.id} style={common.card}>
+            <div style={common.cardLeft}>
+              <span style={common.cardName}>{recipe.name}</span>
+              <span style={common.cardType}>{recipe.product.name}</span>
               {recipe.notes && (
-                <span style={styles.cardType}>{recipe.notes}</span>
+                <span style={common.cardType}>{recipe.notes}</span>
               )}
               {recipe.recipeItems && recipe.recipeItems.length > 0 && (
-                <span style={styles.cardType}>
+                <span style={common.cardType}>
                   {recipe.recipeItems.length} ingredient{recipe.recipeItems.length !== 1 ? 's' : ''}
                 </span>
               )}
@@ -253,11 +254,6 @@ function RecipesPage() {
 }
 
 const styles = {
-  container: {
-    padding: '16px',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -277,14 +273,6 @@ const styles = {
     backgroundColor: 'var(--color-surface-alt)',
     borderRadius: '8px',
     border: '1px solid var(--color-border)',
-  },
-  input: {
-    padding: '10px 12px',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
   },
   sectionLabel: {
     color: 'var(--color-text-secondary)',
@@ -379,43 +367,6 @@ const styles = {
     fontSize: '13px',
     fontWeight: 'bold',
   },
-  button: {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: 'var(--color-accent-link)',
-    color: 'var(--color-on-accent)',
-    fontSize: '14px',
-    cursor: 'pointer',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  card: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-  },
-  cardLeft: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  cardName: {
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
-  },
-  cardType: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '12px',
-  },
 }
 
 export default RecipesPage
-

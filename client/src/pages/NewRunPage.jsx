@@ -10,6 +10,7 @@ import Step3_Parameters from '../components/wizard/Step3_Parameters'
 import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
 import { createRun, getAllRuns, getRunById  } from '../api/productionRuns'
+import { common } from '../styles/common'
 
 /**
  * Converts separate local date and time inputs into the timestamp shape expected by the API.
@@ -214,7 +215,7 @@ function NewRunPage() {
       </div>
 
       {error && (
-        <div style={styles.errorBox}>
+        <div style={common.errorBox}>
           {error}
         </div>
       )}
@@ -257,13 +258,6 @@ const styles = {
     height: '6px',
     flex: 1,
     borderRadius: '3px',
-  },
-  errorBox: {
-    backgroundColor: 'var(--color-danger-soft)',
-    color: 'var(--color-danger)',
-    padding: '0.75rem',
-    borderRadius: '8px',
-    marginBottom: '1rem',
   },
   loadingText: {
     color: 'var(--color-text-secondary)',

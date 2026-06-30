@@ -5,6 +5,7 @@
  */
 import { useState, useEffect } from 'react'
 import { getAllMaterials, createMaterial, updateMaterial } from '../api/materials'
+import { common } from '../styles/common'
 
 function MaterialsPage() {
   const [materials, setMaterials] = useState([])
@@ -40,8 +41,8 @@ function MaterialsPage() {
   async function handleSubmit() {
     if (!name.trim() || !unit.trim()) return
     try {
-      await createMaterial({ 
-        name, 
+      await createMaterial({
+        name,
         unit,
         ...(supplier.trim() && { supplier }),
         ...(stockQty.trim() && { stockQty: parseFloat(stockQty) })
@@ -78,53 +79,53 @@ function MaterialsPage() {
   if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
 
   return (
-    <div style={styles.container}>
+    <div style={common.container}>
       <h1 style={styles.heading}>Materials</h1>
 
-      <div style={styles.form}>
+      <div style={common.form}>
         <input
-          style={styles.input}
+          style={common.input}
           type="text"
           placeholder="Material name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <input
-          style={styles.input}
+          style={common.input}
           type="text"
           placeholder="Unit"
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
         />
         <input
-          style={styles.input}
+          style={common.input}
           type="text"
           placeholder="Supplier (optional)"
           value={supplier}
           onChange={(e) => setSupplier(e.target.value)}
         />
         <input
-          style={styles.input}
+          style={common.input}
           type="number"
           placeholder="Stock Quantity (optional)"
           value={stockQty}
           onChange={(e) => setStockQty(e.target.value)}
         />
-        <button style={styles.button} onClick={handleSubmit}>
+        <button style={common.button} onClick={handleSubmit}>
           Add Material
         </button>
       </div>
 
-      <div style={styles.list}>
+      <div style={common.list}>
         {materials.map((material) => (
-          <div key={material.id} style={styles.card}>
-              <div style={styles.cardLeft}>
-                  <span style={styles.cardName}>{material.name}</span>
-                  <span style={styles.cardType}>{material.unit}</span>
+          <div key={material.id} style={common.card}>
+              <div style={common.cardLeft}>
+                  <span style={common.cardName}>{material.name}</span>
+                  <span style={common.cardType}>{material.unit}</span>
                   {material.supplier && (
-                      <span style={styles.cardType}>{material.supplier}</span>
+                      <span style={common.cardType}>{material.supplier}</span>
                   )}
-                  <span style={styles.cardType}>
+                  <span style={common.cardType}>
                       Stock: {material.stockQty ?? 0} {material.unit}
                   </span>
                   {editingId === material.id ? (
@@ -169,72 +170,17 @@ function MaterialsPage() {
 }
 
 const styles = {
-  container: {
-    padding: '16px',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
   heading: {
     color: 'var(--color-text-primary)',
     marginBottom: '24px',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    marginBottom: '24px',
-  },
-  input: {
-    padding: '10px 12px',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
-  },
-  button: {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: 'var(--color-accent-link)',
-    color: 'var(--color-on-accent)',
-    fontSize: '14px',
-    cursor: 'pointer',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  card: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-  },
-  cardLeft: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  cardName: {
-    color: 'var(--color-text-primary)',
-    fontSize: '14px',
-  },
-  cardType: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '12px',
   },
   editRow: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     marginTop: '4px',
-},
-editInput: {
+  },
+  editInput: {
     padding: '4px 8px',
     borderRadius: '6px',
     border: '1px solid var(--color-border)',
@@ -242,8 +188,8 @@ editInput: {
     color: 'var(--color-text-primary)',
     fontSize: '12px',
     width: '140px',
-},
-editButton: {
+  },
+  editButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -252,8 +198,8 @@ editButton: {
     fontSize: '12px',
     cursor: 'pointer',
     marginTop: '4px',
-},
-saveButton: {
+  },
+  saveButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -261,8 +207,8 @@ saveButton: {
     color: 'var(--color-success-strong)',
     fontSize: '12px',
     cursor: 'pointer',
-},
-cancelButton: {
+  },
+  cancelButton: {
     padding: '4px 10px',
     borderRadius: '6px',
     border: 'none',
@@ -270,8 +216,7 @@ cancelButton: {
     color: 'var(--color-danger-strong)',
     fontSize: '12px',
     cursor: 'pointer',
-},
+  },
 }
 
 export default MaterialsPage
-

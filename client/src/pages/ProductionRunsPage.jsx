@@ -11,6 +11,7 @@ import { getAllRuns, getRunById } from '../api/productionRuns'
 import { getAllMachines } from '../api/machines'
 import { getAllOperators } from '../api/operators'
 import { getAllProducts } from '../api/products'
+import { common } from '../styles/common'
 
 export default function ProductionRunsPage() {
 
@@ -392,7 +393,7 @@ export default function ProductionRunsPage() {
   }
 
   return (
-    <div style={styles.container}>
+    <div style={common.container}>
       <h1 style={styles.heading}>Production Runs</h1>
 
       {/* Filters */}
@@ -490,16 +491,16 @@ export default function ProductionRunsPage() {
         )}
       </div>
 
-      {error && <div style={styles.errorBox}>{error}</div>}
+      {error && <div style={common.errorBox}>{error}</div>}
 
       {loading ? (
-        <p style={styles.loadingText}>Loading runs...</p>
+        <p style={common.loadingText}>Loading runs...</p>
       ) : (
         <>
           {/* In Progress Section */}
           {inProgressRuns.length > 0 && (
             <div style={styles.section}>
-              <p style={styles.sectionLabel}>In Progress</p>
+              <p style={{ ...common.sectionLabel, fontSize: '0.8rem' }}>In Progress</p>
               <div style={styles.list}>
                 {inProgressRuns.map(run => (
                   <div
@@ -515,7 +516,7 @@ export default function ProductionRunsPage() {
                       </span>
                       <span style={styles.cardDate}>{formatDate(run.date)}</span>
                     </div>
-                    <span style={styles.arrow}>›</span>
+                    <span style={common.arrow}>›</span>
                   </div>
                 ))}
               </div>
@@ -524,7 +525,7 @@ export default function ProductionRunsPage() {
 
           {/* Completed Section */}
           <div style={styles.section}>
-            <p style={styles.sectionLabel}>
+            <p style={{ ...common.sectionLabel, fontSize: '0.8rem' }}>
               Completed {completedRuns.length > 0 ? `(${completedRuns.length})` : ''}
             </p>
 
@@ -545,7 +546,7 @@ export default function ProductionRunsPage() {
                       </span>
                       <span style={styles.cardDate}>{formatDate(run.date)}</span>
                     </div>
-                    <span style={styles.arrow}>›</span>
+                    <span style={common.arrow}>›</span>
                   </div>
                 ))}
               </div>
@@ -583,26 +584,8 @@ const styles = {
     cursor: 'pointer',
     fontSize: '0.8rem',
   },
-  errorBox: {
-    backgroundColor: 'var(--color-danger-soft)',
-    color: 'var(--color-danger)',
-    padding: '0.75rem',
-    borderRadius: '8px',
-    marginBottom: '1rem',
-  },
-  loadingText: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.9rem',
-  },
   section: {
     marginBottom: '2rem',
-  },
-  sectionLabel: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.8rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    marginBottom: '0.75rem',
   },
   list: {
     display: 'flex',
@@ -675,13 +658,6 @@ exportButton: {
     color: 'var(--color-on-accent)',
     fontSize: '0.85rem',
     cursor: 'pointer',
-},
-container: {
-    padding: '16px',
-    maxWidth: '600px',
-    width: '100%',              // ← new: be exactly as wide as parent
-    boxSizing: 'border-box',   // ← new: padding included in that width
-    margin: '0 auto',
 },
 
 filtersGrid: {
