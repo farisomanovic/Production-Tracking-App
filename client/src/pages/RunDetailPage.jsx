@@ -571,7 +571,10 @@ return (
         <div style={styles.section}>
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Parameters</p>
         <div style={styles.infoCard}>
-            {run.runParameterValues.map(pv => (
+            {/* Defensive sort: don't rely solely on API row order matching displayOrder */}
+            {[...run.runParameterValues]
+            .sort((a, b) => a.machineParameter.displayOrder - b.machineParameter.displayOrder)
+            .map(pv => (
             <InfoRow
                 key={pv.id}
                 label={pv.machineParameter.parameter.name}

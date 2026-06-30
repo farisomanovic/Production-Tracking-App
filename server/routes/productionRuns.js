@@ -78,6 +78,8 @@ router.get('/:id', async (req, res) => {
                     }
                 },
                 runParameterValues: {
+                    // Sort by the machine's configured displayOrder so this matches the run entry form.
+                    orderBy: { machineParameter: { displayOrder: 'asc' } },
                     include: {
                         machineParameter: {
                             include: { parameter: true }
@@ -331,6 +333,8 @@ router.post('/:id/complete', async (req, res) => {
                     product: true,
                     recipe: true,
                     runParameterValues: {
+                        // Sort by the machine's configured displayOrder so this matches the run entry form.
+                        orderBy: { machineParameter: { displayOrder: 'asc' } },
                         include: {
                             machineParameter: {
                                 include: { parameter: true }
