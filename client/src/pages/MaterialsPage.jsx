@@ -3,40 +3,20 @@
  * Supports material creation, editing, and stock quantity updates.
  * Supplies input materials used by recipes and completed production runs.
  */
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { getAllMaterials, createMaterial, updateMaterial } from '../api/materials'
+import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
 function MaterialsPage() {
-  const [materials, setMaterials] = useState([])
+  const { data: materials, loading, error, reload } = useApi(getAllMaterials, 'Failed to load materials')
   const [name, setName] = useState('')
   const [unit, setUnit] = useState('')
   const [supplier, setSupplier] = useState('')
   const [stockQty, setStockQty] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [actionError, setActionError] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editingStock, setEditingStock] = useState('')
-
-  async function fetchMaterials() {
-    try {
-      setLoading(true)
-      const response = await getAllMaterials()
-      setMaterials(response.data)
-    } catch (err) {
-      setError('Failed to load materials')
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    async function load() {
-      await fetchMaterials()
-    }
-    load()
-  }, [])
 
   async function handleSubmit() {
     if (!name.trim() || !unit.trim()) return
@@ -51,9 +31,9 @@ function MaterialsPage() {
       setUnit('')
       setSupplier('')
       setStockQty('')
-      fetchMaterials()
+      reload()
     } catch (err) {
-      setError('Failed to create material')
+      setActionError('Failed to create material')
       console.error(err)
     }
   }
@@ -61,22 +41,22 @@ function MaterialsPage() {
   async function handleAddStock(id, currentStock) {
     const amount = parseFloat(editingStock)
     if (isNaN(amount) || amount <= 0) {
-        setError('Please enter a valid positive number')
+        setActionError('Please enter a valid positive number')
         return
     }
     try {
         await updateMaterial(id, { stockQty: currentStock + amount })
         setEditingId(null)
         setEditingStock('')
-        fetchMaterials()
+        reload()
     } catch (err) {
-        setError('Failed to update stock')
+        setActionError('Failed to update stock')
         console.error(err)
     }
   }
 
-  if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
+  if (loading) return <p style={common.loadingText}>Loading...</p>
+  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
     <div style={common.container}>

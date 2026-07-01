@@ -3,44 +3,24 @@
  * Supports operator creation, editing, and active-flag soft deletion.
  * Keeps inactive operators available for historical run traceability.
  */
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { getAllOperators, createOperator, updateOperator } from '../api/operators'
+import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
 function OperatorsPage() {
-  const [operators, setOperators] = useState([])
+  const { data: operators, loading, error, reload } = useApi(getAllOperators, 'Failed to load operators')
   const [name, setName] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  async function fetchOperators() {
-    try {
-      setLoading(true)
-      const response = await getAllOperators()
-      setOperators(response.data)
-    } catch (err) {
-      setError('Failed to load operators')
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    async function load() {
-      await fetchOperators()
-    }
-    load()
-  }, [])
+  const [actionError, setActionError] = useState(null)
 
   async function handleSubmit() {
     if (!name.trim()) return
     try {
       await createOperator({ name })
       setName('')
-      fetchOperators()
+      reload()
     } catch (err) {
-      setError('Failed to create operator')
+      setActionError('Failed to create operator')
       console.error(err)
     }
   }
@@ -49,9 +29,9 @@ function OperatorsPage() {
     try {
         // Soft deletion: active=false removes this operator from new runs while retaining historical links.
         await updateOperator(id, { active: false })
-        fetchOperators()
+        reload()
     } catch (err) {
-        setError('Failed to deactivate operator')
+        setActionError('Failed to deactivate operator')
         console.error(err)
     }
   }
@@ -60,15 +40,15 @@ function OperatorsPage() {
     try {
         // Reactivation restores the operator to selection lists for future production runs.
         await updateOperator(id, { active: true })
-        fetchOperators()
+        reload()
     } catch (err) {
-        setError('Failed to activate operator')
+        setActionError('Failed to activate operator')
         console.error(err)
     }
   }
 
-  if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
+  if (loading) return <p style={common.loadingText}>Loading...</p>
+  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
     <div style={common.container}>

@@ -3,12 +3,13 @@
  * Supports product creation and display of manufacturing metadata.
  * Supplies product records to recipes, machine compatibility, and run outputs.
  */
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { getAllProducts, createProduct } from '../api/products'
+import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
 function ProductsPage() {
-  const [products, setProducts] = useState([])
+  const { data: products, loading, error, reload } = useApi(getAllProducts, 'Failed to load products')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [widthMm, setWidthMm] = useState('')
@@ -16,28 +17,7 @@ function ProductsPage() {
   const [lengthM, setLengthM] = useState('')
   const [description, setDescription] = useState('')
   const [unit, setUnit] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  async function fetchProducts() {
-    try {
-      setLoading(true)
-      const response = await getAllProducts()
-      setProducts(response.data)
-    } catch (err) {
-      setError('Failed to load products')
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    async function load() {
-      await fetchProducts()
-    }
-    load()
-  }, [])
+  const [actionError, setActionError] = useState(null)
 
   async function handleSubmit() {
     if (!name.trim() || !code.trim() || !unit.trim()) return
@@ -58,15 +38,15 @@ function ProductsPage() {
       setLengthM('')
       setDescription('')
       setUnit('')
-      fetchProducts()
+      reload()
     } catch (err) {
-      setError('Failed to create product')
+      setActionError('Failed to create product')
       console.error(err)
     }
   }
 
-  if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
+  if (loading) return <p style={common.loadingText}>Loading...</p>
+  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
     <div style={common.container}>
