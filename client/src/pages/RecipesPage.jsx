@@ -3,16 +3,20 @@
  * Validates recipe composition totals before submitting to the API.
  * Displays recipe material breakdowns used by production-run setup.
  */
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { getAllRecipes, createRecipe } from '../api/recipes'
 import { getAllMaterials } from '../api/materials'
 import { getAllProducts } from '../api/products'
+import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
 function RecipesPage() {
-  const [recipes, setRecipes] = useState([])
-  const [materials, setMaterials] = useState([])
-  const [products, setProducts] = useState([])
+  const { data: recipes, loading: loadingRecipes, error: errorRecipes, reload: reloadRecipes } = useApi(getAllRecipes, 'Failed to load recipes')
+  const { data: materials, loading: loadingMaterials, error: errorMaterials } = useApi(getAllMaterials, 'Failed to load materials')
+  const { data: products, loading: loadingProducts, error: errorProducts } = useApi(getAllProducts, 'Failed to load products')
+  const loading = loadingRecipes || loadingMaterials || loadingProducts
+  const error = errorRecipes || errorMaterials || errorProducts
+
   const [name, setName] = useState('')
   const [isDefault, setIsDefault] = useState(false)
   const [notes, setNotes] = useState('')
@@ -21,30 +25,7 @@ function RecipesPage() {
   const [selectedProductId, setSelectedProductId] = useState('')
   const [percentage, setPercentage] = useState('')
   const [showForm, setShowForm] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true)
-        const [recipesRes, materialsRes, productsRes] = await Promise.all([
-          getAllRecipes(),
-          getAllMaterials(),
-          getAllProducts()
-        ])
-        setRecipes(recipesRes.data)
-        setMaterials(materialsRes.data)
-        setProducts(productsRes.data)
-      } catch (err) {
-        setError('Failed to load data')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
+  const [actionError, setActionError] = useState(null)
 
   function handleAddItem() {
     if (!selectedMaterialId || !percentage) return
@@ -99,10 +80,9 @@ function RecipesPage() {
       setItems([])
       setSelectedProductId('')
       setShowForm(false)
-      const res = await getAllRecipes()
-      setRecipes(res.data)
+      reloadRecipes()
     } catch (err) {
-      setError('Failed to create recipe')
+      setActionError('Failed to create recipe')
       console.error(err)
     }
   }
@@ -113,8 +93,8 @@ function RecipesPage() {
 
   const totalPercentage = getTotalPercentage()
 
-  if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
+  if (loading) return <p style={common.loadingText}>Loading...</p>
+  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
     <div style={common.container}>

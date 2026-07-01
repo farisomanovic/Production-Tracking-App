@@ -3,38 +3,18 @@
  * Supports machine creation, editing, and active-flag soft deletion.
  * Preserves machine records needed by historical production runs.
  */
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { getAllMachines, createMachine, updateMachine } from '../api/machines'
+import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
 function MachinesPage() {
-  const [machines, setMachines] = useState([])
+  const { data: machines, loading, error, reload } = useApi(getAllMachines, 'Failed to load machines')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [actionError, setActionError] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editingCode, setEditingCode] = useState('')
-
-  async function fetchMachines() {
-    try {
-      setLoading(true)
-      const response = await getAllMachines()
-      setMachines(response.data)
-    } catch (err) {
-      setError('Failed to load machines')
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    async function load() {
-      await fetchMachines()
-    }
-    load()
-  }, [])
 
   async function handleSubmit() {
     if (!name.trim()) return
@@ -45,9 +25,9 @@ function MachinesPage() {
       })
       setName('')
       setCode('')
-      fetchMachines()
+      reload()
     } catch (err) {
-      setError('Failed to create machine')
+      setActionError('Failed to create machine')
       console.error(err)
     }
   }
@@ -56,9 +36,9 @@ function MachinesPage() {
     try {
         // Soft deletion: active=false removes this machine from new workflows while preserving run history.
         await updateMachine(id, { active: false })
-        fetchMachines()
+        reload()
     } catch (err) {
-        setError('Failed to deactivate machine')
+        setActionError('Failed to deactivate machine')
         console.error(err)
     }
   }
@@ -67,9 +47,9 @@ function MachinesPage() {
       try {
           // Reactivation makes a previously soft-deleted machine available for future runs again.
           await updateMachine(id, { active: true })
-          fetchMachines()
+          reload()
       } catch (err) {
-          setError('Failed to activate machine')
+          setActionError('Failed to activate machine')
           console.error(err)
       }
   }
@@ -78,15 +58,15 @@ function MachinesPage() {
       try {
           await updateMachine(id, { code: editingCode })
           setEditingId(null)
-          fetchMachines()
+          reload()
       } catch (err) {
-          setError('Failed to update machine code')
+          setActionError('Failed to update machine code')
           console.error(err)
       }
   }
 
-  if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
+  if (loading) return <p style={common.loadingText}>Loading...</p>
+  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
     <div style={common.container}>
