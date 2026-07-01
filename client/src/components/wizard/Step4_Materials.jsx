@@ -13,6 +13,8 @@ const [recipeItems, setRecipeItems] = useState([])
 const [values, setValues] = useState({})
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState(null)
+const [quantityProduced, setQuantityProduced] = useState(String(data.quantityProduced ?? ''))
+const [netWeightPerUnit, setNetWeightPerUnit] = useState(String(data.netWeightPerUnit ?? ''))
 
 const recipeId = data.recipeId
 const initialMaterialUsages = data.materialUsages
@@ -46,6 +48,30 @@ useEffect(() => {
     }
     loadRecipe()
 }, [recipeId, initialMaterialUsages])
+
+function recalculateMaterials(qty, nw) {
+    const q = Number(qty)
+    const n = Number(nw)
+    if (!q || !n || recipeItems.length === 0) return
+    const totalKg = q * n
+    const computed = {}
+    recipeItems.forEach(item => {
+    computed[item.materialId] = String(
+        parseFloat((totalKg * item.percentage / 100).toFixed(2))
+    )
+    })
+    setValues(computed)
+}
+
+function handleQuantityChange(value) {
+    setQuantityProduced(value)
+    recalculateMaterials(value, netWeightPerUnit)
+}
+
+function handleNetWeightChange(value) {
+    setNetWeightPerUnit(value)
+    recalculateMaterials(quantityProduced, value)
+}
 
 function handleChange(materialId, newValue) {
     setValues(prev => ({
@@ -84,7 +110,7 @@ function handleNext() {
     quantityUsed: Number(values[item.materialId])
     }))
 
-    onNext({ materialUsages })
+    onNext({ materialUsages, quantityProduced: Number(quantityProduced) })
 }
 
 if (loading) return <p style={common.loadingText}>Loading materials...</p>
@@ -106,31 +132,69 @@ return (
         </p>
         </div>
     ) : (
-        <div style={styles.list}>
-        {recipeItems.map(item => (
-            <div key={item.materialId} style={common.field}>
-            <label style={common.label}>
-                {item.material.name}
-                <span style={styles.hint}>
-                {' '}— {item.percentage}% planned
-                {item.plannedQtyKg ? ` (${item.plannedQtyKg} kg)` : ''}
-                </span>
-            </label>
-            <div style={common.inputRow}>
+        <>
+        <div style={styles.calculator}>
+            <p style={styles.calcLabel}>Quick Calculator</p>
+            <div style={styles.calcRow}>
+            <div style={styles.calcField}>
+                <label style={common.label}>Quantity Produced</label>
+                <div style={common.inputRow}>
                 <input
-                style={styles.input}
-                type='number'
-                value={values[item.materialId] ?? ''}
-                onChange={e => handleChange(item.materialId, e.target.value)}
-                placeholder='Enter kg used'
-                min='0'
-                step='0.1'
+                    style={styles.calcInput}
+                    type='number'
+                    value={quantityProduced}
+                    onChange={e => handleQuantityChange(e.target.value)}
+                    placeholder='e.g. 500'
+                    min='0'
+                    step='1'
+                />
+                <span style={common.unit}>pcs</span>
+                </div>
+            </div>
+            <div style={styles.calcField}>
+                <label style={common.label}>Net Weight per Unit</label>
+                <div style={common.inputRow}>
+                <input
+                    style={styles.calcInput}
+                    type='number'
+                    value={netWeightPerUnit}
+                    onChange={e => handleNetWeightChange(e.target.value)}
+                    placeholder='e.g. 1.5'
+                    min='0'
+                    step='0.01'
                 />
                 <span style={common.unit}>kg</span>
+                </div>
             </div>
             </div>
-        ))}
         </div>
+
+        <div style={styles.list}>
+            {recipeItems.map(item => (
+            <div key={item.materialId} style={common.field}>
+                <label style={common.label}>
+                {item.material.name}
+                <span style={styles.hint}>
+                    {' '}— {item.percentage}% planned
+                    {item.plannedQtyKg ? ` (${item.plannedQtyKg} kg)` : ''}
+                </span>
+                </label>
+                <div style={common.inputRow}>
+                <input
+                    style={styles.input}
+                    type='number'
+                    value={values[item.materialId] ?? ''}
+                    onChange={e => handleChange(item.materialId, e.target.value)}
+                    placeholder='Enter kg used'
+                    min='0'
+                    step='0.1'
+                />
+                <span style={common.unit}>kg</span>
+                </div>
+            </div>
+            ))}
+        </div>
+        </>
     )}
 
     <button style={common.nextButton} onClick={handleNext}>
@@ -158,6 +222,38 @@ hint: {
 input: {
     ...common.wizardInput,
     flex: 1,
+},
+calculator: {
+    backgroundColor: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
+    borderRadius: '8px',
+    padding: '1rem',
+    marginBottom: '1.5rem',
+},
+calcLabel: {
+    color: 'var(--color-text-muted)',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    marginBottom: '0.75rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+},
+calcRow: {
+    display: 'flex',
+    gap: '1rem',
+},
+calcField: {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+},
+calcInput: {
+    ...common.wizardInput,
+    width: '100%',
+    boxSizing: 'border-box',
+    minWidth: 0,
 },
 }
 

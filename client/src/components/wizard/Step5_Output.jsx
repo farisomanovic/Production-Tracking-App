@@ -26,7 +26,7 @@ const [outputs, setOutputs] = useState(() => {
     return [{
     id: Date.now(),
     productId: data.productId,
-    quantityProduced: '',
+    quantityProduced: data.quantityProduced ? String(data.quantityProduced) : '',
     grossWeightKg: '',
     scrapKg: ''
     }]
