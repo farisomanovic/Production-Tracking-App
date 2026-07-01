@@ -19,6 +19,8 @@ const [run, setRun] = useState(null)
 const [machineParameters, setMachineParameters] = useState([])
 const [products, setProducts] = useState([])
 const [lastRunParameterValues, setLastRunParameterValues] = useState([])
+const [lastRunMaterialUsages, setLastRunMaterialUsages] = useState([])
+const [lastRunQuantityProduced, setLastRunQuantityProduced] = useState('')
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState(null)
 
@@ -54,6 +56,15 @@ useEffect(() => {
                         machineParameterId: pv.machineParameterId,
                         value: pv.value
                     })))
+                }
+                if (lastRun.materialUsages && lastRun.materialUsages.length > 0) {
+                    setLastRunMaterialUsages(lastRun.materialUsages.map(mu => ({
+                        materialId: mu.materialId,
+                        quantityUsed: mu.quantityUsed
+                    })))
+                }
+                if (lastRun.runOutputs && lastRun.runOutputs.length > 0) {
+                    setLastRunQuantityProduced(String(lastRun.runOutputs[0].quantityProduced))
                 }
             }
         } catch (err) {
@@ -136,6 +147,8 @@ return (
             machineParameters={machineParameters}
             products={products}
             lastRunParameterValues={lastRunParameterValues}
+            lastRunMaterialUsages={lastRunMaterialUsages}
+            lastRunQuantityProduced={lastRunQuantityProduced}
             onCompleted={() => navigate('/runs')}
         />
     ) : (
@@ -152,7 +165,7 @@ return (
 }
 
 // Completion form for in-progress runs
-function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, onCompleted }) {
+function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, lastRunMaterialUsages, lastRunQuantityProduced, onCompleted }) {
 
 const [endTime, setEndTime] = useState('')
 const [energyEnd, setEnergyEnd] = useState('')
@@ -172,15 +185,19 @@ const [paramValues, setParamValues] = useState(() => {
 const [materialValues, setMaterialValues] = useState(() => {
     const initial = {}
     run.recipe.recipeItems.forEach(item => {
-    initial[item.materialId] = ''
+    const existing = lastRunMaterialUsages.find(mu => mu.materialId === item.materialId)
+    initial[item.materialId] = existing ? String(existing.quantityUsed) : ''
     })
     return initial
 })
 
+const [quantityProduced, setQuantityProduced] = useState(lastRunQuantityProduced)
+const [netWeightPerUnit, setNetWeightPerUnit] = useState('')
+
 const [outputs, setOutputs] = useState(() => [{
     id: Date.now(),
     productId: run.productId,
-    quantityProduced: '',
+    quantityProduced: lastRunQuantityProduced,
     grossWeightKg: '',
     scrapKg: ''
 }])
@@ -194,6 +211,30 @@ function handleParamChange(mpId, value) {
 
 function handleMaterialChange(materialId, value) {
     setMaterialValues(prev => ({ ...prev, [materialId]: value }))
+}
+
+function recalculateMaterials(qty, nw) {
+    const q = Number(qty)
+    const n = Number(nw)
+    if (!q || !n || run.recipe.recipeItems.length === 0) return
+    const totalKg = q * n
+    const computed = {}
+    run.recipe.recipeItems.forEach(item => {
+    computed[item.materialId] = String(
+        parseFloat((totalKg * item.percentage / 100).toFixed(2))
+    )
+    })
+    setMaterialValues(computed)
+}
+
+function handleQuantityChange(value) {
+    setQuantityProduced(value)
+    recalculateMaterials(value, netWeightPerUnit)
+}
+
+function handleNetWeightChange(value) {
+    setNetWeightPerUnit(value)
+    recalculateMaterials(quantityProduced, value)
 }
 
 function handleOutputChange(id, field, value) {
@@ -344,6 +385,45 @@ return (
             />
             </div>
         ))}
+        </div>
+    )}
+
+    {/* Quick Calculator */}
+    {run.recipe.recipeItems.length > 0 && (
+        <div style={styles.calculator}>
+        <p style={styles.calcLabel}>Quick Calculator</p>
+        <div style={styles.calcRow}>
+            <div style={styles.calcField}>
+            <label style={common.label}>Quantity Produced</label>
+            <div style={common.inputRow}>
+                <input
+                style={styles.calcInput}
+                type='number'
+                value={quantityProduced}
+                onChange={e => handleQuantityChange(e.target.value)}
+                placeholder='e.g. 500'
+                min='0'
+                step='1'
+                />
+                <span style={common.unit}>pcs</span>
+            </div>
+            </div>
+            <div style={styles.calcField}>
+            <label style={common.label}>Net Weight per Unit</label>
+            <div style={common.inputRow}>
+                <input
+                style={styles.calcInput}
+                type='number'
+                value={netWeightPerUnit}
+                onChange={e => handleNetWeightChange(e.target.value)}
+                placeholder='e.g. 1.5'
+                min='0'
+                step='0.01'
+                />
+                <span style={common.unit}>kg</span>
+            </div>
+            </div>
+        </div>
         </div>
     )}
 
@@ -832,6 +912,43 @@ deleteButton: {
     cursor: 'pointer',
     fontSize: '0.85rem',
     marginBottom: '1.5rem',
+},
+calculator: {
+    backgroundColor: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
+    borderRadius: '8px',
+    padding: '1rem',
+    marginBottom: '1rem',
+},
+calcLabel: {
+    color: 'var(--color-text-muted)',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    marginBottom: '0.75rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+},
+calcRow: {
+    display: 'flex',
+    gap: '1rem',
+},
+calcField: {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+},
+calcInput: {
+    padding: '0.6rem 0.75rem',
+    borderRadius: '8px',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
+    fontSize: '0.95rem',
+    width: '100%',
+    boxSizing: 'border-box',
+    minWidth: 0,
 },
 }
 
