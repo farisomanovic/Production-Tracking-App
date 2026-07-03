@@ -298,19 +298,18 @@ router.post('/:id/complete', async (req, res) => {
             }
 
             // Stock is decremented in the same transaction as usage logging to keep inventory aligned.
+            // Updates run sequentially because the transaction holds a single DB connection.
             if (materialUsages && materialUsages.length > 0) {
-                await Promise.all(
-                    materialUsages.map(m =>
-                        tx.material.update({
-                            where: { id: m.materialId },
-                            data: {
-                                stockQty: {
-                                    decrement: m.quantityUsed
-                                }
+                for (const m of materialUsages) {
+                    await tx.material.update({
+                        where: { id: m.materialId },
+                        data: {
+                            stockQty: {
+                                decrement: m.quantityUsed
                             }
-                        })
-                    )
-                )
+                        }
+                    })
+                }
             }
 
             // Outputs record sellable quantity and optional weight/scrap metrics for the run.
@@ -384,19 +383,18 @@ router.delete('/:id', async (req, res) => {
         await prisma.$transaction(async (tx) => {
             // Restore material stock if the run was completed so deleting a run
             // reverses the inventory movement recorded during completion.
+            // Updates run sequentially because the transaction holds a single DB connection.
             if (run.status === 'completed' && run.materialUsages.length > 0) {
-                await Promise.all(
-                    run.materialUsages.map(m =>
-                        tx.material.update({
-                            where: { id: m.materialId },
-                            data: {
-                                stockQty: {
-                                    increment: m.quantityUsed
-                                }
+                for (const m of run.materialUsages) {
+                    await tx.material.update({
+                        where: { id: m.materialId },
+                        data: {
+                            stockQty: {
+                                increment: m.quantityUsed
                             }
-                        })
-                    )
-                )
+                        }
+                    })
+                }
             }
 
             // Delete related records first to avoid foreign key violations
