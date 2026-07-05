@@ -7,14 +7,21 @@
 import axios from 'axios'
 
 const api = axios.create({
-  // TODO: hardcoded host means the app only works when the browser runs on the
-  // same machine as the API — a tablet on the shop floor cannot reach
-  // "localhost". Read import.meta.env.VITE_API_URL with this as the dev
-  // fallback. todo.md Group 1 #1.
-  // TODO: no response interceptor and no timeout — network failures surface only
-  // as console errors in individual catch blocks, and a hung request spins
-  // forever. Group 1 #1.
-  baseURL: 'http://localhost:3000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
 })
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      const message =
+        error.response.data?.error || error.response.data?.message || 'Something went wrong. Please try again.'
+      alert(message)
+    } else {
+      alert('Could not reach the server. Check your connection and try again.')
+    }
+    return Promise.reject(error)
+  }
+)
 
 export default api

@@ -4,6 +4,7 @@
  * mounts one router per domain resource, and starts listening. Only wiring belongs
  * here — route logic lives in ./routes/*.js, database access in ./lib/prisma.js.
  */
+import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import operatorsRouter from './routes/operators.js'
@@ -17,11 +18,7 @@ import recipesRouter from './routes/recipes.js'
 import productionRunsRouter from './routes/productionRuns.js'
 
 const app = express()
-// TODO: hardcoded port — should be process.env.PORT with a 3000 fallback, plus
-// `import 'dotenv/config'` at the top of this file. dotenv is installed but never
-// loaded; DATABASE_URL only works because Prisma auto-reads .env itself, so any
-// NEW env var would silently be undefined. See todo.md Group 1 #1.
-const PORT = 3000
+const PORT = process.env.PORT || 3000
 
 // TODO: cors() with no options accepts requests from ANY origin. Combined with the
 // missing auth below this makes the API fully open — restrict it once env loading
