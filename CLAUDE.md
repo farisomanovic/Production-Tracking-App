@@ -40,3 +40,4 @@ This app replaces paper-based tracking with a digital system.
 - Before you make any changes check if I have moved to a new branch if i have not you branch out, move there, and then make changes.
 - When makeing changes if were making changes in a file that has comment //TODO and we handle that todo remove the comment related to it.
 - After the changes are done always leave commit message for user and detailed (not too long just longer than commit message) description for the pull request form.
+- Always tell the user at the end how he can convince himself that the changes work.
