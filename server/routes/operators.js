@@ -1,7 +1,9 @@
 /**
- * Handles Operator API routes for production staff records.
- * Supports create, read, and update workflows from the admin UI.
- * Preserves historical run links through active-flag soft deletion.
+ * @file operators.js
+ * @description CRUD routes for Operator master data (the people running machines).
+ * Deletion is intentionally absent — operators are soft-deleted via `active: false`
+ * so historical ProductionRun rows keep a valid foreign key. UI concerns and
+ * cross-entity workflows do NOT belong here.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -9,19 +11,25 @@ import prisma from '../lib/prisma.js'
 const router = Router()
 
 /**
- * GET /
+ * Lists ALL operators, including inactive ones, because the admin screen needs
+ * them to offer reactivation.
  *
- * Returns all operators in display order.
+ * @param {import('express').Request} req - No params or body used.
+ * @param {import('express').Response} res - 200 → Operator[] sorted by name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request; no query parameters are required.
- * @param {import('express').Response} res - Express response returning an array of operators.
- * @returns {Promise<void>} Sends 200 with operators or 500 when Prisma cannot read records.
+ * @example
+ * // GET /api/operators
+ * // → 200 [{ id: "b3f1…", name: "Amar", active: true }, …]
  */
 router.get('/', async (req, res) => {
   try {
     const operators = await prisma.operator.findMany({
       orderBy: { name: 'asc' }
     })
+    // TODO: dropdown consumers (new-run wizard) need only active operators but
+    // currently filter client-side — an unfiltered caller can still pick an
+    // inactive operator. Consider ?active=true support. todo.md Group 3 #8.
     res.json(operators)
   } catch (error) {
     console.error('GET all /operators error:', error)
@@ -30,13 +38,15 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * GET /:id
+ * Fetches one operator by primary key.
  *
- * Returns one operator by primary key.
+ * @param {import('express').Request} req - `params.id` is the operator UUID.
+ * @param {import('express').Response} res - 200 → Operator; 404 unknown id; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning the operator payload.
- * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
+ * @example
+ * // GET /api/operators/b3f1c2d4-…
+ * // → 200 { id: "b3f1c2d4-…", name: "Amar", active: true }
  */
 router.get('/:id', async (req, res) => {
   try {
@@ -54,18 +64,22 @@ router.get('/:id', async (req, res) => {
 })
 
 /**
- * POST /
+ * Creates an operator from a name only — `active` defaults to true in the schema,
+ * and accepting it here would let a client create pre-deactivated records.
  *
- * Creates an operator. Operators are active by default according to the Prisma
- * schema, so only the required name is accepted here.
+ * @param {import('express').Request} req - `body.name` (string, required).
+ * @param {import('express').Response} res - 201 → created Operator; 400 missing name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with body.name.
- * @param {import('express').Response} res - Express response returning the created operator.
- * @returns {Promise<void>} Sends 201, 400 when name is missing, or 500 on Prisma failure.
+ * @example
+ * // POST /api/operators  { "name": "Emina" }
+ * // → 201 { id: "9a2e…", name: "Emina", active: true }
  */
 router.post('/', async (req, res) => {
   try {
     const { name } = req.body
+    // TODO: "   " passes this check — trim and enforce a minimum length before
+    // the database fills up with blank names. todo.md Group 3 #8.
     if (!name) {
       return res.status(400).json({ error: 'name is required' })
     }
@@ -80,14 +94,15 @@ router.post('/', async (req, res) => {
 })
 
 /**
- * PUT /:id
+ * Partially updates an operator; `active: false` is the soft-delete path.
  *
- * Updates mutable operator fields. The active flag supports soft deletion
- * without breaking historical production run relations.
+ * @param {import('express').Request} req - `params.id` UUID; `body.name` and/or `body.active`, both optional.
+ * @param {import('express').Response} res - 200 → updated Operator; 500 on failure (including unknown id).
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and mutable operator fields.
- * @param {import('express').Response} res - Express response returning the updated operator.
- * @returns {Promise<void>} Sends 200 or 500 on update failure.
+ * @example
+ * // PUT /api/operators/b3f1c2d4-…  { "active": false }
+ * // → 200 { id: "b3f1c2d4-…", name: "Amar", active: false }
  */
 router.put('/:id', async (req, res) => {
   try {
@@ -95,14 +110,20 @@ router.put('/:id', async (req, res) => {
     const operator = await prisma.operator.update({
       where: { id: req.params.id },
       data: {
+        // Spread-if-defined so omitted fields stay untouched — a plain
+        // `{ name, active }` would overwrite missing fields with undefined/null.
         ...(name !== undefined && { name }),
-        // Soft deletion: active=false hides the operator from new workflows while
-        // retaining foreign-key history for completed production runs.
         ...(active !== undefined && { active }),
       }
     })
     res.json(operator)
   } catch (error) {
+    // TODO: an unknown id lands here as Prisma P2025 and becomes a 500 — it
+    // should map to 404. Central error middleware fixes this everywhere at once
+    // (todo.md Group 4 #5).
+    // TODO: deactivation is allowed even while this operator has an in_progress
+    // run, which orphans the live run's context. Check for open runs before
+    // accepting active: false. todo.md Group 3 #5.
     console.error('PUT /operators error:', error)
     res.status(500).json({ error: 'Failed to update operator' })
   }

@@ -1,18 +1,36 @@
 /**
- * Renders step 4 of the production-run wizard.
- * Collects actual material usage against the selected recipe composition.
- * Carries usage values forward for transactional run completion.
+ * @file Step4_Materials.jsx
+ * @description Wizard step 4: record actual kg used per recipe material, with a
+ * calculator that derives the amounts from produced quantity × unit weight ×
+ * recipe percentages so the operator doesn't do mental math at the machine.
  */
 import { useState, useEffect } from 'react'
 import { getRecipeById } from '../../api/recipes'
 import { common } from '../../styles/common'
 
+/**
+ * Renders the material usage inputs plus the quick calculator.
+ *
+ * @component
+ * @param {Object} props
+ * @param {Object} props.data - Accumulated wizard formData; `recipeId` drives the fetch,
+ * `materialUsages` restores previous answers.
+ * @param {string} props.runId - The created run's UUID (unused here, passed for step API symmetry).
+ * @param {Function} props.onNext - Called with `{ materialUsages: [{ materialId, quantityUsed }], quantityProduced }`.
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Step4_Materials data={formData} runId={runId} onNext={handleStepNext} />
+ */
 export default function Step4_Materials({ data, onNext }) {
 
 const [recipeItems, setRecipeItems] = useState([])
+// Keyed by materialId for O(1) writes from each input's onChange.
 const [values, setValues] = useState({})
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState(null)
+// String(… ?? '') so a real 0 from a previous visit survives (0 || '' would
+// drop it) while undefined still becomes an empty input.
 const [quantityProduced, setQuantityProduced] = useState(String(data.quantityProduced ?? ''))
 const [netWeightPerUnit, setNetWeightPerUnit] = useState(String(data.netWeightPerUnit ?? ''))
 
@@ -26,10 +44,9 @@ useEffect(() => {
         const items = response.data.recipeItems
         setRecipeItems(items)
 
-        // Initialize values object keyed by materialId
+        // Pre-key every material so all inputs are controlled from first render.
         const initialValues = {}
         items.forEach(item => {
-        // If user came back to this step, preserve their previous answers
         const existing = initialMaterialUsages?.find(
             mu => mu.materialId === item.materialId
         )
@@ -49,6 +66,19 @@ useEffect(() => {
     loadRecipe()
 }, [recipeId, initialMaterialUsages])
 
+// ─── CALCULATOR ──────────────────────────────────────────────────────────────
+
+/**
+ * Fills every material input from total weight × recipe percentage:
+ * total kg = quantity × net weight per unit, split by each item's share.
+ *
+ * @param {string|number} qty - Produced quantity (pieces).
+ * @param {string|number} nw - Net weight of one piece in kg.
+ * @returns {void} No-op until both inputs are non-zero numbers.
+ *
+ * @example
+ * recalculateMaterials('500', '1.5') // 750 kg total → 70% item gets "525"
+ */
 function recalculateMaterials(qty, nw) {
     const q = Number(qty)
     const n = Number(nw)
@@ -56,23 +86,56 @@ function recalculateMaterials(qty, nw) {
     const totalKg = q * n
     const computed = {}
     recipeItems.forEach(item => {
+    // toFixed(2) then parseFloat: round to 2 decimals for sane kg values but
+    // strip trailing zeros ("525.00" → "525") so inputs look hand-entered.
     computed[item.materialId] = String(
         parseFloat((totalKg * item.percentage / 100).toFixed(2))
     )
     })
+    // TODO: this REPLACES all material inputs, including ones the operator
+    // already corrected by hand — manual edits are lost on the next calculator
+    // keystroke. Consider only filling untouched fields.
     setValues(computed)
 }
 
+/**
+ * Updates produced quantity and re-derives all material amounts.
+ *
+ * @param {string} value - Raw input string from the quantity field.
+ * @returns {void}
+ *
+ * @example
+ * handleQuantityChange('500')
+ */
 function handleQuantityChange(value) {
     setQuantityProduced(value)
     recalculateMaterials(value, netWeightPerUnit)
 }
 
+/**
+ * Updates unit weight and re-derives all material amounts.
+ *
+ * @param {string} value - Raw input string from the net-weight field.
+ * @returns {void}
+ *
+ * @example
+ * handleNetWeightChange('1.5')
+ */
 function handleNetWeightChange(value) {
     setNetWeightPerUnit(value)
     recalculateMaterials(quantityProduced, value)
 }
 
+/**
+ * Stores one material's raw kg input under its materialId.
+ *
+ * @param {string} materialId - Material UUID identifying which input changed.
+ * @param {string} newValue - Raw input value; converted to Number only on submit.
+ * @returns {void}
+ *
+ * @example
+ * handleChange('a9d2…', '480')
+ */
 function handleChange(materialId, newValue) {
     setValues(prev => ({
     ...prev,
@@ -80,8 +143,18 @@ function handleChange(materialId, newValue) {
     }))
 }
 
+// ─── VALIDATION & SUBMIT ─────────────────────────────────────────────────────
+
+/**
+ * Requires a positive number for every material, then passes usage rows and
+ * the produced quantity (which step 5 uses to prefill its first output).
+ *
+ * @returns {void} Calls onNext on success; sets an error message otherwise.
+ *
+ * @example
+ * <button onClick={handleNext}>Next →</button>
+ */
 function handleNext() {
-    // Validate — every material must have a value
     const allFilled = recipeItems.every(item => {
     const val = values[item.materialId]
     return val !== undefined && val.trim() !== ''
@@ -92,7 +165,8 @@ function handleNext() {
     return
     }
 
-    // Validate — every value must be a positive number
+    // Positive, not just numeric: zero or negative usage would corrupt the
+    // stock decrement on completion (negative would INCREASE stock).
     const allPositive = recipeItems.every(item => {
     const val = Number(values[item.materialId])
     return !isNaN(val) && val > 0
@@ -114,6 +188,8 @@ function handleNext() {
 }
 
 if (loading) return <p style={common.loadingText}>Loading materials...</p>
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
 
 return (
     <div style={common.wizardContainer}>
@@ -256,4 +332,3 @@ calcInput: {
     minWidth: 0,
 },
 }
-

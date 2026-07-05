@@ -1,7 +1,8 @@
 /**
- * Handles MachineProduct compatibility routes for production setup.
- * Defines which products can be manufactured on each machine.
- * Prevents duplicate machine-product links with Prisma uniqueness.
+ * @file machineProducts.js
+ * @description Routes for the Machine↔Product link table: which products each
+ * machine is allowed to produce. The new-run wizard uses these links to filter
+ * its product dropdown. Product master data does NOT belong here — see products.js.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -9,14 +10,15 @@ import prisma from '../lib/prisma.js'
 const router = Router()
 
 /**
- * GET /machine/:machineId
+ * Lists a machine's product links with product details for display.
  *
- * Returns all product links for a machine with product details included for UI
- * display. Results are ordered by product name for predictable selection lists.
+ * @param {import('express').Request} req - `params.machineId` is the machine UUID.
+ * @param {import('express').Response} res - 200 → MachineProduct[] (with `product`) ordered by product name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.machineId.
- * @param {import('express').Response} res - Express response returning machine-product links.
- * @returns {Promise<void>} Sends 200 with links or 500 on Prisma read failure.
+ * @example
+ * // GET /api/machine-products/machine/7cd0…
+ * // → 200 [{ id: "88c1…", product: { name: "PP traka 12mm", code: "PP-12" } }]
  */
 router.get('/machine/:machineId', async (req, res) => {
     try {
@@ -33,16 +35,16 @@ router.get('/machine/:machineId', async (req, res) => {
 })
 
 /**
- * POST /
+ * Links a product to a machine; duplicates are rejected via the schema's
+ * unique pair rather than a pre-check, so concurrent requests can't sneak past.
  *
- * Links a product to a machine. Prisma error P2002 is handled explicitly
- * because @@unique([machineId, productId]) prevents duplicate compatibility
- * links.
+ * @param {import('express').Request} req - `body.machineId`, `body.productId` (both required UUIDs).
+ * @param {import('express').Response} res - 201 → created link; 400 missing ids or duplicate; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with body.machineId and body.productId.
- * @param {import('express').Response} res - Express response returning the created link.
- * @returns {Promise<void>} Sends 201, 400 for missing/duplicate values, or 500 on Prisma failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2002 when the machine-product link already exists.
+ * @example
+ * // POST /api/machine-products  { "machineId": "7cd0…", "productId": "c771…" }
+ * // → 201 { id: "88c1…", machineId: "7cd0…", productId: "c771…" }
  */
 router.post('/', async (req, res) => {
     try {
@@ -52,40 +54,45 @@ router.post('/', async (req, res) => {
         }
         const link = await prisma.machineProduct.create({
             data: {
-                machineId,  
+                machineId,
                 productId
             }
         })
         res.status(201).json(link)
     } catch (error) {
-        // P2002 means the machine-product unique constraint already exists.
         if (error.code === 'P2002') {
         return res.status(400).json({ error: 'This product is already linked to this machine' })
         }
+        // TODO: a nonexistent machineId/productId arrives as P2003 and becomes a
+        // 500 — should be a 400 naming the bad reference. todo.md Group 4 #5.
         console.error('POST link a product to a machine Error:', error)
         res.status(500).json({ error: 'Failed to link product to machine' })
-    }   
+    }
 })
 
 /**
- * DELETE /:id
+ * Unlinks a product from a machine by link-table primary key. Safe for history:
+ * ProductionRun references the product directly, not this link row.
  *
- * Removes one machine-product compatibility link by link-table primary key.
+ * @param {import('express').Request} req - `params.id` is the MachineProduct link UUID.
+ * @param {import('express').Response} res - 200 → confirmation message; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning a deletion message.
- * @returns {Promise<void>} Sends 200 or 500 on Prisma deletion failure.
+ * @example
+ * // DELETE /api/machine-products/88c1…
+ * // → 200 { message: "Product unlinked from machine successfully" }
  */
-router.delete('/:id', async (req, res) => { 
+router.delete('/:id', async (req, res) => {
     try {
         await prisma.machineProduct.delete({
             where: { id: req.params.id }
         })
         res.json({ message: 'Product unlinked from machine successfully' })
     } catch (error) {
+        // TODO: unknown id → P2025 → 500; should be 404. todo.md Group 4 #5.
         console.error('DELETE unlink a product from a machine Error:', error)
         res.status(500).json({ error: 'Failed to unlink product from machine' })
-    }   
+    }
 })
 
 export default router

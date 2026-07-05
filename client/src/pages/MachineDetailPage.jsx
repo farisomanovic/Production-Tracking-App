@@ -1,7 +1,8 @@
 /**
- * Renders detailed machine setup for parameters and products.
- * Manages machine-specific parameter assignments and product compatibility.
- * Persists displayOrder-sensitive configuration used by run entry forms.
+ * @file MachineDetailPage.jsx
+ * @description Per-machine setup: link/unlink the parameters its run form
+ * collects and the products it may produce. This page manages the LINK tables
+ * only — creating parameters/products happens on their own admin pages.
  */
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -12,6 +13,15 @@ import { getAllParameters } from '../api/parameters'
 import { getAllProducts } from '../api/products'
 import { common } from '../styles/common'
 
+/**
+ * Renders the machine's linked parameters and products with link/unlink controls.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/admin/machines/:machineId" element={<MachineDetailPage />} />
+ */
 function MachineDetailPage() {
   const { machineId } = useParams()
   const navigate = useNavigate()
@@ -26,10 +36,14 @@ function MachineDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // ─── DATA LOADING ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     async function load() {
       try {
         setLoading(true)
+        // Five independent queries — Promise.all runs them concurrently so the
+        // page waits for the slowest one, not the sum of all five.
         const [machineRes, linkedParamsRes, linkedProductsRes, allParamsRes, allProductsRes] = await Promise.all([
           getMachineById(machineId),
           getMachineParameters(machineId),
@@ -52,11 +66,24 @@ function MachineDetailPage() {
     load()
   }, [machineId])
 
+  // ─── LINK / UNLINK HANDLERS ─────────────────────────────────────────────────
+
+  /**
+   * Links the selected parameter to this machine, then refetches only the
+   * parameter links (the other four datasets can't have changed).
+   *
+   * @returns {Promise<void>} Resolves after the list refresh or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleLinkParameter}>Link</button>
+   */
   async function handleLinkParameter() {
     if (!selectedParameterId) return
     try {
       await linkParameterToMachine({ machineId, parameterId: selectedParameterId })
       setSelectedParameterId('')
+      // Refetch instead of appending locally: the server assigns displayOrder,
+      // so only it knows the row's true position.
       const res = await getMachineParameters(machineId)
       setLinkedParameters(res.data)
     } catch (err) {
@@ -65,17 +92,38 @@ function MachineDetailPage() {
     }
   }
 
+  /**
+   * Unlinks a parameter from this machine.
+   *
+   * @param {string} linkId - MachineParameter link UUID (not the parameter id).
+   * @returns {Promise<void>} Resolves after the list refresh or after the error state is set.
+   *
+   * @example
+   * handleUnlinkParameter('31f0…')
+   */
   async function handleUnlinkParameter(linkId) {
     try {
       await unlinkParameterFromMachine(linkId)
       const res = await getMachineParameters(machineId)
       setLinkedParameters(res.data)
     } catch (err) {
+      // TODO: when the parameter has recorded run values the server throws a
+      // RESTRICT error (500 today) and the user just sees this generic message —
+      // they deserve "this parameter has history and can't be removed".
+      // todo.md Group 4 #3.
       setError('Failed to unlink parameter')
       console.error(err)
     }
   }
 
+  /**
+   * Links the selected product to this machine.
+   *
+   * @returns {Promise<void>} Resolves after the list refresh or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleLinkProduct}>Link</button>
+   */
   async function handleLinkProduct() {
     if (!selectedProductId) return
     try {
@@ -89,6 +137,16 @@ function MachineDetailPage() {
     }
   }
 
+  /**
+   * Unlinks a product from this machine (run history is unaffected — runs
+   * reference the product directly).
+   *
+   * @param {string} linkId - MachineProduct link UUID.
+   * @returns {Promise<void>} Resolves after the list refresh or after the error state is set.
+   *
+   * @example
+   * handleUnlinkProduct('88c1…')
+   */
   async function handleUnlinkProduct(linkId) {
     try {
       await unlinkProductFromMachine(linkId)
@@ -100,6 +158,8 @@ function MachineDetailPage() {
     }
   }
 
+  // Dropdowns offer only what is NOT yet linked — linking twice would just
+  // bounce off the unique constraint with an error.
   const availableParameters = allParameters.filter(
     (p) => !linkedParameters.some((lp) => lp.parameterId === p.id)
   )
@@ -110,6 +170,8 @@ function MachineDetailPage() {
 
   if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
   if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
+
+  // ─── RENDER ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={common.container}>

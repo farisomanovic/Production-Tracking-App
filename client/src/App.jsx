@@ -1,7 +1,8 @@
 /**
- * Defines the React router tree for the frontend application.
- * Maps URL paths to page-level components and shared bottom navigation.
- * Keeps client-side navigation separate from individual page workflows.
+ * @file App.jsx
+ * @description The route table: maps every URL to its page component and mounts
+ * the persistent bottom navigation. Page logic does NOT belong here — only
+ * routing structure.
  */
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
@@ -21,9 +22,20 @@ import NewRunPage from './pages/NewRunPage'
 import NotFoundPage from './pages/NotFoundPage'
 import RunDetailPage from './pages/RunDetailPage'
 
+/**
+ * Renders the router tree with a fixed bottom nav on every page.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <App />
+ */
 function App() {
   return (
     <BrowserRouter>
+      {/* paddingBottom matches BottomNav's fixed 60px height so page content
+          can never be hidden underneath it. Change one → change both. */}
       <div style={{ paddingBottom: '60px' }}>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
@@ -34,6 +46,9 @@ function App() {
           <Route path="/parameters" element={<ParametersPage />} />
           <Route path="/recipes" element={<RecipesPage />} />
           <Route path="/runs" element={<ProductionRunsPage />} />
+          {/* /runs/new must be declared before /runs/:id conceptually — React
+              Router v7 ranks static segments above params automatically, but the
+              order here keeps that intent readable. */}
           <Route path="/runs/new" element={<NewRunPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/admin/machines/:machineId" element={<MachineDetailPage />} />

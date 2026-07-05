@@ -1,26 +1,49 @@
 /**
- * Renders machine master-data administration.
- * Supports machine creation, editing, and active-flag soft deletion.
- * Preserves machine records needed by historical production runs.
+ * @file MachinesPage.jsx
+ * @description Admin page for machine master data: create, edit the code,
+ * deactivate/reactivate. No delete on purpose — machines are soft-deleted so
+ * historical runs keep their reference. Parameter/product links are managed on
+ * MachineDetailPage, not here.
  */
 import { useState } from 'react'
 import { getAllMachines, createMachine, updateMachine } from '../api/machines'
 import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
+/**
+ * Renders the machine list with add form, inline code editing, and active toggles.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/machines" element={<MachinesPage />} />
+ */
 function MachinesPage() {
   const { data: machines, loading, error, reload } = useApi(getAllMachines, 'Failed to load machines')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [actionError, setActionError] = useState(null)
+  // One shared editing slot (id + draft) instead of per-row state: only one
+  // code can be edited at a time, which keeps the row components stateless.
   const [editingId, setEditingId] = useState(null)
   const [editingCode, setEditingCode] = useState('')
 
+  /**
+   * Creates a machine from the form, then refetches the list.
+   *
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleSubmit}>Add Machine</button>
+   */
   async function handleSubmit() {
     if (!name.trim()) return
     try {
       await createMachine({
         name,
+        // Only send code when non-blank — an empty string would occupy the
+        // unique constraint's single "" slot and block every later blank code.
         ...(code.trim() && { code })
       })
       setName('')
@@ -32,9 +55,18 @@ function MachinesPage() {
     }
   }
 
+  /**
+   * Soft-deletes a machine (active: false) — removes it from new-run selection
+   * while preserving run history.
+   *
+   * @param {string} id - Machine UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleDeactivate('7cd0…')
+   */
   async function handleDeactivate(id) {
     try {
-        // Soft deletion: active=false removes this machine from new workflows while preserving run history.
         await updateMachine(id, { active: false })
         reload()
     } catch (err) {
@@ -43,9 +75,17 @@ function MachinesPage() {
     }
   }
 
+  /**
+   * Reactivates a soft-deleted machine for future runs.
+   *
+   * @param {string} id - Machine UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleActivate('7cd0…')
+   */
   async function handleActivate(id) {
       try {
-          // Reactivation makes a previously soft-deleted machine available for future runs again.
           await updateMachine(id, { active: true })
           reload()
       } catch (err) {
@@ -54,6 +94,15 @@ function MachinesPage() {
       }
   }
 
+  /**
+   * Saves the edited machine code and closes the inline editor.
+   *
+   * @param {string} id - Machine UUID being edited.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleSaveCode('7cd0…')
+   */
   async function handleSaveCode(id) {
       try {
           await updateMachine(id, { code: editingCode })
@@ -66,6 +115,8 @@ function MachinesPage() {
   }
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
+  // TODO: a mutation error replaces the WHOLE page — show a banner instead so
+  // the list stays visible and the user can retry.
   if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
@@ -119,6 +170,8 @@ function MachinesPage() {
                               style={styles.editButton}
                               onClick={() => {
                                   setEditingId(machine.id)
+                                  // Seed the draft with the current code so "Save"
+                                  // without typing is a no-op, not an erase.
                                   setEditingCode(machine.code || '')
                               }}
                           >

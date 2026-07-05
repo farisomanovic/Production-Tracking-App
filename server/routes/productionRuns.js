@@ -1,34 +1,46 @@
 /**
- * Handles ProductionRun API routes for transactional shop-floor records.
- * Coordinates run creation, completion, detail reads, and deletion.
- * Uses Prisma transactions for completion and inventory consistency.
+ * @file productionRuns.js
+ * @description Routes for the transactional heart of the app: production runs.
+ * Covers the two-step lifecycle (create as in_progress → complete with
+ * measurements/materials/outputs), filtered listing, detail reads, and deletion
+ * with stock reversal. Master-data CRUD does NOT belong here.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 
 const router = Router()
 
+// ─── LIST & DETAIL ───────────────────────────────────────────────────────────
+
 /**
- * GET /
+ * Lists runs with optional filters, relations included so the list page can
+ * render names without follow-up requests.
  *
- * Returns production runs with optional machine, operator, product, and date
- * filters. Related master data is included so the client can render a complete
- * run summary without follow-up requests.
+ * @param {import('express').Request} req - Optional query: `machineId`, `operatorId`, `productId`,
+ * `status` ("in_progress" | "completed"), `dateFrom`/`dateTo` (YYYY-MM-DD), `limit` (positive int).
+ * @param {import('express').Response} res - 200 → ProductionRun[] newest-first; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with optional filter query parameters.
- * @param {import('express').Response} res - Express response returning production run summaries.
- * @returns {Promise<void>} Sends 200 with runs or 500 on Prisma read failure.
+ * @example
+ * // GET /api/production-runs?machineId=7cd0…&status=completed&limit=1
+ * // → 200 [{ id: "ab12…", date: "2026-07-01T00:00:00.000Z", status: "completed",
+ * //          machine: { name: "Extruder 1" }, operator: { name: "Amar" }, … }]
  */
 router.get('/', async (req, res) => {
     try {
         const { machineId, operatorId, productId, dateFrom, dateTo, limit, status } = req.query
         const where = {}
-        // Build one Prisma where object so any combination of filters can share this endpoint.
+        // One shared where object so any combination of filters can be expressed
+        // by the same endpoint instead of one route per filter.
         if (machineId) where.machineId = machineId
         if (operatorId) where.operatorId = operatorId
         if (productId) where.productId = productId
-        if (status) where.status = status 
+        if (status) where.status = status
         if (dateFrom || dateTo) {
+            // Explicit UTC boundaries because `date` is a DATE column: without the
+            // T00:00/T23:59 suffixes, timezone conversion could shift the filter a day.
+            // TODO: the client builds "today" in UTC too — between midnight and
+            // ~02:00 local (Sarajevo is UTC+1/+2) that's still yesterday. Group 6.
             where.date = {
                 ...(dateFrom && { gte: new Date(`${dateFrom}T00:00:00.000Z`) }),
                 ...(dateTo && { lte: new Date(`${dateTo}T23:59:59.999Z`) })
@@ -36,7 +48,15 @@ router.get('/', async (req, res) => {
         }
         const runs = await prisma.productionRun.findMany({
             where,
+            // TODO: `date` is date-only, so all same-day runs TIE and Postgres may
+            // return them in any order — the "prefill from last run" feature
+            // (limit: 1) can get any run from the latest day, not the latest run.
+            // Add a startTime tiebreaker: orderBy: [{date:'desc'},{startTime:'desc'}].
+            // todo.md Group 4 #4.
             orderBy: { date: 'desc' },
+            // TODO: Number("abc") is NaN and makes Prisma throw a 500 — parse and
+            // validate limit first. Also: no default cap, the list grows unbounded.
+            // todo.md Group 4 #2 and #4.
             ...(limit && { take: Number(limit) }),
             include: {
                 operator: true,
@@ -53,14 +73,19 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * GET /:id
+ * Fetches one run with every relation the detail page needs: recipe
+ * composition, measured parameter values, material usage, and outputs.
  *
- * Returns one production run with the full set of related operational details:
- * recipe composition, recorded parameter values, material usage, and outputs.
+ * @param {import('express').Request} req - `params.id` is the run UUID.
+ * @param {import('express').Response} res - 200 → full run aggregate; 404 unknown id; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning a production run aggregate.
- * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
+ * @example
+ * // GET /api/production-runs/ab12…
+ * // → 200 { id: "ab12…", status: "completed",
+ * //          runParameterValues: [{ value: 210, machineParameter: { parameter: { name: "Melt temp" } } }],
+ * //          materialUsages: [{ quantityUsed: 480, material: { name: "PP granulat" } }],
+ * //          runOutputs: [{ quantityProduced: 500, product: { name: "PP traka 12mm" } }] }
  */
 router.get('/:id', async (req, res) => {
     try {
@@ -78,7 +103,8 @@ router.get('/:id', async (req, res) => {
                     }
                 },
                 runParameterValues: {
-                    // Sort by the machine's configured displayOrder so this matches the run entry form.
+                    // Sorted by the machine's configured displayOrder so the detail
+                    // view lists values in the same order the operator entered them.
                     orderBy: { machineParameter: { displayOrder: 'asc' } },
                     include: {
                         machineParameter: {
@@ -104,17 +130,22 @@ router.get('/:id', async (req, res) => {
     }
 })
 
+// ─── CREATE & UPDATE ─────────────────────────────────────────────────────────
+
 /**
- * POST /
+ * Starts a run (status defaults to in_progress in the schema). This is the
+ * write that happens after wizard Step 2 — measurements come later at /complete.
  *
- * Starts a production run. Required foreign keys identify the operator, machine,
- * product, and recipe being used; optional values capture setup details that
- * may not be known at run start.
+ * @param {import('express').Request} req - Required body: `date`, `startTime`, `operatorId`, `machineId`,
+ * `productId`, `recipeId`. Optional: `warmupStartTime`, `stableStartTime`, `energyStart`, `notes`, `potentialBuyer`.
+ * @param {import('express').Response} res - 201 → created run with relations; 400 on validation failure; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with required run header fields.
- * @param {import('express').Response} res - Express response returning the created run summary.
- * @returns {Promise<void>} Sends 201, 400 for validation failures, or 500 on Prisma failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2003 when referenced foreign keys do not exist.
+ * @example
+ * // POST /api/production-runs
+ * // { "date": "2026-07-04T00:00:00.000Z", "startTime": "2026-07-04T08:30:00.000",
+ * //   "operatorId": "b3f1…", "machineId": "7cd0…", "productId": "c771…", "recipeId": "d1e2…" }
+ * // → 201 { id: "ab12…", status: "in_progress", … }
  */
 router.post('/', async (req, res) => {
     try {
@@ -135,12 +166,13 @@ router.post('/', async (req, res) => {
         if (!date || !startTime || !operatorId || !machineId || !productId || !recipeId) {
             return res.status(400).json({ error: 'date, startTime, operatorId, machineId, productId and recipeId are required' })
         }
-        // Inactive operators remain in history, but cannot be assigned to new runs.
         const operator = await prisma.operator.findUnique({
             where: { id: operatorId }
         })
 
-        // Reject future run dates because production runs represent actual shop-floor events.
+        // Runs record real shop-floor events, so future dates are operator error.
+        // setUTCHours(23,59,59) makes "today anywhere on Earth" pass regardless of
+        // the server's timezone — a deliberate loose bound.
         const selectedDate = new Date(date)
         const today = new Date()
         today.setUTCHours(23, 59, 59, 999)
@@ -148,10 +180,22 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Production run date cannot be in the future' })
         }
 
+        // Inactive operators keep their history but must not appear on new runs —
+        // this is the server-side backstop for the client's dropdown filter.
         if (!operator || !operator.active) {
             return res.status(400).json({ error: 'Operator is inactive or does not exist' })
         }
 
+        // TODO: asymmetry — the operator is checked for existence AND active, the
+        // machine for neither: a deactivated machine is accepted silently and a
+        // nonexistent one becomes P2003 → 500. Mirror the operator check.
+        // todo.md Group 3 #2.
+        // TODO: machineId/productId/recipeId are trusted independently — nothing
+        // verifies the MachineProduct link exists or that recipe.productId matches,
+        // so a "Frankenstein" run can be created via direct API call.
+        // todo.md Group 3 #7.
+        // TODO: new Date() on unparseable strings produces Invalid Date → Prisma
+        // throws → 500. Guard with Number.isNaN(d.getTime()) → 400. Group 3 #4.
         const run = await prisma.productionRun.create({
             data: {
                 date: new Date(date),
@@ -181,14 +225,18 @@ router.post('/', async (req, res) => {
 })
 
 /**
- * PUT /:id
+ * Updates a run's mutable fields. The four foreign keys are deliberately NOT
+ * accepted — swapping the machine or recipe after creation would detach the
+ * run from the context its measurements were recorded under.
  *
- * Updates mutable run fields only. Machine, operator, product, and recipe are
- * intentionally fixed after creation to preserve the run's production context.
+ * @param {import('express').Request} req - `params.id` UUID; any subset of `notes`, `potentialBuyer`,
+ * `warmupStartTime`, `stableStartTime`, `energyStart`, `energyEnd`, `endTime`.
+ * @param {import('express').Response} res - 200 → updated run with relations; 500 on failure (including unknown id).
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and mutable run fields.
- * @param {import('express').Response} res - Express response returning the updated run summary.
- * @returns {Promise<void>} Sends 200 or 500 on update failure.
+ * @example
+ * // PUT /api/production-runs/ab12…  { "potentialBuyer": "Bingo d.o.o." }
+ * // → 200 { id: "ab12…", potentialBuyer: "Bingo d.o.o.", … }
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -202,6 +250,9 @@ router.put('/:id', async (req, res) => {
             endTime
         } = req.body
 
+        // TODO: no UI calls this endpoint yet (the client's updateRun helper is
+        // unused) — run headers are uneditable after creation. Either build the
+        // edit screen or drop the route. todo.md Group 8 #2.
         const run = await prisma.productionRun.update({
             where: { id: req.params.id },
             data: {
@@ -227,17 +278,28 @@ router.put('/:id', async (req, res) => {
     }
 })
 
+// ─── COMPLETE (transactional) ────────────────────────────────────────────────
+
 /**
- * POST /:id/complete
+ * Completes a run: flips status, stores measured parameters, material usage,
+ * and outputs, and decrements material stock — all in ONE transaction so a
+ * run can never be "completed" with only half its production data saved.
  *
- * Completes a production run and records its measured parameters, consumed
- * materials, and outputs. All writes run inside one transaction so the run
- * cannot be marked completed without its related production data.
+ * @param {import('express').Request} req - `params.id` UUID. Body: `endTime` (required),
+ * `parameterValues[]` ({ machineParameterId, value }, min 1), `outputs[]`
+ * ({ productId, quantityProduced, grossWeightKg?, scrapKg? }, min 1),
+ * `materialUsages[]` optional, `energyEnd`/`notes` optional.
+ * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid state/payload;
+ * 404 unknown run; 500 on transaction failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and completion payload arrays.
- * @param {import('express').Response} res - Express response returning the completed run aggregate.
- * @returns {Promise<void>} Sends 200, 400/404 for invalid completion state, or 500 on transaction failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2003 when related material, output, or parameter IDs are invalid.
+ * @example
+ * // POST /api/production-runs/ab12…/complete
+ * // { "endTime": "2026-07-04T14:30:00.000",
+ * //   "parameterValues": [{ "machineParameterId": "31f0…", "value": 210 }],
+ * //   "materialUsages": [{ "materialId": "a9d2…", "quantityUsed": 480 }],
+ * //   "outputs": [{ "productId": "c771…", "quantityProduced": 500, "grossWeightKg": 510, "scrapKg": 10 }] }
+ * // → 200 { id: "ab12…", status: "completed", … }
  */
 router.post('/:id/complete', async (req, res) => {
     try {
@@ -253,23 +315,33 @@ router.post('/:id/complete', async (req, res) => {
             return res.status(400).json({ error: 'At least one output is required' })
         }
 
-        // Validate state before writing related records to avoid duplicate completion data.
         const existing = await prisma.productionRun.findUnique({
             where: { id: req.params.id }
         })
         if (!existing) {
             return res.status(404).json({ error: 'Production run not found' })
         }
+        // TODO: TOCTOU race — this status check happens BEFORE the transaction
+        // opens, so two simultaneous /complete calls can both pass it. Today only
+        // the @@unique constraints on the child tables accidentally stop the
+        // second one. The fix: flip the status inside the transaction with a
+        // conditional updateMany({ where: { id, status: 'in_progress' } }) and
+        // abort when count === 0. todo.md Group 2 #4.
         if (existing.status === 'completed') {
             return res.status(400).json({ error: 'Production run is already completed' })
         }
 
-        // Keep status, parameter values, material usage, stock deductions, and outputs atomic.
+        // TODO: no relational validation of the payload — parameterValues can
+        // reference another machine's machineParameterId, outputs.productId isn't
+        // checked against MachineProduct, and a duplicated machineParameterId in
+        // one payload hits @@unique → raw 500. todo.md Group 3 #6.
+        // TODO: no endTime > startTime check — combined with the client gluing
+        // endTime onto the START date, every overnight run (22:00→02:00) is stored
+        // ending before it began. todo.md Group 6 #2.
         const run = await prisma.$transaction(async (tx) => {
             const updatedRun = await tx.productionRun.update({
                 where: { id: req.params.id },
                 data: {
-                    // Marking status here makes completion the authoritative state transition.
                     status: 'completed',
                     endTime: new Date(endTime),
                     ...(energyEnd !== undefined && { energyEnd }),
@@ -278,7 +350,6 @@ router.post('/:id/complete', async (req, res) => {
             })
 
             await tx.runParameterValue.createMany({
-                // createMany efficiently records the machine-specific measurements for this run.
                 data: parameterValues.map(p => ({
                     productionRunId: req.params.id,
                     machineParameterId: p.machineParameterId,
@@ -286,7 +357,8 @@ router.post('/:id/complete', async (req, res) => {
                 }))
             })
 
-            // Material usage is optional because some runs may only record output and parameters.
+            // Usage is optional: some runs legitimately record only parameters and
+            // output (e.g. rework passes that consume no fresh material).
             if (materialUsages && materialUsages.length > 0) {
                 await tx.materialUsage.createMany({
                     data: materialUsages.map(m => ({
@@ -297,10 +369,16 @@ router.post('/:id/complete', async (req, res) => {
                 })
             }
 
-            // Stock is decremented in the same transaction as usage logging to keep inventory aligned.
-            // Updates run sequentially because the transaction holds a single DB connection.
+            // Stock is decremented in the SAME transaction as the usage rows so
+            // inventory can never disagree with recorded consumption.
+            // Sequential loop, not Promise.all: an interactive transaction holds a
+            // single DB connection, so parallel awaits gain nothing here.
             if (materialUsages && materialUsages.length > 0) {
                 for (const m of materialUsages) {
+                    // TODO: decrement has no floor — stock can go negative, and a
+                    // NEGATIVE quantityUsed would silently INCREASE stock. Needs a
+                    // DB CHECK (stockQty >= 0) plus positive-number validation.
+                    // todo.md Group 2 #4.
                     await tx.material.update({
                         where: { id: m.materialId },
                         data: {
@@ -312,7 +390,6 @@ router.post('/:id/complete', async (req, res) => {
                 }
             }
 
-            // Outputs record sellable quantity and optional weight/scrap metrics for the run.
             await tx.runOutput.createMany({
                 data: outputs.map(o => ({
                     productionRunId: req.params.id,
@@ -323,7 +400,8 @@ router.post('/:id/complete', async (req, res) => {
                 }))
             })
 
-            // Return the completed aggregate shape expected by the detail view.
+            // Re-fetch inside the transaction so the response reflects exactly the
+            // state that was committed, in the shape the detail view expects.
             return tx.productionRun.findUnique({
                 where: { id: req.params.id },
                 include: {
@@ -332,7 +410,6 @@ router.post('/:id/complete', async (req, res) => {
                     product: true,
                     recipe: true,
                     runParameterValues: {
-                        // Sort by the machine's configured displayOrder so this matches the run entry form.
                         orderBy: { machineParameter: { displayOrder: 'asc' } },
                         include: {
                             machineParameter: {
@@ -357,18 +434,27 @@ router.post('/:id/complete', async (req, res) => {
     }
 })
 
+// ─── DELETE (transactional, reverses stock) ──────────────────────────────────
+
 /**
- * DELETE /:id
+ * Deletes a run and its child rows atomically, restoring material stock for
+ * completed runs so the inventory movement recorded at completion is reversed.
  *
- * Deletes a production run and all its related records atomically.
- * Material stock is restored to account for the reversed usage.
+ * @param {import('express').Request} req - `params.id` is the run UUID.
+ * @param {import('express').Response} res - 200 → confirmation; 404 unknown run; 500 on transaction failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning a deletion message.
- * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on transaction failure.
+ * @example
+ * // DELETE /api/production-runs/ab12…
+ * // → 200 { message: "Production run deleted successfully" }
  */
 router.delete('/:id', async (req, res) => {
     try {
+        // TODO: TOCTOU race — this read happens OUTSIDE the transaction below. If a
+        // /complete lands in between, the status read here is still "in_progress",
+        // the stock restore is skipped, and the completion's decrement survives
+        // while the run vanishes: inventory is permanently wrong. Move this
+        // findUnique inside the $transaction. todo.md Group 2 #2.
         const run = await prisma.productionRun.findUnique({
             where: { id: req.params.id },
             include: {
@@ -381,9 +467,8 @@ router.delete('/:id', async (req, res) => {
         }
 
         await prisma.$transaction(async (tx) => {
-            // Restore material stock if the run was completed so deleting a run
-            // reverses the inventory movement recorded during completion.
-            // Updates run sequentially because the transaction holds a single DB connection.
+            // Only completed runs ever decremented stock, so only they get it back.
+            // Sequential loop for the same single-connection reason as /complete.
             if (run.status === 'completed' && run.materialUsages.length > 0) {
                 for (const m of run.materialUsages) {
                     await tx.material.update({
@@ -397,12 +482,13 @@ router.delete('/:id', async (req, res) => {
                 }
             }
 
-            // Delete related records first to avoid foreign key violations
+            // Children first: the foreign keys are RESTRICT, so deleting the run
+            // before its rows would throw P2003. (onDelete: Cascade in the schema
+            // would let the DB do this — see todo.md Group 2 #4.)
             await tx.runParameterValue.deleteMany({ where: { productionRunId: req.params.id } })
             await tx.materialUsage.deleteMany({ where: { productionRunId: req.params.id } })
             await tx.runOutput.deleteMany({ where: { productionRunId: req.params.id } })
 
-            // Delete the run itself
             await tx.productionRun.delete({ where: { id: req.params.id } })
         })
 

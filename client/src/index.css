@@ -1,8 +1,14 @@
-/*
- * Defines global color tokens for dark and light themes.
- * Supplies shared CSS variables consumed by inline React styles.
- * Establishes document-level background and default text color.
+/**
+ * @file index.css
+ * @description Global color tokens for both themes plus the body reset.
+ * The ONLY stylesheet in the app — all layout styling is inline in components;
+ * only what components cannot express (CSS variables, body defaults) lives here.
  */
+
+/* Dark is the default (no data-theme attribute needed): the app runs on a
+   production floor where dark screens glare less. BottomNav flips themes by
+   stamping data-theme="light" on <html>, which swaps these variables without
+   any React re-render. */
 :root {
     --color-background: #0a0a0a;
     --color-surface: #1a1a2e;
@@ -27,6 +33,11 @@
     --color-progress-empty: #e5e7eb;
 }
 
+/* Light theme only overrides what differs — anything missing here (accent,
+   danger, success…) intentionally falls through to the dark values above.
+   TODO: --color-progress-empty and --color-danger-soft are light-gray/pink in
+   BOTH themes, which looks washed out on the dark background — give them dark
+   variants. */
 :root[data-theme="light"] {
     --color-background: #f5f5f5;
     --color-surface: #ffffff;
@@ -47,6 +58,7 @@
 body {
     background-color: var(--color-background);
     color: var(--color-text-primary);
+    /* Kill the browser's default 8px body margin so the fixed BottomNav and
+       full-width cards actually reach the viewport edges. */
     margin: 0;
 }
-

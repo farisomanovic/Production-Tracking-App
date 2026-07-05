@@ -1,13 +1,23 @@
 /**
- * Renders reusable parameter master-data administration.
- * Allows parameters to be created before assignment to machines.
- * Feeds machine setup and production-run measurement workflows.
+ * @file ParametersPage.jsx
+ * @description Admin page for parameter definitions (create + list only —
+ * editing has no UI yet even though the API supports it). Assigning parameters
+ * to machines happens on MachineDetailPage, not here.
  */
 import { useState } from 'react'
 import { getAllParameters, createParameter } from '../api/parameters'
 import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
+/**
+ * Renders the parameter list with an add form.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/parameters" element={<ParametersPage />} />
+ */
 function ParametersPage() {
   const { data: parameters, loading, error, reload } = useApi(getAllParameters, 'Failed to load parameters')
   const [name, setName] = useState('')
@@ -15,6 +25,14 @@ function ParametersPage() {
   const [description, setDescription] = useState('')
   const [actionError, setActionError] = useState(null)
 
+  /**
+   * Creates a parameter definition from the form, then refetches the list.
+   *
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleSubmit}>Add Parameter</button>
+   */
   async function handleSubmit() {
     if (!name.trim()) return
     try {
@@ -34,6 +52,7 @@ function ParametersPage() {
   }
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
+  // TODO: a mutation error replaces the WHOLE page — show a banner instead.
   if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (

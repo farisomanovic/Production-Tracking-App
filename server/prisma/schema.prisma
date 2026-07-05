@@ -1,20 +1,23 @@
-// Defines the PostgreSQL data model for Production Tracker.
-// Separates master data, configuration links, and transactional run records.
-// Preserves operational history through soft deletion and relational traceability.
-// Defines the relational model used by the backend. Operators and machines use
-// soft deletion through active flags so historical production runs remain valid.
-// Prisma generates the JavaScript client consumed by the route handlers.
+// @file schema.prisma
+// @description Data model for the production tracker: master data (Operator,
+// Machine, Product, Material, Parameter), configuration links (MachineParameter,
+// MachineProduct, Recipe/RecipeItem), and transactional run records
+// (ProductionRun + its children). Query logic does NOT belong here — routes own it.
+
 generator client {
   provider = "prisma-client-js"
 }
 
-// PostgreSQL connection settings are read from DATABASE_URL.
 datasource db {
   provider = "postgresql"
+  // DATABASE_URL: full Postgres connection string (user, password, host, port,
+  // db name). Loaded by Prisma itself from server/.env — if it is missing, every
+  // prisma CLI command and client query fails at startup with a clear error.
   url      = env("DATABASE_URL")
 }
 
-// Operators are soft-deleted with active=false to preserve production history.
+// Soft delete via `active` instead of row deletion: ProductionRun history keeps a
+// valid foreign key, and a deactivated operator can be reactivated later.
 model Operator {
   id        String   @id @default(uuid())
   name      String
@@ -22,8 +25,10 @@ model Operator {
 
   productionRuns ProductionRun[]
 }
- 
-// Machines may have a unique operational code and are soft-deleted with active=false.
+
+// `code` is optional because older machines were entered before codes existed;
+// the unique constraint still holds for the ones that have one (Postgres treats
+// NULLs as distinct). Soft-deleted via `active`, same reasoning as Operator.
 model Machine {
   id       String  @id @default(uuid())
   name     String
@@ -35,6 +40,10 @@ model Machine {
   productionRuns    ProductionRun[]
 }
 
+// A measurement TYPE (e.g. "Melt temp"), not a value — values live in
+// RunParameterValue, and machine assignment lives in MachineParameter.
+// TODO: name is not unique, but the XLSX export matches columns by name —
+// two parameters with the same name silently merge in reports. todo.md Group 5 #5.
 model Parameter {
   id          String  @id @default(uuid())
   name        String
@@ -44,9 +53,11 @@ model Parameter {
   machineParameters MachineParameter[]
 }
 
-// Links parameters to machines and defines their form order.
-// @@unique([machineId, parameterId]) prevents assigning the same parameter twice.
-// @@unique([machineId, displayOrder]) prevents two parameters sharing one position.
+// The unique pair blocks double-linking a parameter; the unique displayOrder pair
+// blocks two fields claiming one form position.
+// TODO: @@unique([machineId, displayOrder]) also makes SWAPPING two positions
+// impossible in single updates (first write collides) — consider dropping it,
+// since orderBy handles ties harmlessly. todo.md Group 5 #2.
 model MachineParameter {
   id           String @id @default(uuid())
   displayOrder Int    @default(0)
@@ -63,7 +74,8 @@ model MachineParameter {
   @@unique([machineId, displayOrder])
 }
 
-// Product codes are unique so production outputs can be identified consistently.
+// `code` is the human-facing product identifier (labels, Excel reports), which is
+// why it is unique while `name` is not.
 model Product {
   id          String @id @default(uuid())
   name        String
@@ -80,7 +92,8 @@ model Product {
   productionRuns  ProductionRun[]
 }
 
-// Links machines to compatible products; the unique pair prevents duplicates.
+// Compatibility whitelist: the new-run wizard only offers products linked to the
+// chosen machine. The unique pair prevents duplicate links.
 model MachineProduct {
   id String @id @default(uuid())
 
@@ -93,6 +106,11 @@ model MachineProduct {
   @@unique([machineId, productId])
 }
 
+// stockQty is live inventory: decremented by run completion, incremented by run
+// deletion and manual deliveries — all in kg-equivalent of `unit`.
+// TODO: no CHECK (stockQty >= 0) — concurrent completions can drive it negative.
+// todo.md Group 2 #4.
+// TODO: name is not unique; export matches material columns by name. Group 5 #5.
 model Material {
   id       String @id @default(uuid())
   name     String
@@ -104,8 +122,10 @@ model Material {
   materialUsages MaterialUsage[]
 }
 
-// A recipe is a material formula for a product. A product may have multiple
-// recipes, with isDefault marking the preferred formula.
+// A product can have several formulas (e.g. virgin vs. regranulate mix);
+// isDefault marks the one the wizard preselects.
+// TODO: nothing enforces ONE default per product — several can be flagged and the
+// wizard picks arbitrarily. todo.md Group 5 #6.
 model Recipe {
   id        String   @id @default(uuid())
   name      String
@@ -119,8 +139,9 @@ model Recipe {
   productionRuns ProductionRun[]
 }
 
-// Connects recipes to materials and stores each material's formula percentage.
-// The unique pair prevents adding the same material twice to one recipe.
+// One material's share of a recipe. Percentages (not absolute kg) so the same
+// formula scales to any batch size; plannedQtyKg is an optional convenience for
+// a typical batch. The unique pair prevents listing a material twice.
 model RecipeItem {
   id           String @id @default(uuid())
   percentage   Float
@@ -135,8 +156,16 @@ model RecipeItem {
   @@unique([recipeId, materialId])
 }
 
-// Central production event. status supports a two-step workflow: start a run,
-// then complete it with measurements, material usage, and outputs.
+// The central transactional record. Two-step lifecycle: created as in_progress
+// with header data only, then /complete adds measurements + outputs and flips
+// status. `date` is the production day (DATE, no time) used for filtering;
+// startTime/endTime carry the clock times.
+// TODO: status is a raw string — an enum (in_progress | completed) would make
+// typos unrepresentable. todo.md Group 5 #4.
+// TODO: no indexes on machineId/operatorId/productId/status/date although every
+// list query filters on them (Postgres does not auto-index FKs). Group 5 #1.
+// TODO: children below use default RESTRICT — onDelete: Cascade would let the DB
+// handle run deletion instead of manual deleteMany calls. Group 2 #4.
 model ProductionRun {
   id              String    @id @default(uuid())
   date            DateTime  @db.Date
@@ -165,8 +194,9 @@ model ProductionRun {
   runOutputs         RunOutput[]
 }
 
-// Stores measured machine-parameter values for a run.
-// The unique pair prevents recording the same parameter twice for one run.
+// One measured value per machine parameter per run — the unique pair enforces
+// that, and it is also what accidentally blocks double-completion today (see
+// the TOCTOU note in productionRuns.js).
 model RunParameterValue {
   id         String   @id @default(uuid())
   value      Float
@@ -181,9 +211,9 @@ model RunParameterValue {
   @@unique([productionRunId, machineParameterId])
 }
 
-// Stores actual material consumption for a run. quantityUsed may differ from
-// the planned recipe quantity.
-// The unique pair prevents duplicate usage rows for the same material in a run.
+// Actual consumption per run — may differ from the recipe's planned percentages,
+// which is exactly the deviation the business wants to see. The unique pair
+// prevents duplicate rows per material within one run.
 model MaterialUsage {
   id             String @id @default(uuid())
   quantityUsed   Float
@@ -197,7 +227,10 @@ model MaterialUsage {
   @@unique([productionRunId, materialId])
 }
 
-// Stores production output quantities plus optional weight and scrap metrics.
+// Deliberately NO unique pair here: one run may output the same product in
+// several batches (separate rows with their own weight/scrap).
+// TODO: productionRunId has no index (the other children get one from their
+// @@unique prefix) — detail reads and deletes scan. todo.md Group 5 #1.
 model RunOutput {
   id               String  @id @default(uuid())
   quantityProduced Float

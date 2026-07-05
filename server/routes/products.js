@@ -1,7 +1,9 @@
 /**
- * Handles Product API routes for manufactured item master data.
- * Stores dimensional, unit, and description fields for production outputs.
- * Supplies product records to machine compatibility and run workflows.
+ * @file products.js
+ * @description CRUD routes for Product master data (the items PakOm manufactures —
+ * PP strapping and LDPE foil variants, identified by a unique code). Recipes,
+ * machine compatibility, and run outputs reference products but are managed in
+ * their own route files, not here.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -9,13 +11,15 @@ import prisma from '../lib/prisma.js'
 const router = Router()
 
 /**
- * GET /
+ * Lists every product.
  *
- * Returns all products in display order.
+ * @param {import('express').Request} req - No params or body used.
+ * @param {import('express').Response} res - 200 → Product[] sorted by name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request; no query parameters are required.
- * @param {import('express').Response} res - Express response returning product records.
- * @returns {Promise<void>} Sends 200 with products or 500 on Prisma read failure.
+ * @example
+ * // GET /api/products
+ * // → 200 [{ id: "c771…", name: "PP traka 12mm", code: "PP-12", unit: "kg", … }]
  */
 router.get('/', async (req, res) => {
     try {
@@ -26,17 +30,19 @@ router.get('/', async (req, res) => {
     } catch (error) {
         console.error('GET /products error:', error)
         res.status(500).json({ error: 'Failed to fetch products' })
-    }      
+    }
 })
 
 /**
- * GET /:id
+ * Fetches one product by primary key.
  *
- * Returns one product by primary key.
+ * @param {import('express').Request} req - `params.id` is the product UUID.
+ * @param {import('express').Response} res - 200 → Product; 404 unknown id; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning a product record.
- * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
+ * @example
+ * // GET /api/products/c771…
+ * // → 200 { id: "c771…", name: "PP traka 12mm", code: "PP-12", widthMm: 12, … }
  */
 router.get('/:id', async (req, res) => {
     try {
@@ -51,22 +57,26 @@ router.get('/:id', async (req, res) => {
         console.error('GET /products/:id error:', error)
         res.status(500).json({ error: 'Failed to fetch product' })
     }
-})  
+})
 
 /**
- * POST /
+ * Creates a product master record.
  *
- * Creates a product master record. The product code is passed to Prisma because
- * the schema enforces code uniqueness at the database level.
+ * @param {import('express').Request} req - `body.name`, `body.unit` (required); `body.code` (required by the
+ * schema but NOT validated here); dimensions and description optional.
+ * @param {import('express').Response} res - 201 → created Product; 400 missing name/unit; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with required name/unit and optional product fields.
- * @param {import('express').Response} res - Express response returning the created product.
- * @returns {Promise<void>} Sends 201, 400 when required fields are missing, or 500 on Prisma failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2002 when product code uniqueness is violated.
+ * @example
+ * // POST /api/products  { "name": "LDPE folija 50µ", "code": "LD-50", "unit": "kg" }
+ * // → 201 { id: "0b3c…", name: "LDPE folija 50µ", code: "LD-50", unit: "kg", … }
  */
 router.post('/', async (req, res) => {
     try {
         const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body
+        // TODO: code is required by the schema but not checked here — omitting it
+        // throws a raw Prisma error and returns 500 instead of a clear 400.
+        // Either validate it or make the column optional. todo.md Group 3 #1.
         if (!name || !unit) {
             return res.status(400).json({ error: 'name and unit are required' })
         }
@@ -80,27 +90,30 @@ router.post('/', async (req, res) => {
         })
         res.status(201).json(product)
     } catch (error) {
+        // TODO: duplicate code → P2002 → 500 here; should be 409. todo.md Group 4 #5.
         console.error('POST /products error:', error)
         res.status(500).json({ error: 'Failed to create product' })
-    }       
+    }
 })
 
 /**
- * PUT /:id
+ * Partially updates a product.
  *
- * Updates mutable product fields while preserving omitted values.
+ * @param {import('express').Request} req - `params.id` UUID; any subset of name/code/dimensions/description/unit.
+ * @param {import('express').Response} res - 200 → updated Product; 500 on failure (including unknown id or duplicate code).
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and mutable product fields.
- * @param {import('express').Response} res - Express response returning the updated product.
- * @returns {Promise<void>} Sends 200 or 500 on update failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2002 when an updated product code conflicts.
+ * @example
+ * // PUT /api/products/c771…  { "thicknessMm": 0.55 }
+ * // → 200 { id: "c771…", name: "PP traka 12mm", thicknessMm: 0.55, … }
  */
 router.put('/:id', async (req, res) => {
     try {
         const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body
         const product = await prisma.product.update({
             where: { id: req.params.id },
-            data: {     
+            data: {
+                // Spread-if-defined keeps omitted fields untouched (partial update).
                 ...(name !== undefined && { name }),
                 ...(code !== undefined && { code }),
                 ...(widthMm !== undefined && { widthMm }),
@@ -108,13 +121,13 @@ router.put('/:id', async (req, res) => {
                 ...(lengthM !== undefined && { lengthM }),
                 ...(description !== undefined && { description }),
                 ...(unit !== undefined && { unit })
-            }   
-        })  
+            }
+        })
         res.json(product)
     } catch (error) {
         console.error('PUT /products error:', error)
         res.status(500).json({ error: 'Failed to update product ' })
-    }       
+    }
 })
 
 export default router

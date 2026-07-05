@@ -1,28 +1,34 @@
 /**
- * Handles Recipe API routes for product material formulas.
- * Persists recipe headers with nested material composition rows.
- * Enforces complete 100 percent formulas before production use.
+ * @file recipes.js
+ * @description Routes for Recipe headers and their RecipeItem composition rows
+ * (a product's material formula in percentages). Creation validates the formula;
+ * material master data and stock do NOT belong here — see materials.js.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 
 const router = Router()
 
+// ─── READS ───────────────────────────────────────────────────────────────────
+
 /**
- * GET /
+ * Lists every recipe with product and full material breakdown.
  *
- * Returns all recipes with their product and material composition included.
+ * @param {import('express').Request} req - No params or body used.
+ * @param {import('express').Response} res - 200 → Recipe[] (with product + recipeItems.material) sorted by name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request; no query parameters are required.
- * @param {import('express').Response} res - Express response returning recipes with relations.
- * @returns {Promise<void>} Sends 200 with recipes or 500 on Prisma read failure.
+ * @example
+ * // GET /api/recipes
+ * // → 200 [{ id: "d1e2…", name: "Standard mix", isDefault: true,
+ * //          product: { name: "PP traka 12mm" },
+ * //          recipeItems: [{ percentage: 70, material: { name: "PP granulat" } }] }]
  */
 router.get('/', async (req, res) => {
     try {
         const recipes = await prisma.recipe.findMany({
             orderBy: { name: 'asc' },
             include: {
-                // Include relation data needed to display each recipe as a full material breakdown.
                 product: true,
                 recipeItems: {
                     include: {
@@ -39,14 +45,16 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * GET /by-product/:productId
+ * Lists the recipes belonging to one product — this is what the wizard's
+ * Step 2 uses, so a recipe for a different product can never even be offered.
  *
- * Returns recipes for one product, including material details for selection and
- * review screens.
+ * @param {import('express').Request} req - `params.productId` is the product UUID.
+ * @param {import('express').Response} res - 200 → Recipe[] (possibly empty) with relations; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.productId.
- * @param {import('express').Response} res - Express response returning product-specific recipes.
- * @returns {Promise<void>} Sends 200 with recipes or 500 on Prisma read failure.
+ * @example
+ * // GET /api/recipes/by-product/c771…
+ * // → 200 [{ id: "d1e2…", name: "Standard mix", isDefault: true, … }]
  */
 router.get('/by-product/:productId', async (req, res) => {
     try {
@@ -70,13 +78,15 @@ router.get('/by-product/:productId', async (req, res) => {
 })
 
 /**
- * GET /:id
+ * Fetches one recipe aggregate by primary key.
  *
- * Returns one recipe by primary key with its product and recipe-item relations.
+ * @param {import('express').Request} req - `params.id` is the recipe UUID.
+ * @param {import('express').Response} res - 200 → Recipe with relations; 404 unknown id; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning a recipe aggregate.
- * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
+ * @example
+ * // GET /api/recipes/d1e2…
+ * // → 200 { id: "d1e2…", name: "Standard mix", recipeItems: [ … ] }
  */
 router.get('/:id', async (req, res) => {
     try {
@@ -101,16 +111,23 @@ router.get('/:id', async (req, res) => {
     }
 })
 
+// ─── WRITES ──────────────────────────────────────────────────────────────────
+
 /**
- * POST /
+ * Creates a recipe and all of its items in one nested write, after validating
+ * that the formula is complete (items exist and percentages total 100).
  *
- * Creates a recipe and its RecipeItem rows in one nested write. Recipe items
- * must be present and total 100% so the bill of materials is complete.
+ * @param {import('express').Request} req - `body.name`, `body.productId`, `body.items[]`
+ * ({ materialId, percentage, plannedQtyKg? }) required; `body.isDefault`, `body.notes` optional.
+ * @param {import('express').Response} res - 201 → created Recipe aggregate; 400 invalid formula; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with recipe metadata and items array.
- * @param {import('express').Response} res - Express response returning the created recipe aggregate.
- * @returns {Promise<void>} Sends 201, 400 for invalid formulas, or 500 on Prisma failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2002 when schema-level uniqueness constraints are violated.
+ * @example
+ * // POST /api/recipes
+ * // { "name": "Regranulat mix", "productId": "c771…",
+ * //   "items": [{ "materialId": "a9d2…", "percentage": 60 },
+ * //             { "materialId": "77b0…", "percentage": 40 }] }
+ * // → 201 { id: "4fe1…", name: "Regranulat mix", recipeItems: [ …2 items ] }
  */
 router.post('/', async (req, res) => {
     try {
@@ -120,12 +137,19 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'name and productId are required' })
         }
 
-        // A recipe without materials cannot drive production planning.
+        // A recipe with no items would let a run start with nothing to consume —
+        // material usage and the Step 4 calculator both assume at least one row.
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ error: 'At least one recipe item is required' })
         }
 
-        // Percentages must represent a complete formula before the recipe is saved.
+        // Math.round gives ±0.5 tolerance on purpose: three items of 33.33%
+        // sum to 99.99 due to float representation and must still pass.
+        // TODO: only the SUM is checked — a single item can be negative or > 100 if
+        // the rest compensate, and a non-numeric percentage makes the total NaN
+        // (message reads "Currently: NaN%"). Validate each item: number, > 0, <= 100.
+        // Also: the client requires exactly 100 while this accepts 99.5–100.4 —
+        // pick one rule. todo.md Group 3 #3.
         const total = items.reduce((sum, item) => sum + item.percentage, 0)
         if (Math.round(total) !== 100) {
             return res.status(400).json({ error: `Recipe items must add up to 100%. Currently: ${total}%` })
@@ -138,7 +162,9 @@ router.post('/', async (req, res) => {
                 ...(isDefault !== undefined && { isDefault }),
                 ...(notes !== undefined && { notes }),
                 recipeItems: {
-                    // Nested writes keep the Recipe and RecipeItem rows consistent in one create call.
+                    // Nested create instead of separate inserts: Prisma wraps the
+                    // header + items in one implicit transaction, so a failed item
+                    // can never leave behind a recipe with half a formula.
                     create: items.map(item => ({
                         materialId: item.materialId,
                         percentage: item.percentage,
@@ -157,24 +183,33 @@ router.post('/', async (req, res) => {
         })
         res.status(201).json(recipe)
     } catch (error) {
+        // TODO: a bad materialId/productId arrives as P2003 and becomes a 500 —
+        // should be a 400 naming the invalid reference. todo.md Group 4 #5.
         console.error('POST /recipes error:', error)
         res.status(500).json({ error: 'Failed to create recipe' })
     }
 })
 
 /**
- * PUT /:id
+ * Updates recipe metadata only. Items are deliberately untouchable here —
+ * changing composition would require re-validating the 100% total, and no
+ * item-editing endpoint exists yet.
  *
- * Updates recipe metadata. Recipe items are not modified here because changing
- * formula composition requires separate validation of the 100% total.
+ * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.isDefault`, `body.notes`.
+ * @param {import('express').Response} res - 200 → updated Recipe aggregate; 500 on failure (including unknown id).
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and mutable recipe fields.
- * @param {import('express').Response} res - Express response returning the updated recipe aggregate.
- * @returns {Promise<void>} Sends 200 or 500 on update failure.
+ * @example
+ * // PUT /api/recipes/d1e2…  { "isDefault": true }
+ * // → 200 { id: "d1e2…", name: "Standard mix", isDefault: true, … }
  */
 router.put('/:id', async (req, res) => {
     try {
         const { name, isDefault, notes } = req.body
+        // TODO: setting isDefault: true here does NOT clear the flag on the
+        // product's other recipes, so several "defaults" can coexist and the
+        // wizard auto-picks whichever it finds first. Wrap in a transaction that
+        // unsets siblings first. todo.md Group 5 #6.
         const recipe = await prisma.recipe.update({
             where: { id: req.params.id },
             data: {

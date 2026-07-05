@@ -1,13 +1,23 @@
 /**
- * Renders the administrative hub for master-data maintenance.
- * Presents setup entry points and machine configuration links.
- * Keeps configuration workflows separate from production-run entry.
+ * @file AdminPage.jsx
+ * @description The admin hub: navigation grid to every master-data page plus
+ * the machine list that leads into per-machine setup (parameters/products).
+ * No data is mutated here — this page only routes.
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllMachines } from '../api/machines'
 import { common } from '../styles/common'
 
+/**
+ * Renders the data-management grid and the machine setup list.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/admin" element={<AdminPage />} />
+ */
 export default function AdminPage() {
 
   const navigate = useNavigate()
@@ -30,6 +40,8 @@ export default function AdminPage() {
     loadMachines()
   }, [])
 
+  // Static config lives in the component (not module scope) purely for
+  // proximity to the JSX that renders it; there's no state involved.
   const dataPages = [
     { label: 'Operators', path: '/operators' },
     { label: 'Machines', path: '/machines' },

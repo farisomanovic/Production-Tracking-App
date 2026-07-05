@@ -1,12 +1,26 @@
 /**
- * Renders step 2 of the production-run wizard.
- * Loads and selects recipes available for the chosen product.
- * Advances run creation once the production formula is selected.
+ * @file Step2_Recipe.jsx
+ * @description Wizard step 2: pick the material formula for the chosen product.
+ * This is the last step before the run is written to the database — the parent
+ * calls createRun immediately after this step's onNext.
  */
 import { useState, useEffect } from 'react'
 import { getRecipesByProduct } from '../../api/recipes'
 import { common } from '../../styles/common'
 
+/**
+ * Renders the product's recipes as selectable cards, preselecting the default.
+ *
+ * @component
+ * @param {Object} props
+ * @param {Object} props.data - Accumulated wizard formData; `productId` drives the fetch,
+ * `recipeId` restores a previous selection.
+ * @param {Function} props.onNext - Called with `{ recipeId }`; the parent then creates the run.
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Step2_Recipe data={formData} onNext={handleStepNext} />
+ */
 export default function Step2_Recipe({ data, onNext }) {
 
 const [recipes, setRecipes] = useState([])
@@ -14,6 +28,8 @@ const [recipeId, setRecipeId] = useState(data.recipeId || '')
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState(null)
 
+// Pulled into plain constants so the effect can depend on stable primitives
+// instead of the whole data object (which changes identity every merge).
 const productId = data.productId
 const initialRecipeId = data.recipeId
 
@@ -24,7 +40,12 @@ async function loadRecipes() {
     const fetchedRecipes = response.data
     setRecipes(fetchedRecipes)
 
+    // Preselect the default only when the user hasn't chosen before —
+    // returning to this step must not overwrite an explicit choice.
     if (!initialRecipeId) {
+        // TODO: several recipes can be flagged isDefault (nothing enforces one
+        // per product) and find() just takes the first — the preselection is
+        // arbitrary in that case. todo.md Group 5 #6.
         const defaultRecipe = fetchedRecipes.find(r => r.isDefault === true)
         if (defaultRecipe) {
         setRecipeId(defaultRecipe.id)
@@ -40,6 +61,14 @@ async function loadRecipes() {
 loadRecipes()
 }, [productId, initialRecipeId])
 
+/**
+ * Requires a selection, then hands the chosen recipe id up to the wizard.
+ *
+ * @returns {void} Calls onNext on success; sets an error message otherwise.
+ *
+ * @example
+ * <button onClick={handleNext}>Next →</button>
+ */
 function handleNext() {
     if (!recipeId) {
     setError('Please select a recipe before continuing.')
@@ -73,7 +102,6 @@ return (
             }}
             onClick={() => setRecipeId(recipe.id)}
             >
-            {/* Recipe header */}
             <div style={styles.cardHeader}>
                 <span style={styles.recipeName}>{recipe.name}</span>
                 {recipe.isDefault && (
@@ -81,7 +109,8 @@ return (
                 )}
             </div>
 
-            {/* Recipe items */}
+            {/* Full material breakdown on the card so the operator can verify
+                the formula without leaving the wizard. */}
             <div style={styles.itemList}>
                 {recipe.recipeItems.map(item => (
                 <div key={item.id} style={styles.itemRow}>
@@ -162,4 +191,3 @@ itemPercent: {
     fontSize: '0.85rem',
 },
 }
-

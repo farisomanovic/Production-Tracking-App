@@ -1,7 +1,8 @@
 /**
- * Boots the Express API process for Production Tracker.
- * Registers global middleware and domain-specific routers.
- * Exposes the backend boundary consumed by the React client.
+ * @file index.js
+ * @description Express entry point: builds the app, registers global middleware,
+ * mounts one router per domain resource, and starts listening. Only wiring belongs
+ * here — route logic lives in ./routes/*.js, database access in ./lib/prisma.js.
  */
 import express from 'express'
 import cors from 'cors'
@@ -16,14 +17,24 @@ import recipesRouter from './routes/recipes.js'
 import productionRunsRouter from './routes/productionRuns.js'
 
 const app = express()
+// TODO: hardcoded port — should be process.env.PORT with a 3000 fallback, plus
+// `import 'dotenv/config'` at the top of this file. dotenv is installed but never
+// loaded; DATABASE_URL only works because Prisma auto-reads .env itself, so any
+// NEW env var would silently be undefined. See todo.md Group 1 #1.
 const PORT = 3000
 
-// Allow the frontend origin to call this API from the browser.
+// TODO: cors() with no options accepts requests from ANY origin. Combined with the
+// missing auth below this makes the API fully open — restrict it once env loading
+// exists: app.use(cors({ origin: process.env.CLIENT_ORIGIN })). todo.md Group 1 #2.
 app.use(cors())
-// Parse JSON payloads so route handlers can read request bodies from req.body.
+// Registered before the routers on purpose: express.json() is what fills req.body,
+// and Express runs middleware strictly in registration order — moved below the
+// routers, every handler would see req.body === undefined.
 app.use(express.json())
 
-// Mount each domain router under its API namespace.
+// TODO: no authentication — anyone who can reach this host can read and mutate all
+// data. Auth middleware belongs here, above the routers, so every /api route is
+// gated in one place. See todo.md Group 1 #4.
 app.use('/api/operators', operatorsRouter)
 app.use('/api/machines', machinesRouter)
 app.use('/api/parameters', parametersRouter)
@@ -35,18 +46,25 @@ app.use('/api/recipes', recipesRouter)
 app.use('/api/production-runs', productionRunsRouter)
 
 /**
- * GET /ping
+ * Health check that proves the process is up without touching the database —
+ * useful to distinguish "server down" from "database down" while debugging.
  *
- * Lightweight health check used to verify that the API process is reachable.
+ * @param {import('express').Request} req - Unused.
+ * @param {import('express').Response} res - Always 200 with a static JSON body.
+ * @returns {void}
  *
- * @param {import('express').Request} req - Express request object; no parameters are required.
- * @param {import('express').Response} res - Express response object used to return service status.
- * @returns {void} JSON payload confirming the server process is alive.
+ * @example
+ * // GET http://localhost:3000/ping
+ * // → 200 { "message": "Server is alive!" }
  */
 app.get('/ping', (req, res) => {
   res.json({ message: 'Server is alive!' })
 })
 
+// TODO: no central error middleware — every router hand-rolls try/catch and most
+// failures collapse to a generic 500. One `app.use((err, req, res, next) => …)`
+// registered here, LAST (Express only treats 4-arg functions as error handlers),
+// would fix the wrong status codes in one place. See todo.md Group 4 #5.
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })
