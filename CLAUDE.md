@@ -37,3 +37,4 @@ This app replaces paper-based tracking with a digital system.
 - Before writing any code, explain the approach and why
 - After writing code, explain each important line
 - If there are multiple ways to do something, tell me the tradeoffs
+- Before you make any changes check if I have moved to a new branch if i have not you branch out, move there, and then make changes.
