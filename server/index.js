@@ -20,10 +20,7 @@ import productionRunsRouter from './routes/productionRuns.js'
 const app = express()
 const PORT = process.env.PORT || 3000
 
-// TODO: cors() with no options accepts requests from ANY origin. Combined with the
-// missing auth below this makes the API fully open — restrict it once env loading
-// exists: app.use(cors({ origin: process.env.CLIENT_ORIGIN })). todo.md Group 1 #2.
-app.use(cors())
+app.use(cors({ origin: process.env.CLIENT_ORIGIN }))
 // Registered before the routers on purpose: express.json() is what fills req.body,
 // and Express runs middleware strictly in registration order — moved below the
 // routers, every handler would see req.body === undefined.
