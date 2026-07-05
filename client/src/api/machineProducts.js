@@ -1,15 +1,22 @@
 /**
- * Provides frontend API helpers for machine-product compatibility.
- * Maps machine setup screens to Express /machine-products endpoints.
- * Controls which products are available when starting a production run.
+ * @file machineProducts.js
+ * @description Axios wrappers for /api/machine-products — the machine↔product
+ * compatibility links that filter the wizard's product dropdown. Product master
+ * data lives in products.js.
  */
 import api from './axiosInstance'
 
 /**
- * Fetches products linked to a machine.
+ * Fetches the products a machine is allowed to produce.
  *
  * @param {string} machineId - Machine UUID.
- * @returns {Promise<import('axios').AxiosResponse>} Axios response containing machine-product links.
+ * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = MachineProduct[]
+ * (each including its `product`), sorted by product name.
+ * @throws {import('axios').AxiosError} On network failure or non-2xx status.
+ *
+ * @example
+ * const res = await getMachineProducts('7cd0…')
+ * const products = res.data.map(link => link.product)
  */
 export function getMachineProducts(machineId) {
   return api.get(`/machine-products/machine/${machineId}`)
@@ -18,18 +25,27 @@ export function getMachineProducts(machineId) {
 /**
  * Links a product to a machine.
  *
- * @param {Object} data - Link payload with machineId and productId.
- * @returns {Promise<import('axios').AxiosResponse>} Axios response containing the created link.
+ * @param {Object} data - `{ machineId, productId }`, both required UUIDs.
+ * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = created link (201).
+ * @throws {import('axios').AxiosError} 400 when already linked or ids missing.
+ *
+ * @example
+ * await linkProductToMachine({ machineId: '7cd0…', productId: 'c771…' })
  */
 export function linkProductToMachine(data) {
   return api.post('/machine-products', data)
 }
 
 /**
- * Removes a machine-product compatibility link.
+ * Removes a machine-product compatibility link. Safe for history — runs
+ * reference the product directly, not this link.
  *
- * @param {string} id - MachineProduct UUID.
- * @returns {Promise<import('axios').AxiosResponse>} Axios response containing unlink status.
+ * @param {string} id - MachineProduct link UUID.
+ * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = confirmation message.
+ * @throws {import('axios').AxiosError} On network failure or non-2xx status.
+ *
+ * @example
+ * await unlinkProductFromMachine('88c1…')
  */
 export function unlinkProductFromMachine(id) {
   return api.delete(`/machine-products/${id}`)

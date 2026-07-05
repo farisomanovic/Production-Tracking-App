@@ -1,7 +1,8 @@
 /**
- * Renders step 1 of the production-run wizard.
- * Collects operator, machine, product, date, and setup timing fields.
- * Filters product choices through machine-product compatibility links.
+ * @file Step1_BasicInfo.jsx
+ * @description Wizard step 1: who/where/what/when — operator, machine, product,
+ * date, and setup times. Nothing is written to the server here; the run is only
+ * created after step 2.
  */
 import { useState, useEffect } from 'react'
 import { getAllOperators } from '../../api/operators'
@@ -9,9 +10,23 @@ import { getAllMachines } from '../../api/machines'
 import { getMachineProducts } from '../../api/machineProducts'
 import { common } from '../../styles/common'
 
+/**
+ * Renders the run header form and reports its values upward on Next.
+ *
+ * @component
+ * @param {Object} props
+ * @param {Object} props.data - Accumulated wizard formData; used to restore values if the user returns.
+ * @param {Function} props.onNext - Called with this step's fields merged-ready; parent advances the step.
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Step1_BasicInfo data={formData} onNext={handleStepNext} />
+ */
 export default function Step1_BasicInfo({ data, onNext }) {
 
-// Form field state — initialized from data prop so if user comes back, values are preserved
+// ─── FORM STATE ──────────────────────────────────────────────────────────────
+// Initialized from the data prop so values survive a return to this step —
+// wizard state lives in the parent, each step is just an editor for its slice.
 const [operatorId, setOperatorId] = useState(data.operatorId || '')
 const [machineId, setMachineId] = useState(data.machineId || '')
 const [productId, setProductId] = useState(data.productId || '')
@@ -22,17 +37,18 @@ const [stableStartTime, setStableStartTime] = useState(data.stableStartTime || '
 const [energyStart, setEnergyStart] = useState(data.energyStart || '')
 const [potentialBuyer, setPotentialBuyer] = useState(data.potentialBuyer || '')
 
-// Data lists fetched from API
 const [operators, setOperators] = useState([])
 const [machines, setMachines] = useState([])
 const [products, setProducts] = useState([])
 
-// Loading and error state
+// Two loading flags because they gate different UI: loadingInitial blocks the
+// whole step, loadingProducts only the product dropdown after a machine pick.
 const [loadingInitial, setLoadingInitial] = useState(true)
 const [loadingProducts, setLoadingProducts] = useState(false)
 const [error, setError] = useState(null)
 
-// Runs once on mount — fetch operators and machines at the same time
+// ─── DATA LOADING ────────────────────────────────────────────────────────────
+
 useEffect(() => {
     async function loadInitial() {
     try {
@@ -52,6 +68,8 @@ useEffect(() => {
     loadInitial()
 }, [])
 
+// Products are machine-dependent (MachineProduct links), so they reload every
+// time the machine changes rather than being fetched once.
 useEffect(() => {
 if (!machineId) return
 
@@ -71,8 +89,17 @@ async function loadProducts() {
 loadProducts()
 }, [machineId])
 
+// ─── VALIDATION & SUBMIT ─────────────────────────────────────────────────────
+
+/**
+ * Validates required fields and passes this step's data up to the wizard.
+ *
+ * @returns {void} Calls onNext on success; sets an error message otherwise.
+ *
+ * @example
+ * <button onClick={handleNext}>Next →</button>
+ */
 function handleNext() {
-    // Validate required fields
     if (!operatorId || !machineId || !productId || !date || !startTime) {
     setError('Please fill in all required fields before continuing.')
     return
@@ -80,14 +107,14 @@ function handleNext() {
 
     setError(null)
 
-    // Build the data object to pass up to the parent
     const stepData = {
     operatorId,
     machineId,
     productId,
     date,
     startTime,
-    // Optional fields — only include if they have a value
+    // Optionals are spread-if-truthy so the payload builder later doesn't have
+    // to distinguish "" (untouched input) from a real value.
     ...(warmupStartTime && { warmupStartTime }),
     ...(stableStartTime && { stableStartTime }),
     ...(energyStart && { energyStart }),
@@ -98,6 +125,8 @@ function handleNext() {
 }
 
 if (loadingInitial) return <p style={common.loadingText}>Loading...</p>
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
 
 return (
     <div style={common.wizardContainer}>
@@ -114,7 +143,9 @@ return (
         onChange={e => setOperatorId(e.target.value)}
         >
         <option value=''>Select operator...</option>
-        {/* Soft deletion: inactive operators stay in historical runs but are hidden from new-run entry. */}
+        {/* Client-side active filter — the API returns inactive operators too
+            (the admin page needs them). The server re-checks on create, so this
+            is UX, not security. */}
         {operators.filter(op => op.active).map(op => (
             <option key={op.id} value={op.id}>
                 {op.name}
@@ -131,12 +162,14 @@ return (
         value={machineId}
         onChange={e => {
             setMachineId(e.target.value)
+            // Product must reset with the machine: the old selection may not be
+            // producible on the new machine, and keeping it would create exactly
+            // the machine/product mismatch the link table exists to prevent.
             setProductId('')
             setProducts([])
         }}
         >
         <option value=''>Select machine...</option>
-        {/* Soft deletion: inactive machines remain traceable but cannot be selected for new production. */}
         {machines.filter(m => m.active).map(machine => (
             <option key={machine.id} value={machine.id}>
                 {machine.name}
@@ -145,7 +178,7 @@ return (
         </select>
     </div>
 
-    {/* Product — only shown after machine is selected */}
+    {/* Product — hidden until a machine is chosen because the list is machine-specific */}
     {machineId && (
         <div style={common.field}>
         <label style={common.label}>Product *</label>
@@ -176,6 +209,8 @@ return (
             type='date'
             value={date}
             onChange={e => setDate(e.target.value)}
+            // TODO: max is computed in UTC — right after local midnight this
+            // still says "yesterday" and blocks today's date. todo.md Group 6.
             max={new Date().toISOString().split('T')[0]}
         />
     </div>

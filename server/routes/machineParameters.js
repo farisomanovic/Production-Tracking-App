@@ -1,7 +1,8 @@
 /**
- * Handles MachineParameter assignment routes for machine forms.
- * Defines which process parameters are collected per machine.
- * Maintains displayOrder values used by the production-run wizard.
+ * @file machineParameters.js
+ * @description Routes for the Machine↔Parameter link table: which measurements a
+ * machine collects and in what form order (displayOrder). Parameter definitions
+ * themselves do NOT belong here — see parameters.js.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -9,20 +10,24 @@ import prisma from '../lib/prisma.js'
 const router = Router()
 
 /**
- * GET /machine/:machineId
+ * Lists a machine's parameter links, parameter metadata included, in the order
+ * the run-entry form should render them.
  *
- * Returns the parameter links for a machine, including parameter metadata.
- * displayOrder controls the order in which fields appear on production forms.
+ * @param {import('express').Request} req - `params.machineId` is the machine UUID.
+ * @param {import('express').Response} res - 200 → MachineParameter[] (with `parameter`) ordered by displayOrder; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.machineId.
- * @param {import('express').Response} res - Express response returning machine-parameter links.
- * @returns {Promise<void>} Sends 200 with ordered links or 500 on Prisma read failure.
+ * @example
+ * // GET /api/machine-parameters/machine/7cd0…
+ * // → 200 [{ id: "31f0…", displayOrder: 0, parameter: { name: "Melt temp", unit: "°C" } }]
  */
 router.get('/machine/:machineId', async (req, res) => {
     try {
         const links = await prisma.machineParameter.findMany({
             where: { machineId: req.params.machineId },
-            // displayOrder is the persisted UI order used by setup forms and run entry.
+            // displayOrder is the single source of truth for form field order —
+            // the wizard, the completion form, and run detail all rely on it so
+            // the operator always sees fields in the same sequence.
             orderBy: { displayOrder: 'asc' },
             include: {
                 parameter: true
@@ -36,15 +41,16 @@ router.get('/machine/:machineId', async (req, res) => {
 })
 
 /**
- * POST /
+ * Links a parameter to a machine, appending it to the end of the form when no
+ * explicit displayOrder is given.
  *
- * Links a parameter to a machine. If displayOrder is omitted, the next available
- * order is derived from the current highest value for that machine.
+ * @param {import('express').Request} req - `body.machineId`, `body.parameterId` (required); `body.displayOrder` (optional).
+ * @param {import('express').Response} res - 201 → created link (with `parameter`); 400 missing ids or duplicate link; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with machineId, parameterId, and optional displayOrder.
- * @param {import('express').Response} res - Express response returning the created link.
- * @returns {Promise<void>} Sends 201, 400 for validation/duplicate links, or 500 on Prisma failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2002 when machineId/parameterId or machineId/displayOrder is duplicated.
+ * @example
+ * // POST /api/machine-parameters  { "machineId": "7cd0…", "parameterId": "e01b…" }
+ * // → 201 { id: "31f0…", displayOrder: 3, parameter: { name: "Melt temp" } }
  */
 router.post('/', async (req, res) => {
     try {
@@ -56,14 +62,16 @@ router.post('/', async (req, res) => {
         let finalDisplayOrder = displayOrder
 
         if (finalDisplayOrder === undefined) {
-            // Read the current last position so the new parameter appears at the end of the form.
+            // "Highest existing + 1" so a new parameter lands at the bottom of the
+            // form instead of colliding with position 0.
             const existing = await prisma.machineParameter.findMany({
                 where: { machineId },
                 orderBy: { displayOrder: 'desc' },
                 take: 1
             })
-            // This simple "last + 1" strategy assumes sequential writes; concurrent inserts
-            // can still collide with @@unique([machineId, displayOrder]).
+            // TODO: read-then-write race — two concurrent inserts can compute the
+            // same "last + 1" and one will hit @@unique([machineId, displayOrder])
+            // as an unmapped 500. Rare with one admin user, but real.
             finalDisplayOrder = existing.length > 0 ? existing[0].displayOrder + 1 : 0
         }
 
@@ -79,7 +87,8 @@ router.post('/', async (req, res) => {
         })
         res.status(201).json(link)
     } catch (error) {
-        // P2002 covers unique constraint collisions, including duplicate parameter links.
+        // P2002 here means either unique pair (already linked) or unique
+        // displayOrder collided — both surface as the friendlier duplicate message.
         if (error.code === 'P2002') {
         return res.status(400).json({ error: 'This parameter is already linked to this machine' })
         }
@@ -89,14 +98,15 @@ router.post('/', async (req, res) => {
 })
 
 /**
- * PUT /:id
+ * Changes one link's displayOrder (form position).
  *
- * Updates the display order for one machine-parameter link.
+ * @param {import('express').Request} req - `params.id` link UUID; `body.displayOrder` (required integer).
+ * @param {import('express').Response} res - 200 → updated link (with `parameter`); 400 missing displayOrder; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and body.displayOrder.
- * @param {import('express').Response} res - Express response returning the updated link.
- * @returns {Promise<void>} Sends 200, 400 when displayOrder is missing, or 500 on Prisma failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2002 when the target displayOrder is already used for the machine.
+ * @example
+ * // PUT /api/machine-parameters/31f0…  { "displayOrder": 1 }
+ * // → 200 { id: "31f0…", displayOrder: 1, parameter: { name: "Melt temp" } }
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -104,6 +114,10 @@ router.put('/:id', async (req, res) => {
         if (displayOrder === undefined) {
             return res.status(400).json({ error: 'displayOrder is required' })
         }
+        // TODO: swapping two rows is impossible with @@unique([machineId,
+        // displayOrder]) — the first update collides with the other row's value
+        // and P2002 falls through to a 500 (not mapped here). No UI calls this
+        // endpoint yet, likely for that reason. See todo.md Group 5 #2.
         const link = await prisma.machineParameter.update({
             where: { id: req.params.id },
             data: { displayOrder },
@@ -119,16 +133,22 @@ router.put('/:id', async (req, res) => {
 })
 
 /**
- * DELETE /:id
+ * Unlinks a parameter from a machine by link-table primary key.
  *
- * Removes one machine-parameter link by link-table primary key.
+ * @param {import('express').Request} req - `params.id` is the MachineParameter link UUID (not the parameter id).
+ * @param {import('express').Response} res - 200 → confirmation message; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning a deletion message.
- * @returns {Promise<void>} Sends 200 or 500 on Prisma deletion failure.
+ * @example
+ * // DELETE /api/machine-parameters/31f0…
+ * // → 200 { message: "Parameter unlinked from machine successfully" }
  */
 router.delete('/:id', async (req, res) => {
     try {
+        // TODO: once any completed run recorded a value for this link,
+        // RunParameterValue's RESTRICT foreign key makes this delete throw P2003 —
+        // which lands in catch as a bare 500. Map it to a 409 with a clear
+        // "has recorded history" message. todo.md Group 4 #3.
         await prisma.machineParameter.delete({
             where: { id: req.params.id }
         })

@@ -1,7 +1,9 @@
 /**
- * Handles Parameter API routes for reusable machine measurements.
- * Stores parameter metadata such as unit and description.
- * Feeds machine-specific parameter configuration through link tables.
+ * @file parameters.js
+ * @description CRUD routes for Parameter definitions — reusable measurement types
+ * (temperature, speed, pressure…) that machines later collect values for.
+ * Machine assignment and display ordering do NOT belong here — see
+ * machineParameters.js.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -9,13 +11,15 @@ import prisma from '../lib/prisma.js'
 const router = Router()
 
 /**
- * GET /
+ * Lists every parameter definition.
  *
- * Returns all configurable machine parameters in display order.
+ * @param {import('express').Request} req - No params or body used.
+ * @param {import('express').Response} res - 200 → Parameter[] sorted by name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request; no query parameters are required.
- * @param {import('express').Response} res - Express response returning parameter definitions.
- * @returns {Promise<void>} Sends 200 with parameters or 500 on Prisma read failure.
+ * @example
+ * // GET /api/parameters
+ * // → 200 [{ id: "e01b…", name: "Melt temp", unit: "°C", description: null }]
  */
 router.get('/', async (req, res) => {
     try {
@@ -30,16 +34,18 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * GET /:id
+ * Fetches one parameter definition by primary key.
  *
- * Returns one parameter definition by primary key.
+ * @param {import('express').Request} req - `params.id` is the parameter UUID.
+ * @param {import('express').Response} res - 200 → Parameter; 404 unknown id; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning a parameter definition.
- * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
+ * @example
+ * // GET /api/parameters/e01b…
+ * // → 200 { id: "e01b…", name: "Melt temp", unit: "°C", description: null }
  */
 router.get('/:id', async (req, res) => {
-    try {       
+    try {
         const parameter = await prisma.parameter.findUnique({
             where: { id: req.params.id }
         })
@@ -50,18 +56,19 @@ router.get('/:id', async (req, res) => {
     } catch (error) {
         console.error('GET single /parameters error:', error)
         res.status(500).json({ error: 'Failed to fetch parameter' })
-    }   
+    }
 })
 
 /**
- * POST /
+ * Creates a reusable parameter definition.
  *
- * Creates a reusable parameter definition that can later be assigned to one or
- * more machines through the machine-parameter link table.
+ * @param {import('express').Request} req - `body.name` (required); `body.unit`, `body.description` (optional).
+ * @param {import('express').Response} res - 201 → created Parameter; 400 missing name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with body.name and optional unit/description.
- * @param {import('express').Response} res - Express response returning the created parameter.
- * @returns {Promise<void>} Sends 201, 400 when name is missing, or 500 on Prisma failure.
+ * @example
+ * // POST /api/parameters  { "name": "Line speed", "unit": "m/min" }
+ * // → 201 { id: "f4a9…", name: "Line speed", unit: "m/min", description: null }
  */
 router.post('/', async (req, res) => {
     try {
@@ -69,6 +76,9 @@ router.post('/', async (req, res) => {
         if (!name) {
             return res.status(400).json({ error: 'name is required' })
         }
+        // TODO: name has no unique constraint, so two "Melt temp" parameters can
+        // coexist — and the XLSX export matches columns BY NAME, silently merging
+        // them. Needs @unique in the schema. todo.md Group 5 #5.
         const parameter = await prisma.parameter.create({
             data: { name,
                 ...(unit !== undefined && { unit }),
@@ -79,24 +89,27 @@ router.post('/', async (req, res) => {
     } catch (error) {
         console.error('POST /parameters error:', error)
         res.status(500).json({ error: 'Failed to create parameter' })
-    }       
+    }
 })
 
 /**
- * PUT /:id
+ * Partially updates a parameter definition.
  *
- * Updates the parameter metadata used when collecting production run values.
+ * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.unit`, `body.description`.
+ * @param {import('express').Response} res - 200 → updated Parameter; 500 on failure (including unknown id).
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and mutable parameter fields.
- * @param {import('express').Response} res - Express response returning the updated parameter.
- * @returns {Promise<void>} Sends 200 or 500 on update failure.
+ * @example
+ * // PUT /api/parameters/e01b…  { "unit": "°F" }
+ * // → 200 { id: "e01b…", name: "Melt temp", unit: "°F", description: null }
  */
 router.put('/:id', async (req, res) => {
-    try {   
+    try {
         const { name, unit, description } = req.body
         const parameter = await prisma.parameter.update({
             where: { id: req.params.id },
             data: {
+                // Spread-if-defined keeps omitted fields untouched (partial update).
                 ...(name !== undefined && { name }),
                 ...(unit !== undefined && { unit }),
                 ...(description !== undefined && { description })
@@ -104,9 +117,10 @@ router.put('/:id', async (req, res) => {
         })
         res.json(parameter)
     } catch (error) {
+        // TODO: unknown id → P2025 → 500 here; should be 404. todo.md Group 4 #5.
         console.error('PUT /parameters error:', error)
         res.status(500).json({ error: 'Failed to update parameter' })
-    }   
+    }
 })
 
 export default router

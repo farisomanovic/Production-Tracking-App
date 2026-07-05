@@ -1,13 +1,23 @@
 /**
- * Renders product master-data administration.
- * Supports product creation and display of manufacturing metadata.
- * Supplies product records to recipes, machine compatibility, and run outputs.
+ * @file ProductsPage.jsx
+ * @description Admin page for product master data (create + list only — editing
+ * has no UI yet even though the API supports it). Machine compatibility and
+ * recipes are managed elsewhere.
  */
 import { useState } from 'react'
 import { getAllProducts, createProduct } from '../api/products'
 import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
+/**
+ * Renders the product list with an add form.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/products" element={<ProductsPage />} />
+ */
 function ProductsPage() {
   const { data: products, loading, error, reload } = useApi(getAllProducts, 'Failed to load products')
   const [name, setName] = useState('')
@@ -19,12 +29,24 @@ function ProductsPage() {
   const [unit, setUnit] = useState('')
   const [actionError, setActionError] = useState(null)
 
+  /**
+   * Creates a product from the form, then refetches the list. Requires code
+   * client-side because the schema requires it and the server doesn't check —
+   * this guard is what stands between the user and a raw 500.
+   *
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleSubmit}>Add Product</button>
+   */
   async function handleSubmit() {
     if (!name.trim() || !code.trim() || !unit.trim()) return
     try {
       await createProduct({
         name,
         code,
+        // Dimensions parsed here (not sent as strings) because the schema
+        // columns are Float — Prisma rejects string values.
         ...(widthMm.trim() && { widthMm: parseFloat(widthMm) }),
         ...(thicknessMm.trim() && { thicknessMm: parseFloat(thicknessMm) }),
         ...(lengthM.trim() && { lengthM: parseFloat(lengthM) }),
@@ -46,6 +68,7 @@ function ProductsPage() {
   }
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
+  // TODO: a mutation error replaces the WHOLE page — show a banner instead.
   if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (

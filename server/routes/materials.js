@@ -1,7 +1,8 @@
 /**
- * Handles Material API routes for consumed production inputs.
- * Tracks units, suppliers, and current stock quantity.
- * Supplies recipe composition and run material-usage workflows.
+ * @file materials.js
+ * @description CRUD routes for Material master data (raw production inputs) plus
+ * their live stock quantity. Stock is DECREMENTED by run completion in
+ * productionRuns.js — this file only handles master data and manual stock edits.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -9,13 +10,15 @@ import prisma from '../lib/prisma.js'
 const router = Router()
 
 /**
- * GET /
+ * Lists every material with its current stock.
  *
- * Returns all materials in display order, including current stock quantities.
+ * @param {import('express').Request} req - No params or body used.
+ * @param {import('express').Response} res - 200 → Material[] sorted by name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request; no query parameters are required.
- * @param {import('express').Response} res - Express response returning material records.
- * @returns {Promise<void>} Sends 200 with materials or 500 on Prisma read failure.
+ * @example
+ * // GET /api/materials
+ * // → 200 [{ id: "a9d2…", name: "PP granulat", unit: "kg", stockQty: 1250.5 }]
  */
 router.get('/', async (req, res) => {
     try {
@@ -25,43 +28,47 @@ router.get('/', async (req, res) => {
         res.json(materials)
     } catch (error) {
         console.error('GET all /materials materials:', error)
-        res.status(500).json({ error: 'Failed to fetch materials' })        
+        res.status(500).json({ error: 'Failed to fetch materials' })
     }
 })
 
 /**
- * GET /:id
+ * Fetches one material by primary key.
  *
- * Returns one material by primary key.
+ * @param {import('express').Request} req - `params.id` is the material UUID.
+ * @param {import('express').Response} res - 200 → Material; 404 unknown id; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning a material record.
- * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
+ * @example
+ * // GET /api/materials/a9d2…
+ * // → 200 { id: "a9d2…", name: "PP granulat", unit: "kg", stockQty: 1250.5 }
  */
 router.get('/:id', async (req, res) => {
     try {
-        const material = await prisma.material.findUnique({ 
-            where: { id: req.params.id } 
+        const material = await prisma.material.findUnique({
+            where: { id: req.params.id }
         })
         if (!material) {
             return res.status(404).json({ error: 'Material not found' })
-        }   
+        }
         res.json(material)
     } catch (error) {
         console.error('GET single /materials material:', error)
-        res.status(500).json({ error: 'Failed to fetch material' })        
-    }   
+        res.status(500).json({ error: 'Failed to fetch material' })
+    }
 })
 
 /**
- * POST /
+ * Creates a material master record with optional supplier and opening stock.
  *
- * Creates a material master record. Optional supplier and stock values are
- * stored only when supplied by the client.
+ * @param {import('express').Request} req - `body.name`, `body.unit` (required); `body.supplier`,
+ * `body.stockQty` (optional — stock defaults to 0 in the schema).
+ * @param {import('express').Response} res - 201 → created Material; 400 missing name/unit; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with required name/unit and optional supplier/stockQty.
- * @param {import('express').Response} res - Express response returning the created material.
- * @returns {Promise<void>} Sends 201, 400 when required fields are missing, or 500 on Prisma failure.
+ * @example
+ * // POST /api/materials  { "name": "LDPE regranulat", "unit": "kg", "stockQty": 500 }
+ * // → 201 { id: "77b0…", name: "LDPE regranulat", unit: "kg", stockQty: 500 }
  */
 router.post('/', async (req, res) => {
     try {
@@ -69,6 +76,8 @@ router.post('/', async (req, res) => {
         if (!name || !unit) {
             return res.status(400).json({ error: 'name and unit are required' })
         }
+        // TODO: name has no unique constraint and the XLSX export matches material
+        // columns BY NAME — duplicates silently merge in reports. todo.md Group 5 #5.
         const material = await prisma.material.create({
             data: { name, unit,
                 ...(supplier !== undefined && { supplier }),
@@ -78,22 +87,28 @@ router.post('/', async (req, res) => {
         res.status(201).json(material)
     } catch (error) {
         console.error('POST /materials material:', error)
-        res.status(500).json({ error: 'Failed to create material' })        
-    }       
+        res.status(500).json({ error: 'Failed to create material' })
+    }
 })
 
 /**
- * PUT /:id
+ * Partially updates a material, including overwriting its stock quantity.
  *
- * Updates material metadata or the current stock quantity.
+ * @param {import('express').Request} req - `params.id` UUID; any subset of name/unit/supplier/stockQty.
+ * @param {import('express').Response} res - 200 → updated Material; 500 on failure (including unknown id).
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and mutable material fields.
- * @param {import('express').Response} res - Express response returning the updated material.
- * @returns {Promise<void>} Sends 200 or 500 on update failure.
+ * @example
+ * // PUT /api/materials/a9d2…  { "stockQty": 1750.5 }
+ * // → 200 { id: "a9d2…", name: "PP granulat", unit: "kg", stockQty: 1750.5 }
  */
 router.put('/:id', async (req, res) => {
-    try {   
+    try {
         const { name, unit, supplier, stockQty } = req.body
+        // TODO: stockQty here is an ABSOLUTE overwrite, and the client computes it
+        // as (stale current + delivery) — two simultaneous deliveries lose one.
+        // Accept a stockDelta and use Prisma's { increment } instead, like run
+        // completion already does. todo.md Group 2 #1.
         const material = await prisma.material.update({
             where: { id: req.params.id },
             data: {
@@ -107,7 +122,7 @@ router.put('/:id', async (req, res) => {
     } catch (error) {
         console.error('PUT /materials material:', error)
         res.status(500).json({ error: 'Failed to update material' })
-    }   
+    }
 })
 
 export default router

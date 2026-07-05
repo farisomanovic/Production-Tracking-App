@@ -1,13 +1,23 @@
 /**
- * Renders material master-data administration.
- * Supports material creation, editing, and stock quantity updates.
- * Supplies input materials used by recipes and completed production runs.
+ * @file MaterialsPage.jsx
+ * @description Admin page for material master data and stock deliveries.
+ * Stock is only ever ADDED here — consumption happens automatically when runs
+ * complete, so there is deliberately no "subtract stock" control.
  */
 import { useState } from 'react'
 import { getAllMaterials, createMaterial, updateMaterial } from '../api/materials'
 import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
+/**
+ * Renders the material list with an add form and per-row delivery input.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/materials" element={<MaterialsPage />} />
+ */
 function MaterialsPage() {
   const { data: materials, loading, error, reload } = useApi(getAllMaterials, 'Failed to load materials')
   const [name, setName] = useState('')
@@ -15,9 +25,18 @@ function MaterialsPage() {
   const [supplier, setSupplier] = useState('')
   const [stockQty, setStockQty] = useState('')
   const [actionError, setActionError] = useState(null)
+  // One shared editing slot — only one delivery form is open at a time.
   const [editingId, setEditingId] = useState(null)
   const [editingStock, setEditingStock] = useState('')
 
+  /**
+   * Creates a material from the form, then refetches the list.
+   *
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleSubmit}>Add Material</button>
+   */
   async function handleSubmit() {
     if (!name.trim() || !unit.trim()) return
     try {
@@ -38,13 +57,30 @@ function MaterialsPage() {
     }
   }
 
+  /**
+   * Records a stock delivery by adding the entered amount to the current stock.
+   *
+   * @param {string} id - Material UUID.
+   * @param {number} currentStock - Stock shown in the list (used as the base for the addition).
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleAddStock('a9d2…', 1250.5) // with editingStock "500" → stores 1750.5
+   */
   async function handleAddStock(id, currentStock) {
     const amount = parseFloat(editingStock)
+    // Positive-only: deliveries can't be negative, and rejecting NaN here keeps
+    // garbage input from ever reaching the API.
     if (isNaN(amount) || amount <= 0) {
         setActionError('Please enter a valid positive number')
         return
     }
     try {
+        // TODO: lost-update race — currentStock comes from a possibly stale list,
+        // and the server receives an ABSOLUTE value. If a run completes (or a
+        // second delivery lands) between load and save, that change is silently
+        // erased. Send a delta and let the server increment atomically.
+        // todo.md Group 2 #1.
         await updateMaterial(id, { stockQty: currentStock + amount })
         setEditingId(null)
         setEditingStock('')
@@ -56,6 +92,7 @@ function MaterialsPage() {
   }
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
+  // TODO: a mutation error replaces the WHOLE page — show a banner instead.
   if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (

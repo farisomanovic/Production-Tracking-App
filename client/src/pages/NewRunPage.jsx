@@ -1,7 +1,9 @@
 /**
- * Renders the multi-step production-run creation wizard.
- * Creates the run after recipe selection and then records operational details.
- * Pre-fills parameter values from the last completed matching run when available.
+ * @file NewRunPage.jsx
+ * @description Orchestrates the 5-step new-run wizard: owns the accumulated
+ * formData, decides when the run is actually created (after step 2), and
+ * fetches last-run values to prefill step 3. Step UIs do NOT belong here —
+ * each lives in components/wizard/.
  */
 import { useState } from 'react'
 import Step1_BasicInfo from '../components/wizard/Step1_BasicInfo'
@@ -13,16 +15,33 @@ import { createRun, getAllRuns, getRunById  } from '../api/productionRuns'
 import { common } from '../styles/common'
 
 /**
- * Converts separate local date and time inputs into the timestamp shape expected by the API.
+ * Glues a date input and a time input into the timestamp string the API stores.
+ * Deliberately has NO timezone suffix: the DB columns are naive timestamps, so
+ * "what the wall clock said" is preserved as typed.
  *
- * @param {string} dateStr - Date input value in YYYY-MM-DD format.
- * @param {string} timeStr - Time input value in HH:mm format.
- * @returns {string} Local ISO-like timestamp without timezone conversion.
+ * @param {string} dateStr - Date input value, "YYYY-MM-DD".
+ * @param {string} timeStr - Time input value, "HH:mm".
+ * @returns {string} Local ISO-like timestamp, e.g. "2026-07-04T08:30:00.000".
+ *
+ * @example
+ * toLocalISO('2026-07-04', '08:30') // → "2026-07-04T08:30:00.000"
  */
+// TODO: this whole approach breaks the moment server and client disagree on
+// timezone — the fix_timestamp_timezone migration is proof it already bit once.
+// Standardize on UTC end-to-end. todo.md Group 6 #3.
 function toLocalISO(dateStr, timeStr) {
   return `${dateStr}T${timeStr}:00.000`
 }
 
+/**
+ * Renders the wizard shell: progress bar, current step, and Back control.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/runs/new" element={<NewRunPage />} />
+ */
 function NewRunPage() {
 
   const [currentStep, setCurrentStep] = useState(1)
@@ -30,6 +49,8 @@ function NewRunPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
+  // Single accumulator for all five steps so any step can be revisited without
+  // losing what the others collected; each step edits only its own slice.
   const [formData, setFormData] = useState({
     operatorId: '',
     machineId: '',
@@ -49,55 +70,77 @@ function NewRunPage() {
     notes: ''
   })
 
-  // This function is called by every step when the user clicks Next.
-  // stepData is an object with whatever that step collected.
-  // We merge it into formData and then decide what to do next.
+  // ─── STEP FLOW ──────────────────────────────────────────────────────────────
+
+  /**
+   * Merges a finished step's data into formData and advances the wizard;
+   * after step 2 it triggers the actual run creation instead.
+   *
+   * @param {Object} stepData - Whatever the step collected (its slice of formData).
+   * @returns {Promise<void>} Resolves once the step change (or run creation) is done.
+   *
+   * @example
+   * <Step1_BasicInfo data={formData} onNext={handleStepNext} />
+   */
   async function handleStepNext(stepData) {
-    // Merge this step's data into the overall formData
+    // Local merge used immediately because setFormData is asynchronous — reading
+    // formData right after setting it would hand stale data to handleCreateRun.
     const updatedData = { ...formData, ...stepData }
     setFormData(updatedData)
 
-    // Step 2 is special — after it we create the run in the database
+    // Step 2 is the commit point: header info is complete, so the run is
+    // created NOW (as in_progress) — steps 3–5 only fill wizard state until
+    // the final completion call.
     if (currentStep === 2) {
       await handleCreateRun(updatedData)
-      return // handleCreateRun will advance the step itself
+      return
     }
 
-    // For all other steps just move forward
     setCurrentStep(prev => prev + 1)
   }
 
-  // Called only after Step 2 completes
+  /**
+   * Creates the run from steps 1–2 data, then tries to prefill step 3 with the
+   * parameter values of the last completed run on the same machine + product —
+   * settings rarely change between runs of the same product.
+   *
+   * @param {Object} data - The merged formData (passed explicitly to avoid stale state).
+   * @returns {Promise<void>} Resolves after the step advances or the error state is set.
+   *
+   * @example
+   * await handleCreateRun({ ...formData, recipeId: 'd1e2…' })
+   */
   async function handleCreateRun(data) {
     setIsSubmitting(true)
     setError(null)
 
     try {
       const payload = {
+        // date goes through toISOString (UTC) while the times below stay naive —
+        // two conventions in one payload. TODO: unify, see todo.md Group 6 #3.
         date: new Date(data.date).toISOString(),
         startTime: toLocalISO(data.date, data.startTime),
         operatorId: data.operatorId,
         machineId: data.machineId,
         productId: data.productId,
         recipeId: data.recipeId,
-        // Optional fields — only include if they have a value
-        ...(data.warmupStartTime && { 
+        ...(data.warmupStartTime && {
           warmupStartTime: toLocalISO(data.date, data.warmupStartTime)
         }),
-        ...(data.stableStartTime && { 
+        ...(data.stableStartTime && {
           stableStartTime: toLocalISO(data.date, data.stableStartTime)
         }),
+        // TODO: truthiness drops a legitimate 0 meter reading. Group 7 #2.
         ...(data.energyStart && { energyStart: Number(data.energyStart) }),
         ...(data.potentialBuyer && { potentialBuyer: data.potentialBuyer }),
         ...(data.notes && { notes: data.notes }),
       }
-      
+
       const response = await createRun(payload)
       setRunId(response.data.id)
 
-      // Fetch the last completed run for this machine + product
-      // We use limit 1 and order by date desc so we get the most recent one
-      // We also filter by status=completed so in-progress runs are ignored
+      // Prefill fetch is inside its own try/catch: it's a convenience, and a
+      // failure here must not block the operator from continuing the wizard.
       try {
         const lastRunRes = await getAllRuns({
         machineId: data.machineId,
@@ -106,10 +149,14 @@ function NewRunPage() {
         limit: 1
         })
 
+        // TODO: the API orders by date only (a DATE column), so several runs on
+        // the same day tie and "the last run" may be any of them. Needs a
+        // startTime tiebreaker server-side. todo.md Group 4 #4.
         const lastRunSummary = lastRunRes.data[0]
 
         if (lastRunSummary) {
-          // Fetch the full run detail which includes runParameterValues
+          // Second request because the list endpoint doesn't include
+          // runParameterValues — only the detail endpoint does.
           const lastRunDetail = await getRunById(lastRunSummary.id)
           const lastRun = lastRunDetail.data
 
@@ -122,11 +169,9 @@ function NewRunPage() {
           }
         }
       } catch (err) {
-        // If the fetch fails for any reason, just continue normally
-        // Pre-filling is a convenience, not a requirement
         console.error('Could not fetch last run for pre-fill:', err)
     }
-    
+
     setCurrentStep(3)
 
     } catch (err) {
@@ -137,20 +182,33 @@ function NewRunPage() {
     }
   }
 
+  /**
+   * Steps back within the post-creation phase (steps 3–5 only). Steps 1–2 are
+   * unreachable on purpose: the run already exists in the database, and editing
+   * its header from here would desynchronize wizard state from the stored row.
+   *
+   * @returns {void}
+   *
+   * @example
+   * <button onClick={handleBack}>Back</button>
+   */
+  // TODO: closing the tab in steps 3–5 leaves the run in_progress forever with
+  // no cleanup path — needs a Cancel/Abandon action. todo.md Group 2 #3.
   function handleBack() {
-    // Don't allow going back past step 1
     if (currentStep === 1) return
-
-    // Important: once the run is created (after step 2), 
-    // going back to step 1 or 2 is dangerous because the run 
-    // already exists in the database. For now we only allow 
-    // going back within steps 3-5.
     if (currentStep <= 2) return
 
     setCurrentStep(prev => prev - 1)
   }
 
-  // Renders the correct step component based on currentStep
+  /**
+   * Picks the step component for the current wizard position.
+   *
+   * @returns {JSX.Element} The active step, wired to formData and handleStepNext.
+   *
+   * @example
+   * {renderStep()}
+   */
   function renderStep() {
     switch (currentStep) {
       case 1:
@@ -195,6 +253,8 @@ function NewRunPage() {
         return <p>Unknown step</p>
     }
   }
+
+  // ─── RENDER ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={styles.container}>
@@ -275,4 +335,3 @@ const styles = {
 }
 
 export default NewRunPage
-

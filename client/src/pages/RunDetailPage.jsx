@@ -1,7 +1,11 @@
 /**
- * Renders production-run detail, completion, editing, and deletion workflows.
- * Displays related parameters, material usage, outputs, and traceability data.
- * Completes in-progress runs using machine-specific configuration and outputs.
+ * @file RunDetailPage.jsx
+ * @description One run's page in both of its lives: a completion form while the
+ * run is in_progress (so a run can be finished outside the original wizard
+ * session), and a read-only record with delete once completed.
+ * TODO: RunCompleteView duplicates wizard Steps 3–5 almost verbatim — a bug fix
+ * in one won't reach the other. Extract a shared RunCompletionForm.
+ * todo.md Group 7 #3.
  */
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -10,6 +14,16 @@ import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
 import { common } from '../styles/common'
 
+/**
+ * Loads the run and dispatches to the completion form or the read-only view
+ * based on its status.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/runs/:id" element={<RunDetailPage />} />
+ */
 export default function RunDetailPage() {
 
 const { id } = useParams()
@@ -24,6 +38,8 @@ const [lastRunQuantityProduced, setLastRunQuantityProduced] = useState('')
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState(null)
 
+// ─── DATA LOADING ────────────────────────────────────────────────────────────
+
 useEffect(() => {
     async function loadRun() {
     try {
@@ -31,6 +47,8 @@ useEffect(() => {
         const fetchedRun = runRes.data
         setRun(fetchedRun)
 
+        // Form config (machine parameters + allowed products) is only needed
+        // when the completion form will render — completed runs skip 3 requests.
         if (fetchedRun.status === 'in_progress') {
         const [paramsRes, productsRes] = await Promise.all([
             getMachineParameters(fetchedRun.machineId),
@@ -39,7 +57,9 @@ useEffect(() => {
         setMachineParameters(paramsRes.data)
         setProducts(productsRes.data.map(item => item.product))
 
-        // Fetch last completed run for same machine + product to pre-fill parameters
+        // Same prefill idea as the wizard: machine settings rarely change
+        // between runs of the same product, so the last completed run's values
+        // are the best starting guess.
         try {
             const lastRunRes = await getAllRuns({
                 machineId: fetchedRun.machineId,
@@ -47,6 +67,8 @@ useEffect(() => {
                 status: 'completed',
                 limit: 1
             })
+            // TODO: same-day runs tie on the API's date-only sort, so this may
+            // not truly be the LATEST run. todo.md Group 4 #4.
             const lastRunSummary = lastRunRes.data[0]
             if (lastRunSummary) {
                 const lastRunDetail = await getRunById(lastRunSummary.id)
@@ -68,7 +90,8 @@ useEffect(() => {
                 }
             }
         } catch (err) {
-            // Pre-fill is a convenience, failure here should not block the completion form
+            // Own try/catch: prefill is a convenience and its failure must not
+            // block the operator from completing the run.
             console.error('Could not fetch last run for pre-fill:', err)
         }
     }
@@ -83,11 +106,16 @@ useEffect(() => {
     loadRun()
 }, [id])
 
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
 /**
- * Formats a production-run date for detail display.
+ * Formats the run's production date for display.
  *
- * @param {string} dateStr - Date string returned by the API.
- * @returns {string} Human-readable date or a fallback dash.
+ * @param {string} dateStr - ISO date string from the API; may be null.
+ * @returns {string} e.g. "04 Jul 2026", or "—" so missing data keeps the row layout.
+ *
+ * @example
+ * formatDate('2026-07-04T00:00:00.000Z') // → "04 Jul 2026"
  */
 function formatDate(dateStr) {
     if (!dateStr) return '—'
@@ -98,6 +126,14 @@ function formatDate(dateStr) {
     })
 }
 
+/**
+ * Deletes this run (server restores its consumed stock) and returns to the list.
+ *
+ * @returns {Promise<void>} Resolves after navigation or after the error state is set.
+ *
+ * @example
+ * <RunDetailView onDelete={handleDelete} />
+ */
 async function handleDelete() {
     try {
         await deleteRun(run.id)
@@ -109,10 +145,13 @@ async function handleDelete() {
 }
 
 /**
- * Formats a production-run timestamp for detail display.
+ * Formats a timestamp as a short clock time for the Times card.
  *
- * @param {string} dateStr - Timestamp string returned by the API.
- * @returns {string} Human-readable time or a fallback dash.
+ * @param {string} dateStr - ISO timestamp from the API; null for never-set optional times.
+ * @returns {string} e.g. "08:30 AM", or "—" for missing values.
+ *
+ * @example
+ * formatTime('2026-07-04T08:30:00.000') // → "08:30 AM"
  */
 function formatTime(dateStr) {
     if (!dateStr) return '—'
@@ -164,13 +203,38 @@ return (
 )
 }
 
-// Completion form for in-progress runs
+// ─── COMPLETION FORM (in-progress runs) ──────────────────────────────────────
+
+/**
+ * Completion form: parameters, material usage, outputs, and end-of-run fields
+ * for a run still in progress. Near-duplicate of wizard Steps 3–5 (see the
+ * file-level TODO).
+ *
+ * @component
+ * @param {Object} props
+ * @param {Object} props.run - The in_progress run aggregate (recipe items included).
+ * @param {Array} props.machineParameters - The machine's parameter links, in display order.
+ * @param {Array} props.products - Products this machine may output.
+ * @param {Array} props.lastRunParameterValues - Prefill values from the last completed matching run.
+ * @param {Array} props.lastRunMaterialUsages - Prefill usage from the last completed matching run.
+ * @param {string} props.lastRunQuantityProduced - Prefill quantity from the last run's first output.
+ * @param {Function} props.onCompleted - Called after successful completion (parent navigates away).
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <RunCompleteView run={run} machineParameters={mps} products={prods}
+ *   lastRunParameterValues={[]} lastRunMaterialUsages={[]}
+ *   lastRunQuantityProduced="" onCompleted={() => navigate('/runs')} />
+ */
 function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, lastRunMaterialUsages, lastRunQuantityProduced, onCompleted }) {
 
 const [endTime, setEndTime] = useState('')
 const [energyEnd, setEnergyEnd] = useState('')
 const [notes, setNotes] = useState('')
 
+// Lazy initializers are safe here because this component only mounts AFTER the
+// parent finished loading run, parameters, and prefill data — so the props are
+// final on first render and never need re-syncing.
 const [paramValues, setParamValues] = useState(() => {
     const initial = {}
     machineParameters.forEach(mp => {
@@ -205,14 +269,47 @@ const [outputs, setOutputs] = useState(() => [{
 const [isSubmitting, setIsSubmitting] = useState(false)
 const [error, setError] = useState(null)
 
+/**
+ * Stores one parameter's raw input string under its machineParameterId.
+ *
+ * @param {string} mpId - MachineParameter link UUID.
+ * @param {string} value - Raw input value; converted to Number only on submit.
+ * @returns {void}
+ *
+ * @example
+ * handleParamChange('31f0…', '210')
+ */
 function handleParamChange(mpId, value) {
     setParamValues(prev => ({ ...prev, [mpId]: value }))
 }
 
+/**
+ * Stores one material's raw kg input under its materialId.
+ *
+ * @param {string} materialId - Material UUID.
+ * @param {string} value - Raw input value; converted to Number only on submit.
+ * @returns {void}
+ *
+ * @example
+ * handleMaterialChange('a9d2…', '480')
+ */
 function handleMaterialChange(materialId, value) {
     setMaterialValues(prev => ({ ...prev, [materialId]: value }))
 }
 
+/**
+ * Fills every material input from total weight × recipe percentage
+ * (total kg = quantity × net weight per unit).
+ *
+ * @param {string|number} qty - Produced quantity (pieces).
+ * @param {string|number} nw - Net weight of one piece in kg.
+ * @returns {void} No-op until both inputs are non-zero numbers.
+ *
+ * @example
+ * recalculateMaterials('500', '1.5')
+ */
+// TODO: replaces ALL material inputs, including hand-corrected ones — same
+// behavior (and same fix) as wizard Step 4's calculator.
 function recalculateMaterials(qty, nw) {
     const q = Number(qty)
     const n = Number(nw)
@@ -220,6 +317,7 @@ function recalculateMaterials(qty, nw) {
     const totalKg = q * n
     const computed = {}
     run.recipe.recipeItems.forEach(item => {
+    // toFixed(2)+parseFloat: 2-decimal kg without trailing zeros.
     computed[item.materialId] = String(
         parseFloat((totalKg * item.percentage / 100).toFixed(2))
     )
@@ -227,22 +325,61 @@ function recalculateMaterials(qty, nw) {
     setMaterialValues(computed)
 }
 
+/**
+ * Updates the calculator's quantity and re-derives material amounts.
+ * Note: does NOT update the output rows below — the calculator quantity and
+ * output quantity are independent fields here, unlike in the wizard.
+ *
+ * @param {string} value - Raw input string.
+ * @returns {void}
+ *
+ * @example
+ * handleQuantityChange('500')
+ */
 function handleQuantityChange(value) {
     setQuantityProduced(value)
     recalculateMaterials(value, netWeightPerUnit)
 }
 
+/**
+ * Updates the calculator's unit weight and re-derives material amounts.
+ *
+ * @param {string} value - Raw input string.
+ * @returns {void}
+ *
+ * @example
+ * handleNetWeightChange('1.5')
+ */
 function handleNetWeightChange(value) {
     setNetWeightPerUnit(value)
     recalculateMaterials(quantityProduced, value)
 }
 
+/**
+ * Updates one field of one output row by its local list key.
+ *
+ * @param {number} id - Local row id (React key only, never sent to the server).
+ * @param {string} field - "productId" | "quantityProduced" | "grossWeightKg" | "scrapKg".
+ * @param {string} value - Raw input value.
+ * @returns {void}
+ *
+ * @example
+ * handleOutputChange(1751623945000, 'scrapKg', '10')
+ */
 function handleOutputChange(id, field, value) {
     setOutputs(prev => prev.map(o =>
     o.id === id ? { ...o, [field]: value } : o
     ))
 }
 
+/**
+ * Appends an empty output row for multi-product runs.
+ *
+ * @returns {void}
+ *
+ * @example
+ * <button onClick={addOutput}>+ Add Another Output</button>
+ */
 function addOutput() {
     setOutputs(prev => [...prev, {
     id: Date.now(),
@@ -253,11 +390,30 @@ function addOutput() {
     }])
 }
 
+/**
+ * Removes an output row — except the last, since the server requires at least
+ * one output to complete a run.
+ *
+ * @param {number} id - Local row id to remove.
+ * @returns {void}
+ *
+ * @example
+ * removeOutput(1751623945000)
+ */
 function removeOutput(id) {
     if (outputs.length === 1) return
     setOutputs(prev => prev.filter(o => o.id !== id))
 }
 
+/**
+ * Checks completion requirements: end time set, all parameters and materials
+ * filled, every output row complete with positive quantities (scrap may be 0).
+ *
+ * @returns {boolean} true when the payload is safe to send; false after setting an error.
+ *
+ * @example
+ * if (!validate()) return
+ */
 function validate() {
     if (!endTime) {
     setError('End time is required.')
@@ -306,17 +462,28 @@ function validate() {
     return true
 }
 
+/**
+ * Builds the completion payload from form state and submits it; hands control
+ * back to the parent (which navigates away) on success.
+ *
+ * @returns {Promise<void>} Resolves after onCompleted or after the error state is set.
+ *
+ * @example
+ * <button onClick={handleComplete}>Complete Run ✓</button>
+ */
 async function handleComplete() {
     if (!validate()) return
 
     setIsSubmitting(true)
     setError(null)
 
-    // Extract just the date part from run.date for combining with endTime
     const datePart = run.date.split('T')[0]
 
     try {
     const payload = {
+        // TODO: glues the end TIME onto the run's START date — an overnight run
+        // (22:00→02:00) is stored ending ~20h before it began. Roll the date
+        // forward when end < start. Same bug as wizard Step 5. todo.md Group 6 #2.
         endTime: `${datePart}T${endTime}:00.000`,
         parameterValues: machineParameters.map(mp => ({
         machineParameterId: mp.id,
@@ -332,6 +499,8 @@ async function handleComplete() {
         grossWeightKg: Number(o.grossWeightKg),
         scrapKg: Number(o.scrapKg)
         })),
+        // TODO: truthiness drops a legitimate 0 meter reading — use
+        // energyEnd !== ''. todo.md Group 7 #2.
         ...(energyEnd && { energyEnd: Number(energyEnd) }),
         ...(notes && { notes }),
     }
@@ -592,7 +761,23 @@ return (
 )
 }
 
-// Read only detail view for completed runs
+// ─── READ-ONLY VIEW (completed runs) ─────────────────────────────────────────
+
+/**
+ * Read-only record of a completed run: info, times, energy, parameters,
+ * materials, outputs, notes — plus the delete action.
+ *
+ * @component
+ * @param {Object} props
+ * @param {Object} props.run - Completed run aggregate with all relations.
+ * @param {Function} props.formatDate - Parent's date formatter (shared so both views format identically).
+ * @param {Function} props.formatTime - Parent's time formatter.
+ * @param {Function} props.onDelete - Called after the user confirms deletion.
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <RunDetailView run={run} formatDate={formatDate} formatTime={formatTime} onDelete={handleDelete} />
+ */
 function RunDetailView({ run, formatDate, formatTime, onDelete }) {
 return (
     <div>
@@ -625,6 +810,8 @@ return (
         </div>
     </div>
 
+    {/* TODO: truthiness hides this whole section (and the readings inside)
+        when a meter legitimately reads 0 — use != null checks. todo.md Group 7 #2. */}
     {(run.energyStart || run.energyEnd) && (
         <div style={styles.section}>
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Energy</p>
@@ -651,7 +838,9 @@ return (
         <div style={styles.section}>
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Parameters</p>
         <div style={styles.infoCard}>
-            {/* Defensive sort: don't rely solely on API row order matching displayOrder */}
+            {/* Defensive re-sort on a COPY ([...] because .sort mutates): the API
+                already orders by displayOrder, but this view breaks visibly if
+                that ever regresses, so it doesn't rely on it. */}
             {[...run.runParameterValues]
             .sort((a, b) => a.machineParameter.displayOrder - b.machineParameter.displayOrder)
             .map(pv => (
@@ -712,6 +901,20 @@ return (
 )
 }
 
+// ─── SHARED ROW COMPONENTS ───────────────────────────────────────────────────
+
+/**
+ * One label/value line inside an info card.
+ *
+ * @component
+ * @param {Object} props
+ * @param {string} props.label - Left-hand label text.
+ * @param {string|number} props.value - Right-hand value; falsy renders as "—".
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <InfoRow label='Operator' value={run.operator.name} />
+ */
 function InfoRow({ label, value }) {
 return (
     <div style={styles.infoRow}>
@@ -721,6 +924,20 @@ return (
 )
 }
 
+/**
+ * Row used by the completion form's summary card.
+ *
+ * @component
+ * @param {Object} props
+ * @param {string} props.label - Left-hand label text.
+ * @param {string|number} props.value - Right-hand value; falsy renders as "—".
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <SummaryRow label='Product' value={run.product.name} />
+ */
+// TODO: character-for-character duplicate of InfoRow — delete this and use
+// InfoRow in both places. todo.md Group 8 #1.
 function SummaryRow({ label, value }) {
 return (
     <div style={styles.infoRow}>
@@ -729,6 +946,8 @@ return (
     </div>
 )
 }
+
+// ─── STYLES ──────────────────────────────────────────────────────────────────
 
 const styles = {
 container: {

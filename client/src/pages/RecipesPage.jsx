@@ -1,7 +1,8 @@
 /**
- * Renders recipe administration for product material formulas.
- * Validates recipe composition totals before submitting to the API.
- * Displays recipe material breakdowns used by production-run setup.
+ * @file RecipesPage.jsx
+ * @description Admin page for recipes: build a material formula item by item
+ * with a live percentage total, and save only when it reaches exactly 100%.
+ * Editing existing recipes has no UI yet.
  */
 import { useState } from 'react'
 import { getAllRecipes, createRecipe } from '../api/recipes'
@@ -10,16 +11,31 @@ import { getAllProducts } from '../api/products'
 import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
+/**
+ * Renders the recipe list and the collapsible recipe-builder form.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/recipes" element={<RecipesPage />} />
+ */
 function RecipesPage() {
+  // Three useApi instances instead of one combined fetch: each has its own
+  // error message, and only the recipe list ever needs reloading (after create).
   const { data: recipes, loading: loadingRecipes, error: errorRecipes, reload: reloadRecipes } = useApi(getAllRecipes, 'Failed to load recipes')
   const { data: materials, loading: loadingMaterials, error: errorMaterials } = useApi(getAllMaterials, 'Failed to load materials')
   const { data: products, loading: loadingProducts, error: errorProducts } = useApi(getAllProducts, 'Failed to load products')
   const loading = loadingRecipes || loadingMaterials || loadingProducts
   const error = errorRecipes || errorMaterials || errorProducts
 
+  // ─── FORM STATE ─────────────────────────────────────────────────────────────
+
   const [name, setName] = useState('')
   const [isDefault, setIsDefault] = useState(false)
   const [notes, setNotes] = useState('')
+  // Draft items carry materialName alongside materialId so the list can render
+  // without a lookup into `materials` on every row.
   const [items, setItems] = useState([])
   const [selectedMaterialId, setSelectedMaterialId] = useState('')
   const [selectedProductId, setSelectedProductId] = useState('')
@@ -27,6 +43,18 @@ function RecipesPage() {
   const [showForm, setShowForm] = useState(false)
   const [actionError, setActionError] = useState(null)
 
+  // ─── DRAFT ITEM MANAGEMENT ──────────────────────────────────────────────────
+
+  /**
+   * Adds the selected material + percentage to the draft formula. Silently
+   * ignores duplicates — the dropdown already excludes added materials, so a
+   * duplicate can only mean a stale click.
+   *
+   * @returns {void}
+   *
+   * @example
+   * <button onClick={handleAddItem}>Add</button>
+   */
   function handleAddItem() {
     if (!selectedMaterialId || !percentage) return
 
@@ -46,21 +74,47 @@ function RecipesPage() {
     setPercentage('')
   }
 
+  /**
+   * Removes one material from the draft formula.
+   *
+   * @param {string} materialId - Material UUID of the row to remove.
+   * @returns {void}
+   *
+   * @example
+   * handleRemoveItem('a9d2…')
+   */
   function handleRemoveItem(materialId) {
     setItems(items.filter((i) => i.materialId !== materialId))
   }
 
   /**
-   * Calculates the total material percentage for the current recipe draft.
+   * Sums the draft formula's percentages — drives both the colored total row
+   * and the save button's enabled state.
    *
-   * @returns {number} Sum of all recipe item percentages.
+   * @returns {number} Sum of item percentages (can be fractional).
+   *
+   * @example
+   * getTotalPercentage() // → 100
    */
   function getTotalPercentage() {
     return items.reduce((sum, item) => sum + item.percentage, 0)
   }
 
+  /**
+   * Creates the recipe from the draft, then resets the form and reloads the list.
+   * Requires exactly 100% client-side (stricter than the server's rounded check).
+   *
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleSubmit}>Save Recipe</button>
+   */
   async function handleSubmit() {
     if (!name.trim() || !selectedProductId || items.length === 0) return
+    // TODO: exact float equality — 33.33+33.33+33.34 works, but three items of
+    // 33.333… would sum to 99.999… and never enable saving even though the
+    // SERVER would accept it (rounded check). Align the two rules.
+    // todo.md Group 3 #3.
     if (getTotalPercentage() !== 100) return
 
     try {
@@ -87,6 +141,8 @@ function RecipesPage() {
     }
   }
 
+  // Already-added materials disappear from the dropdown so the unique
+  // (recipe, material) constraint can't even be attempted from this UI.
   const availableMaterials = materials.filter(
     (m) => !items.some((i) => i.materialId === m.id)
   )
@@ -94,7 +150,10 @@ function RecipesPage() {
   const totalPercentage = getTotalPercentage()
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
+  // TODO: a mutation error replaces the WHOLE page — show a banner instead.
   if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
+
+  // ─── RENDER ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={common.container}>

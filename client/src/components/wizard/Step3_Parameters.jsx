@@ -1,15 +1,32 @@
 /**
- * Renders step 3 of the production-run wizard.
- * Collects machine-specific parameter measurements in displayOrder order.
- * Supports prefilled values from the last completed matching run.
+ * @file Step3_Parameters.jsx
+ * @description Wizard step 3: enter the measured value for each parameter the
+ * chosen machine collects. Runs AFTER the run exists in the DB — values are
+ * held in wizard state and only submitted at step 5's completion call.
  */
 import { useState, useEffect } from 'react'
 import { getMachineParameters } from '../../api/machineParameters'
 import { common } from '../../styles/common'
 
+/**
+ * Renders one numeric input per machine parameter, in configured display order.
+ *
+ * @component
+ * @param {Object} props
+ * @param {Object} props.data - Accumulated wizard formData; `machineId` drives the fetch,
+ * `parameterValues` restores previous answers or the last-run prefill.
+ * @param {string} props.runId - The created run's UUID (unused here, passed for step API symmetry).
+ * @param {Function} props.onNext - Called with `{ parameterValues: [{ machineParameterId, value }] }`.
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Step3_Parameters data={formData} runId={runId} onNext={handleStepNext} />
+ */
 export default function Step3_Parameters({ data, onNext }) {
 
 const [machineParameters, setMachineParameters] = useState([])
+// values is an object keyed by machineParameterId (not an array) so each
+// input's onChange is a single O(1) key write instead of an array search.
 const [values, setValues] = useState({})
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState(null)
@@ -24,11 +41,13 @@ useEffect(() => {
         const params = response.data
         setMachineParameters(params)
 
-        // Initialize values object with empty strings for each parameter
-        // This ensures every parameter has a controlled input from the start
+        // Every parameter gets a key up front (empty string when unknown) so
+        // every input is controlled from its first render — React warns if an
+        // input flips from undefined (uncontrolled) to a value (controlled).
         const initialValues = {}
         params.forEach(mp => {
-        // If user came back to this step, preserve their previous answers
+        // Previous answers win over blank: covers both "user came back" and
+        // the last-completed-run prefill the parent fetched.
         const existing = initialParameterValues?.find(
             pv => pv.machineParameterId === mp.id
         )
@@ -46,6 +65,16 @@ useEffect(() => {
     loadParameters()
 }, [machineId, initialParameterValues])
 
+/**
+ * Stores one parameter's raw input string under its machineParameterId.
+ *
+ * @param {string} machineParameterId - Link UUID identifying which input changed.
+ * @param {string} newValue - Raw input value; converted to Number only on submit.
+ * @returns {void}
+ *
+ * @example
+ * handleChange('31f0…', '210')
+ */
 function handleChange(machineParameterId, newValue) {
     setValues(prev => ({
     ...prev,
@@ -53,8 +82,16 @@ function handleChange(machineParameterId, newValue) {
     }))
 }
 
+/**
+ * Requires every parameter to be filled, converts strings to numbers, and
+ * passes the array format the completion endpoint expects.
+ *
+ * @returns {void} Calls onNext on success; sets an error message otherwise.
+ *
+ * @example
+ * <button onClick={handleNext}>Next →</button>
+ */
 function handleNext() {
-    // Validate — every parameter must have a value
     const allFilled = machineParameters.every(mp => {
     const val = values[mp.id]
     return val !== undefined && val.trim() !== ''
@@ -67,7 +104,6 @@ function handleNext() {
 
     setError(null)
 
-    // Convert values object into the array format the backend expects
     const parameterValues = machineParameters.map(mp => ({
     machineParameterId: mp.id,
     value: Number(values[mp.id])
@@ -130,4 +166,3 @@ list: {
     marginBottom: '1.5rem',
 },
 }
-

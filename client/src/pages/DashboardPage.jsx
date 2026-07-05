@@ -1,13 +1,23 @@
 /**
- * Renders the operational dashboard for recent production activity.
- * Highlights in-progress and recent completed production runs.
- * Provides the primary entry point for starting or reviewing runs.
+ * @file DashboardPage.jsx
+ * @description Landing page: today's runs at a glance — live runs, completed
+ * count, and which machines worked. Fetches once; all groupings are derived on
+ * the client because a single day is a handful of rows at most.
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllRuns } from '../api/productionRuns'
 import { common } from '../styles/common'
 
+/**
+ * Renders today's stat cards, live runs, and active machines.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/" element={<DashboardPage />} />
+ */
 export default function DashboardPage() {
 
   const navigate = useNavigate()
@@ -18,8 +28,12 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadTodayRuns() {
       try {
-        // Get today's date in YYYY-MM-DD format for the filter
+        // TODO: toISOString() is UTC — in Sarajevo (UTC+1/+2) this is still
+        // YESTERDAY between midnight and ~02:00, so a night shift sees "No runs
+        // recorded today". Build the string from local date parts instead.
+        // todo.md Group 6 #1.
         const today = new Date().toISOString().split('T')[0]
+        // Same value for both bounds = exactly one day's runs.
         const response = await getAllRuns({ dateFrom: today, dateTo: today })
         setRuns(response.data)
       } catch (err) {
@@ -32,20 +46,25 @@ export default function DashboardPage() {
     loadTodayRuns()
   }, [])
 
-  // Simple calculations done on the frontend
+  // Derived on every render instead of stored in state: state would need manual
+  // resyncing with `runs`, and filtering a day's worth of rows is trivially cheap.
   const inProgressRuns = runs.filter(r => r.status === 'in_progress')
   const completedRuns = runs.filter(r => r.status === 'completed')
 
-  // Get unique machines that had runs today
+  // Map keyed by machineId deduplicates machines that ran several times today —
+  // insertion order is preserved, so the display order follows first appearance.
   const activeMachines = [...new Map(
     runs.map(r => [r.machineId, r.machine])
   ).values()]
 
   /**
-   * Formats an API timestamp for compact dashboard display.
+   * Formats a timestamp as a short clock time for the run cards.
    *
-   * @param {string} dateStr - Timestamp string returned by the API.
-   * @returns {string} Locale-formatted time or a fallback dash.
+   * @param {string} dateStr - ISO timestamp from the API; may be null for open runs.
+   * @returns {string} e.g. "08:30 AM", or "—" so the layout never collapses on missing data.
+   *
+   * @example
+   * formatTime('2026-07-04T08:30:00.000Z') // → "08:30 AM" (locale-dependent)
    */
   function formatTime(dateStr) {
     if (!dateStr) return '—'
@@ -94,7 +113,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* In progress runs — shown prominently if any exist */}
+      {/* Live runs come first — the operator's most likely destination */}
       {inProgressRuns.length > 0 && (
         <div style={styles.section}>
           <p style={common.sectionLabel}>Live Now</p>
@@ -142,7 +161,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Empty state — no runs today */}
+      {/* Empty state doubles as the call to action for a fresh day */}
       {runs.length === 0 && (
         <div style={styles.emptyBox}>
           <p style={styles.emptyText}>No runs recorded today.</p>

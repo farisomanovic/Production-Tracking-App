@@ -1,6 +1,14 @@
+/**
+ * @file common.js
+ * @description Shared inline-style objects used across pages and wizard steps.
+ * This project styles exclusively via the `style` attribute (no CSS classes);
+ * anything used by 2+ components belongs here, single-component styles stay in
+ * that component's local `styles` object at the bottom of its file.
+ */
 export const common = {
 
-  // Page shell — centered, max 600px, fills parent width
+  // Page shell — centered, max 600px: the app is designed phone-first for
+  // shop-floor use, and capping width keeps it readable on desktop too.
   container: {
     padding: '16px',
     maxWidth: '600px',
@@ -74,7 +82,8 @@ export const common = {
     fontSize: '20px',
   },
 
-  // Text input in admin pages (px sizing)
+  // Text input in admin pages. px sizing here vs rem in wizardInput below:
+  // the two form families were built at different times — unify eventually.
   input: {
     padding: '10px 12px',
     borderRadius: '8px',
@@ -112,7 +121,7 @@ export const common = {
     marginBottom: '0.75rem',
   },
 
-  // Text input in wizard and detail pages (rem sizing)
+  // Text input in wizard and detail pages (rem sizing — see `input` above)
   wizardInput: {
     padding: '0.6rem 0.75rem',
     borderRadius: '8px',
@@ -156,7 +165,8 @@ export const common = {
     gap: '0.5rem',
   },
 
-  // Unit label next to a numeric input ("kg", "kWh")
+  // Unit label next to a numeric input ("kg", "kWh"); minWidth keeps mixed
+  // units ("kg" vs "kWh") from making inputs different widths in one column.
   unit: {
     color: 'var(--color-text-secondary)',
     fontSize: '0.85rem',

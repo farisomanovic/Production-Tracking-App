@@ -1,7 +1,9 @@
 /**
- * Handles Machine API routes for production equipment records.
- * Supports operational reads and admin maintenance updates.
- * Uses active-flag soft deletion to protect historical run traceability.
+ * @file machines.js
+ * @description CRUD routes for Machine master data. Like operators, machines are
+ * soft-deleted via `active: false` to preserve historical run references. The
+ * machine↔parameter and machine↔product link management does NOT belong here —
+ * see machineParameters.js and machineProducts.js.
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
@@ -9,13 +11,16 @@ import prisma from '../lib/prisma.js'
 const router = Router()
 
 /**
- * GET /
+ * Lists ALL machines, including inactive ones, for the admin screen's
+ * activate/deactivate toggle.
  *
- * Returns all machines in display order.
+ * @param {import('express').Request} req - No params or body used.
+ * @param {import('express').Response} res - 200 → Machine[] sorted by name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request; no query parameters are required.
- * @param {import('express').Response} res - Express response returning machine records.
- * @returns {Promise<void>} Sends 200 with machines or 500 on Prisma read failure.
+ * @example
+ * // GET /api/machines
+ * // → 200 [{ id: "7cd0…", name: "Extruder 1", code: "EXT-01", active: true }]
  */
 router.get('/', async (req, res) => {
   try {
@@ -30,13 +35,15 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * GET /:id
+ * Fetches one machine by primary key.
  *
- * Returns one machine by primary key.
+ * @param {import('express').Request} req - `params.id` is the machine UUID.
+ * @param {import('express').Response} res - 200 → Machine; 404 unknown id; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id.
- * @param {import('express').Response} res - Express response returning the machine payload.
- * @returns {Promise<void>} Sends 200, 404 when missing, or 500 on database failure.
+ * @example
+ * // GET /api/machines/7cd0…
+ * // → 200 { id: "7cd0…", name: "Extruder 1", code: "EXT-01", active: true }
  */
 router.get('/:id', async (req, res) => {
   try {
@@ -54,15 +61,15 @@ router.get('/:id', async (req, res) => {
 })
 
 /**
- * POST /
+ * Creates a machine with an optional unique code.
  *
- * Creates a machine. The optional code is persisted only when supplied because
- * the database enforces uniqueness on non-null machine codes.
+ * @param {import('express').Request} req - `body.name` (required); `body.code` (optional, unique when present).
+ * @param {import('express').Response} res - 201 → created Machine; 400 missing name; 500 on DB failure.
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request with body.name and optional body.code.
- * @param {import('express').Response} res - Express response returning the created machine.
- * @returns {Promise<void>} Sends 201, 400 when name is missing, or 500 on Prisma failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2002 when a unique machine code is duplicated.
+ * @example
+ * // POST /api/machines  { "name": "Foil line 2", "code": "FOL-02" }
+ * // → 201 { id: "51aa…", name: "Foil line 2", code: "FOL-02", active: true }
  */
 router.post('/', async (req, res) => {
   try {
@@ -71,27 +78,33 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'name is required' })
     }
     const machine = await prisma.machine.create({
+      // code is only included when the client sent it: the column is nullable
+      // with a unique constraint, and Postgres treats NULLs as distinct — so
+      // omitting it allows many code-less machines, while an explicit duplicate
+      // string would violate the constraint.
       data: { name,
         ...(code !== undefined && { code }),
       }
     })
     res.status(201).json(machine)
   } catch (error) {
+    // TODO: a duplicate code arrives here as Prisma P2002 and becomes a 500 —
+    // should be a 409 with a "code already in use" message. todo.md Group 4 #5.
     console.error('POST /machines error:', error)
     res.status(500).json({ error: 'Failed to create machine' })
   }
 })
 
 /**
- * PUT /:id
+ * Partially updates a machine; `active: false` is the soft-delete path.
  *
- * Updates mutable machine fields. The active flag supports soft deletion while
- * preserving existing production run history.
+ * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.code`, `body.active`.
+ * @param {import('express').Response} res - 200 → updated Machine; 500 on failure (including unknown id or duplicate code).
+ * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
- * @param {import('express').Request} req - Express request containing params.id and mutable machine fields.
- * @param {import('express').Response} res - Express response returning the updated machine.
- * @returns {Promise<void>} Sends 200 or 500 on update failure.
- * @throws {Prisma.PrismaClientKnownRequestError} P2002 when an updated machine code conflicts.
+ * @example
+ * // PUT /api/machines/7cd0…  { "code": "EXT-01B" }
+ * // → 200 { id: "7cd0…", name: "Extruder 1", code: "EXT-01B", active: true }
  */
 router.put('/:id', async (req, res) => {
   try {
@@ -99,15 +112,18 @@ router.put('/:id', async (req, res) => {
     const machine = await prisma.machine.update({
       where: { id: req.params.id },
       data: {
+        // Spread-if-defined keeps omitted fields untouched (partial update).
         ...(name !== undefined && { name }),
         ...(code !== undefined && { code }),
-        // Soft deletion: active=false removes the machine from new work without
-        // deleting rows referenced by historical ProductionRun records.
         ...(active !== undefined && { active }),
       }
     })
     res.json(machine)
   } catch (error) {
+    // TODO: P2025 (unknown id) and P2002 (duplicate code) both collapse to 500
+    // here — should be 404 and 409. todo.md Group 4 #5.
+    // TODO: deactivation is allowed while a run is in progress on this machine.
+    // todo.md Group 3 #5.
     console.error('PUT /machines error:', error)
     res.status(500).json({ error: 'Failed to update machine' })
   }

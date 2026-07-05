@@ -38,3 +38,4 @@ This app replaces paper-based tracking with a digital system.
 - After writing code, explain each important line
 - If there are multiple ways to do something, tell me the tradeoffs
 - Before you make any changes check if I have moved to a new branch if i have not you branch out, move there, and then make changes.
+- When makeing changes if were making changes in a file that has comment //TODO and we handle that todo remove the comment related to it.

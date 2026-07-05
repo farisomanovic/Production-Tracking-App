@@ -1,18 +1,38 @@
 /**
- * Renders operator master-data administration.
- * Supports operator creation, editing, and active-flag soft deletion.
- * Keeps inactive operators available for historical run traceability.
+ * @file OperatorsPage.jsx
+ * @description Admin page for operator master data: create, deactivate,
+ * reactivate. There is no delete on purpose — operators are soft-deleted so
+ * historical runs keep their reference.
  */
 import { useState } from 'react'
 import { getAllOperators, createOperator, updateOperator } from '../api/operators'
 import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
 
+/**
+ * Renders the operator list with an add form and active toggles.
+ *
+ * @component
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <Route path="/operators" element={<OperatorsPage />} />
+ */
 function OperatorsPage() {
   const { data: operators, loading, error, reload } = useApi(getAllOperators, 'Failed to load operators')
   const [name, setName] = useState('')
+  // Separate from the hook's fetch error: a failed mutation shouldn't be
+  // overwritten by the next successful list reload.
   const [actionError, setActionError] = useState(null)
 
+  /**
+   * Creates an operator from the form, then refetches the list.
+   *
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleSubmit}>Add Operator</button>
+   */
   async function handleSubmit() {
     if (!name.trim()) return
     try {
@@ -25,9 +45,18 @@ function OperatorsPage() {
     }
   }
 
+  /**
+   * Soft-deletes an operator (active: false) — hides them from new runs while
+   * keeping history intact.
+   *
+   * @param {string} id - Operator UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleDeactivate('b3f1c2d4-…')
+   */
   async function handleDeactivate(id) {
     try {
-        // Soft deletion: active=false removes this operator from new runs while retaining historical links.
         await updateOperator(id, { active: false })
         reload()
     } catch (err) {
@@ -36,9 +65,17 @@ function OperatorsPage() {
     }
   }
 
+  /**
+   * Reactivates a soft-deleted operator for future runs.
+   *
+   * @param {string} id - Operator UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleActivate('b3f1c2d4-…')
+   */
   async function handleActivate(id) {
     try {
-        // Reactivation restores the operator to selection lists for future production runs.
         await updateOperator(id, { active: true })
         reload()
     } catch (err) {
@@ -48,6 +85,8 @@ function OperatorsPage() {
   }
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
+  // TODO: a mutation error replaces the WHOLE page (list and form vanish) —
+  // render it as a banner above the list instead so the user can retry in place.
   if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
