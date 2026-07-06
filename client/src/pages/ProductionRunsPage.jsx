@@ -155,6 +155,23 @@ export default function ProductionRunsPage() {
   }
 
   /**
+   * Prefixes a value with an apostrophe if it could be interpreted as a
+   * live formula when opened in Excel (formula/CSV injection defense).
+   * Excel treats a leading `'` as "force literal text" and does not
+   * display it — the value renders unchanged to the user.
+   *
+   * @param {*} value - Raw cell value; null/undefined become "".
+   * @returns {string} Safe-to-write cell text.
+   *
+   * @example
+   * sanitizeCellText('=SUM(A1:A9)') // → "'=SUM(A1:A9)"
+   */
+  function sanitizeCellText(value) {
+      const str = String(value ?? '')
+      return /^[=+\-@\t\r]/.test(str) ? `'${str}` : str
+  }
+
+  /**
    * Converts a 0-based column index to an Excel column letter (0→A, 25→Z,
    * 26→AA). Needed because the summary-row formulas below must reference cells
    * by Excel address, and column count varies with the machine's parameters.
@@ -441,8 +458,8 @@ export default function ProductionRunsPage() {
               'Energy Start (kWh)',
               'Energy End (kWh)',
               'Energy Consumed (kWh)',
-              ...paramNames,
-              ...materialNames.map(n => `${n} Used (kg)`),
+              ...paramNames.map(sanitizeCellText),
+              ...materialNames.map(n => sanitizeCellText(`${n} Used (kg)`)),
               'Quantity Produced',
               'Gross Weight (kg)',
               'Scrap (kg)',
@@ -492,10 +509,10 @@ export default function ProductionRunsPage() {
 
               return [
                   formatExportDate(run.date),
-                  run.machine.name,
-                  run.operator.name,
-                  run.product.name,
-                  run.recipe.name,
+                  sanitizeCellText(run.machine.name),
+                  sanitizeCellText(run.operator.name),
+                  sanitizeCellText(run.product.name),
+                  sanitizeCellText(run.recipe.name),
                   formatExportTime(run.warmupStartTime),
                   formatExportTime(run.startTime),
                   formatExportTime(run.stableStartTime),
@@ -508,10 +525,7 @@ export default function ProductionRunsPage() {
                   totalQty,
                   Number(totalGross.toFixed(1)),
                   Number(totalScrap.toFixed(1)),
-                  // TODO: formula injection — a note starting with =, +, - or @
-                  // becomes a live Excel formula on the accountant's machine.
-                  // Prefix such values with an apostrophe. todo.md Group 1 #3.
-                  run.notes || ''
+                  sanitizeCellText(run.notes)
               ]
           })
 
@@ -533,7 +547,7 @@ export default function ProductionRunsPage() {
           // +1 offsets: spreadsheet rows are 1-based and row 1 is the header.
           const lastDataRowNumber = rows.length + 1
           const summaryRowNumber = lastDataRowNumber + 1
-          const materialStartIndex = headers.findIndex(header => header === `${materialNames[0]} Used (kg)`)
+          const materialStartIndex = headers.findIndex(header => header === sanitizeCellText(`${materialNames[0]} Used (kg)`))
           const totalColumnHeaders = ['Quantity Produced', 'Gross Weight (kg)', 'Scrap (kg)']
 
           // Label and value fused into one formula cell ("Broj radnih dana: 22")
