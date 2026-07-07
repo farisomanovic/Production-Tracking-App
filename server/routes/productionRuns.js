@@ -10,6 +10,10 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
+// Sentinel thrown inside a $transaction callback to signal "not found" up to the
+// route's catch block, distinguishing it from a genuine DB/transaction failure.
+class RunNotFoundError extends Error {}
+
 // ─── LIST & DETAIL ───────────────────────────────────────────────────────────
 
 /**
@@ -450,23 +454,20 @@ router.post('/:id/complete', async (req, res) => {
  */
 router.delete('/:id', async (req, res) => {
     try {
-        // TODO: TOCTOU race — this read happens OUTSIDE the transaction below. If a
-        // /complete lands in between, the status read here is still "in_progress",
-        // the stock restore is skipped, and the completion's decrement survives
-        // while the run vanishes: inventory is permanently wrong. Move this
-        // findUnique inside the $transaction. todo.md Group 2 #2.
-        const run = await prisma.productionRun.findUnique({
-            where: { id: req.params.id },
-            include: {
-                materialUsages: true
-            }
-        })
-
-        if (!run) {
-            return res.status(404).json({ error: 'Production run not found' })
-        }
-
         await prisma.$transaction(async (tx) => {
+            // Read inside the transaction so the status/materialUsages snapshot
+            // used below can't go stale from a /complete committing in between.
+            const run = await tx.productionRun.findUnique({
+                where: { id: req.params.id },
+                include: {
+                    materialUsages: true
+                }
+            })
+
+            if (!run) {
+                throw new RunNotFoundError()
+            }
+
             // Only completed runs ever decremented stock, so only they get it back.
             // Sequential loop for the same single-connection reason as /complete.
             if (run.status === 'completed' && run.materialUsages.length > 0) {
@@ -495,6 +496,9 @@ router.delete('/:id', async (req, res) => {
         res.json({ message: 'Production run deleted successfully' })
 
     } catch (error) {
+        if (error instanceof RunNotFoundError) {
+            return res.status(404).json({ error: 'Production run not found' })
+        }
         console.error('DELETE /production-runs/:id error:', error)
         res.status(500).json({ error: 'Failed to delete production run' })
     }
