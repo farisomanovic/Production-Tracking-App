@@ -189,6 +189,7 @@ return (
             lastRunMaterialUsages={lastRunMaterialUsages}
             lastRunQuantityProduced={lastRunQuantityProduced}
             onCompleted={() => navigate('/runs')}
+            onDelete={handleDelete}
         />
     ) : (
         <RunDetailView
@@ -219,14 +220,16 @@ return (
  * @param {Array} props.lastRunMaterialUsages - Prefill usage from the last completed matching run.
  * @param {string} props.lastRunQuantityProduced - Prefill quantity from the last run's first output.
  * @param {Function} props.onCompleted - Called after successful completion (parent navigates away).
+ * @param {Function} props.onDelete - Called to cancel/abandon this in-progress run (parent navigates away).
  * @returns {JSX.Element}
  *
  * @example
  * <RunCompleteView run={run} machineParameters={mps} products={prods}
  *   lastRunParameterValues={[]} lastRunMaterialUsages={[]}
- *   lastRunQuantityProduced="" onCompleted={() => navigate('/runs')} />
+ *   lastRunQuantityProduced="" onCompleted={() => navigate('/runs')}
+ *   onDelete={handleDelete} />
  */
-function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, lastRunMaterialUsages, lastRunQuantityProduced, onCompleted }) {
+function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, lastRunMaterialUsages, lastRunQuantityProduced, onCompleted, onDelete }) {
 
 const [endTime, setEndTime] = useState('')
 const [energyEnd, setEnergyEnd] = useState('')
@@ -755,6 +758,17 @@ return (
         disabled={isSubmitting}
     >
         {isSubmitting ? 'Completing Run...' : 'Complete Run ✓'}
+    </button>
+
+    <button
+        style={styles.deleteButton}
+        disabled={isSubmitting}
+        onClick={() => {
+            const confirmed = window.confirm('Are you sure you want to cancel this in-progress run? This cannot be undone.')
+            if (confirmed) onDelete()
+        }}
+    >
+        Cancel Run
     </button>
 
     </div>

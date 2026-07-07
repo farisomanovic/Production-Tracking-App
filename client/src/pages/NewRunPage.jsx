@@ -5,13 +5,14 @@
  * fetches last-run values to prefill step 3. Step UIs do NOT belong here —
  * each lives in components/wizard/.
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Step1_BasicInfo from '../components/wizard/Step1_BasicInfo'
 import Step2_Recipe from '../components/wizard/Step2_Recipe'
 import Step3_Parameters from '../components/wizard/Step3_Parameters'
 import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
-import { createRun, getAllRuns, getRunById  } from '../api/productionRuns'
+import { createRun, getAllRuns, getRunById, deleteRun } from '../api/productionRuns'
 import { common } from '../styles/common'
 
 /**
@@ -44,9 +45,12 @@ function toLocalISO(dateStr, timeStr) {
  */
 function NewRunPage() {
 
+  const navigate = useNavigate()
+
   const [currentStep, setCurrentStep] = useState(1)
   const [runId, setRunId] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
   const [error, setError] = useState(null)
 
   // Single accumulator for all five steps so any step can be revisited without
@@ -97,6 +101,48 @@ function NewRunPage() {
     }
 
     setCurrentStep(prev => prev + 1)
+  }
+
+  // Warns before an accidental tab-close/navigation once a run row exists
+  // server-side (steps 3-5) — the wizard has no way to resume a run, so an
+  // unconfirmed exit here otherwise leaves it stuck in_progress forever.
+  // Browsers ignore any custom message and show their own generic prompt.
+  useEffect(() => {
+    if (currentStep <= 2) return
+
+    function handleBeforeUnload(e) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [currentStep])
+
+  /**
+   * Deletes the in-progress run and returns to the run list — the
+   * intentional way to bail out of steps 3-5 instead of closing the tab.
+   *
+   * @returns {Promise<void>} Resolves after navigation or after the error state is set.
+   *
+   * @example
+   * <button onClick={handleCancelRun}>Cancel Run</button>
+   */
+  async function handleCancelRun() {
+    const confirmed = window.confirm(
+      'Are you sure you want to cancel this run? The run and any progress will be permanently deleted.'
+    )
+    if (!confirmed) return
+
+    setIsCancelling(true)
+    try {
+      await deleteRun(runId)
+      navigate('/runs')
+    } catch (err) {
+      console.error(err)
+      setError('Failed to cancel production run')
+      setIsCancelling(false)
+    }
   }
 
   /**
@@ -192,8 +238,6 @@ function NewRunPage() {
    * @example
    * <button onClick={handleBack}>Back</button>
    */
-  // TODO: closing the tab in steps 3–5 leaves the run in_progress forever with
-  // no cleanup path — needs a Cancel/Abandon action. todo.md Group 2 #3.
   function handleBack() {
     if (currentStep === 1) return
     if (currentStep <= 2) return
@@ -287,9 +331,18 @@ function NewRunPage() {
       {renderStep()}
 
       {currentStep > 2 && (
-        <button onClick={handleBack} style={styles.backButton}>
-          Back
-        </button>
+        <div style={styles.stepActions}>
+          <button onClick={handleBack} style={styles.backButton}>
+            Back
+          </button>
+          <button
+            onClick={handleCancelRun}
+            style={styles.cancelButton}
+            disabled={isSubmitting || isCancelling || !runId}
+          >
+            Cancel Run
+          </button>
+        </div>
       )}
 
     </div>
@@ -323,14 +376,27 @@ const styles = {
     color: 'var(--color-text-secondary)',
     marginBottom: '1rem',
   },
-  backButton: {
+  stepActions: {
     marginTop: '1rem',
+    display: 'flex',
+    gap: '0.75rem',
+  },
+  backButton: {
     padding: '0.5rem 1.25rem',
     backgroundColor: 'var(--color-surface)',
     border: '1px solid var(--color-border)',
     borderRadius: '8px',
     cursor: 'pointer',
     color: 'var(--color-text-primary)',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    border: '1px solid var(--color-danger)',
+    color: 'var(--color-danger)',
+    padding: '0.5rem 1.25rem',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
   },
 }
 
