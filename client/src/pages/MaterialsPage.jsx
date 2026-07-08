@@ -58,16 +58,15 @@ function MaterialsPage() {
   }
 
   /**
-   * Records a stock delivery by adding the entered amount to the current stock.
+   * Records a stock delivery by atomically adding the entered amount to stock.
    *
    * @param {string} id - Material UUID.
-   * @param {number} currentStock - Stock shown in the list (used as the base for the addition).
    * @returns {Promise<void>} Resolves after reload or after the error state is set.
    *
    * @example
-   * handleAddStock('a9d2…', 1250.5) // with editingStock "500" → stores 1750.5
+   * handleAddStock('a9d2…') // with editingStock "500" → server adds 500 to current stock
    */
-  async function handleAddStock(id, currentStock) {
+  async function handleAddStock(id) {
     const amount = parseFloat(editingStock)
     // Positive-only: deliveries can't be negative, and rejecting NaN here keeps
     // garbage input from ever reaching the API.
@@ -76,12 +75,7 @@ function MaterialsPage() {
         return
     }
     try {
-        // TODO: lost-update race — currentStock comes from a possibly stale list,
-        // and the server receives an ABSOLUTE value. If a run completes (or a
-        // second delivery lands) between load and save, that change is silently
-        // erased. Send a delta and let the server increment atomically.
-        // todo.md Group 2 #1.
-        await updateMaterial(id, { stockQty: currentStock + amount })
+        await updateMaterial(id, { stockDelta: amount })
         setEditingId(null)
         setEditingStock('')
         reload()
@@ -156,7 +150,7 @@ function MaterialsPage() {
                           />
                           <button
                               style={styles.saveButton}
-                              onClick={() => handleAddStock(material.id, material.stockQty ?? 0)}
+                              onClick={() => handleAddStock(material.id)}
                           >
                               Add
                           </button>

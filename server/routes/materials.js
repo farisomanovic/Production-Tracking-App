@@ -92,30 +92,30 @@ router.post('/', async (req, res) => {
 })
 
 /**
- * Partially updates a material, including overwriting its stock quantity.
+ * Partially updates a material. Stock can be adjusted two ways: `stockDelta`
+ * atomically adds to the current value (deliveries), `stockQty` sets it
+ * outright (corrections). Send only one — if both are present, stockDelta wins.
  *
- * @param {import('express').Request} req - `params.id` UUID; any subset of name/unit/supplier/stockQty.
+ * @param {import('express').Request} req - `params.id` UUID; any subset of name/unit/supplier/stockDelta/stockQty.
  * @param {import('express').Response} res - 200 → updated Material; 500 on failure (including unknown id).
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // PUT /api/materials/a9d2…  { "stockQty": 1750.5 }
+ * // PUT /api/materials/a9d2…  { "stockDelta": 500 }
  * // → 200 { id: "a9d2…", name: "PP granulat", unit: "kg", stockQty: 1750.5 }
  */
 router.put('/:id', async (req, res) => {
     try {
-        const { name, unit, supplier, stockQty } = req.body
-        // TODO: stockQty here is an ABSOLUTE overwrite, and the client computes it
-        // as (stale current + delivery) — two simultaneous deliveries lose one.
-        // Accept a stockDelta and use Prisma's { increment } instead, like run
-        // completion already does. todo.md Group 2 #1.
+        const { name, unit, supplier, stockQty, stockDelta } = req.body
         const material = await prisma.material.update({
             where: { id: req.params.id },
             data: {
                 ...(name !== undefined && { name }),
                 ...(unit !== undefined && { unit }),
                 ...(supplier !== undefined && { supplier }),
-                ...(stockQty !== undefined && { stockQty })
+                ...(stockDelta !== undefined
+                    ? { stockQty: { increment: stockDelta } }
+                    : stockQty !== undefined && { stockQty })
             }
         })
         res.json(material)

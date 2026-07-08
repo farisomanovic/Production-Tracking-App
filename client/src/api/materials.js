@@ -50,16 +50,17 @@ export function createMaterial(data) {
 }
 
 /**
- * Partially updates a material — including stock, which is an ABSOLUTE overwrite.
+ * Partially updates a material.
  *
  * @param {string} id - Material UUID.
- * @param {Object} data - Any subset of `{ name, unit, supplier, stockQty }`.
- * `stockQty` replaces the stored value outright — see the lost-update TODO in MaterialsPage.
+ * @param {Object} data - Any subset of `{ name, unit, supplier, stockDelta, stockQty }`.
+ * `stockDelta` atomically adds to the current stock (use for deliveries); `stockQty`
+ * replaces it outright (use for corrections). Send only one.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = updated Material.
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example
- * await updateMaterial('a9d2…', { supplier: 'Prevent d.o.o.' })
+ * await updateMaterial('a9d2…', { stockDelta: 500 })
  */
 export function updateMaterial(id, data) {
   return api.put(`/materials/${id}`, data)
