@@ -10,9 +10,13 @@ import prisma from '../lib/prisma.js'
 
 const router = Router()
 
-// Sentinel thrown inside a $transaction callback to signal "not found" up to the
-// route's catch block, distinguishing it from a genuine DB/transaction failure.
+// Sentinels thrown inside a $transaction callback to signal business outcomes up
+// to the route's catch block, distinguishing them from genuine DB/transaction
+// failures. Throwing aborts the transaction, so nothing partial is ever committed.
 class RunNotFoundError extends Error {}
+class RunAlreadyCompletedError extends Error {}
+class UnknownMaterialError extends Error {}
+class InsufficientStockError extends Error {}
 
 // ─── LIST & DETAIL ───────────────────────────────────────────────────────────
 
@@ -293,8 +297,8 @@ router.put('/:id', async (req, res) => {
  * `parameterValues[]` ({ machineParameterId, value }, min 1), `outputs[]`
  * ({ productId, quantityProduced, grossWeightKg?, scrapKg? }, min 1),
  * `materialUsages[]` optional, `energyEnd`/`notes` optional.
- * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid state/payload;
- * 404 unknown run; 500 on transaction failure.
+ * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid payload;
+ * 404 unknown run; 409 already completed or insufficient stock; 500 on transaction failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -319,20 +323,32 @@ router.post('/:id/complete', async (req, res) => {
             return res.status(400).json({ error: 'At least one output is required' })
         }
 
-        const existing = await prisma.productionRun.findUnique({
-            where: { id: req.params.id }
-        })
-        if (!existing) {
-            return res.status(404).json({ error: 'Production run not found' })
+        // Numeric validation BEFORE the transaction: a negative quantityUsed
+        // would silently INCREMENT stock (decrement of a negative), and Prisma
+        // stores NaN/strings as garbage or throws a raw 500. Parameter values
+        // only need to be real numbers — a measured reading of 0 is legitimate.
+        const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v)
+        for (const p of parameterValues) {
+            if (!p.machineParameterId || !isFiniteNumber(p.value)) {
+                return res.status(400).json({ error: 'Each parameter value needs a machineParameterId and a numeric value' })
+            }
         }
-        // TODO: TOCTOU race — this status check happens BEFORE the transaction
-        // opens, so two simultaneous /complete calls can both pass it. Today only
-        // the @@unique constraints on the child tables accidentally stop the
-        // second one. The fix: flip the status inside the transaction with a
-        // conditional updateMany({ where: { id, status: 'in_progress' } }) and
-        // abort when count === 0. todo.md Group 2 #4.
-        if (existing.status === 'completed') {
-            return res.status(400).json({ error: 'Production run is already completed' })
+        if (materialUsages !== undefined && !Array.isArray(materialUsages)) {
+            return res.status(400).json({ error: 'materialUsages must be an array' })
+        }
+        for (const m of materialUsages || []) {
+            if (!m.materialId || !isFiniteNumber(m.quantityUsed) || m.quantityUsed <= 0) {
+                return res.status(400).json({ error: 'Each material usage needs a materialId and a quantityUsed greater than 0' })
+            }
+        }
+        for (const o of outputs) {
+            if (!o.productId || !isFiniteNumber(o.quantityProduced) || o.quantityProduced <= 0) {
+                return res.status(400).json({ error: 'Each output needs a productId and a quantityProduced greater than 0' })
+            }
+            if ((o.grossWeightKg !== undefined && (!isFiniteNumber(o.grossWeightKg) || o.grossWeightKg < 0)) ||
+                (o.scrapKg !== undefined && (!isFiniteNumber(o.scrapKg) || o.scrapKg < 0))) {
+                return res.status(400).json({ error: 'grossWeightKg and scrapKg must be numbers of at least 0 when provided' })
+            }
         }
 
         // TODO: no relational validation of the payload — parameterValues can
@@ -343,8 +359,12 @@ router.post('/:id/complete', async (req, res) => {
         // endTime onto the START date, every overnight run (22:00→02:00) is stored
         // ending before it began. todo.md Group 6 #2.
         const run = await prisma.$transaction(async (tx) => {
-            const updatedRun = await tx.productionRun.update({
-                where: { id: req.params.id },
+            // Compare-and-swap: the status check and the flip are ONE atomic
+            // UPDATE ... WHERE status = 'in_progress'. Concurrent completions
+            // serialize on the row lock — the loser re-evaluates the WHERE
+            // against the winner's committed row, matches 0 rows, and aborts.
+            const { count } = await tx.productionRun.updateMany({
+                where: { id: req.params.id, status: 'in_progress' },
                 data: {
                     status: 'completed',
                     endTime: new Date(endTime),
@@ -352,6 +372,16 @@ router.post('/:id/complete', async (req, res) => {
                     ...(notes !== undefined && { notes })
                 }
             })
+            if (count === 0) {
+                // 0 rows means "no run in_progress with this id" — look the id up
+                // to tell "never existed" (404) apart from "already completed" (409).
+                const exists = await tx.productionRun.findUnique({
+                    where: { id: req.params.id },
+                    select: { id: true }
+                })
+                if (!exists) throw new RunNotFoundError()
+                throw new RunAlreadyCompletedError()
+            }
 
             await tx.runParameterValue.createMany({
                 data: parameterValues.map(p => ({
@@ -363,7 +393,38 @@ router.post('/:id/complete', async (req, res) => {
 
             // Usage is optional: some runs legitimately record only parameters and
             // output (e.g. rework passes that consume no fresh material).
+            // Stock is decremented in the SAME transaction as the usage rows so
+            // inventory can never disagree with recorded consumption — and BEFORE
+            // inserting them, so an unknown materialId surfaces as a clean 400
+            // here instead of a foreign-key P2003 on the insert.
+            // Sequential loop, not Promise.all: an interactive transaction holds a
+            // single DB connection, so parallel awaits gain nothing here.
             if (materialUsages && materialUsages.length > 0) {
+                for (const m of materialUsages) {
+                    // Same compare-and-swap as the status flip: "subtract this
+                    // amount only if at least that much is on the shelf" is one
+                    // atomic statement, so concurrent runs consuming the same
+                    // material can never drive stock below zero. The DB-level
+                    // CHECK (stockQty >= 0) backs this up for every other path.
+                    const decremented = await tx.material.updateMany({
+                        where: { id: m.materialId, stockQty: { gte: m.quantityUsed } },
+                        data: {
+                            stockQty: {
+                                decrement: m.quantityUsed
+                            }
+                        }
+                    })
+                    if (decremented.count === 0) {
+                        const material = await tx.material.findUnique({
+                            where: { id: m.materialId }
+                        })
+                        if (!material) throw new UnknownMaterialError()
+                        throw new InsufficientStockError(
+                            `Insufficient stock for ${material.name}: ${material.stockQty} ${material.unit} available, ${m.quantityUsed} needed`
+                        )
+                    }
+                }
+
                 await tx.materialUsage.createMany({
                     data: materialUsages.map(m => ({
                         productionRunId: req.params.id,
@@ -371,27 +432,6 @@ router.post('/:id/complete', async (req, res) => {
                         quantityUsed: m.quantityUsed
                     }))
                 })
-            }
-
-            // Stock is decremented in the SAME transaction as the usage rows so
-            // inventory can never disagree with recorded consumption.
-            // Sequential loop, not Promise.all: an interactive transaction holds a
-            // single DB connection, so parallel awaits gain nothing here.
-            if (materialUsages && materialUsages.length > 0) {
-                for (const m of materialUsages) {
-                    // TODO: decrement has no floor — stock can go negative, and a
-                    // NEGATIVE quantityUsed would silently INCREASE stock. Needs a
-                    // DB CHECK (stockQty >= 0) plus positive-number validation.
-                    // todo.md Group 2 #4.
-                    await tx.material.update({
-                        where: { id: m.materialId },
-                        data: {
-                            stockQty: {
-                                decrement: m.quantityUsed
-                            }
-                        }
-                    })
-                }
             }
 
             await tx.runOutput.createMany({
@@ -433,6 +473,21 @@ router.post('/:id/complete', async (req, res) => {
 
         res.json(run)
     } catch (error) {
+        if (error instanceof RunNotFoundError) {
+            return res.status(404).json({ error: 'Production run not found' })
+        }
+        // 409 Conflict, not 400: the request was well-formed — it lost a race
+        // against the current state of the resource (someone completed the run
+        // first, or stock ran out under it).
+        if (error instanceof RunAlreadyCompletedError) {
+            return res.status(409).json({ error: 'Production run is already completed' })
+        }
+        if (error instanceof InsufficientStockError) {
+            return res.status(409).json({ error: error.message })
+        }
+        if (error instanceof UnknownMaterialError) {
+            return res.status(400).json({ error: 'One of the materials in materialUsages does not exist' })
+        }
         console.error('POST /production-runs/:id/complete error:', error)
         res.status(500).json({ error: 'Failed to complete production run' })
     }
@@ -483,13 +538,8 @@ router.delete('/:id', async (req, res) => {
                 }
             }
 
-            // Children first: the foreign keys are RESTRICT, so deleting the run
-            // before its rows would throw P2003. (onDelete: Cascade in the schema
-            // would let the DB do this — see todo.md Group 2 #4.)
-            await tx.runParameterValue.deleteMany({ where: { productionRunId: req.params.id } })
-            await tx.materialUsage.deleteMany({ where: { productionRunId: req.params.id } })
-            await tx.runOutput.deleteMany({ where: { productionRunId: req.params.id } })
-
+            // Child rows (parameter values, usages, outputs) are removed by the
+            // DB itself: their foreign keys are ON DELETE CASCADE.
             await tx.productionRun.delete({ where: { id: req.params.id } })
         })
 

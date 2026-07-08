@@ -513,7 +513,9 @@ async function handleComplete() {
 
     } catch (err) {
     console.error(err)
-    setError('Failed to complete run. Please try again.')
+    // Prefer the server's message: 409s carry actionable detail (which material
+    // is short, or that someone else already completed this run).
+    setError(err.response?.data?.error || 'Failed to complete run. Please try again.')
     } finally {
     setIsSubmitting(false)
     }
