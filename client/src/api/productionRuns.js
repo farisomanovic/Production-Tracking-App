@@ -80,7 +80,8 @@ export function updateRun(id, data) {
  * outputs: [{ productId, quantityProduced, grossWeightKg?, scrapKg? }] }` required;
  * `{ materialUsages: [{ materialId, quantityUsed }], energyEnd, notes }` optional.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = completed run aggregate.
- * @throws {import('axios').AxiosError} 400 when already completed or payload invalid; 404 unknown run.
+ * @throws {import('axios').AxiosError} 400 invalid payload; 404 unknown run;
+ * 409 already completed or insufficient material stock.
  *
  * @example
  * await completeRun('ab12…', {

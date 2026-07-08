@@ -107,9 +107,9 @@ model MachineProduct {
 }
 
 // stockQty is live inventory: decremented by run completion, incremented by run
-// deletion and manual deliveries — all in kg-equivalent of `unit`.
-// TODO: no CHECK (stockQty >= 0) — concurrent completions can drive it negative.
-// todo.md Group 2 #4.
+// deletion and manual deliveries — all in kg-equivalent of `unit`. A DB-level
+// CHECK (stockQty >= 0) exists in the completion_race_and_stock_floor migration;
+// Prisma's schema language cannot express it, so it lives in raw SQL only.
 // TODO: name is not unique; export matches material columns by name. Group 5 #5.
 model Material {
   id       String @id @default(uuid())
@@ -164,8 +164,6 @@ model RecipeItem {
 // typos unrepresentable. todo.md Group 5 #4.
 // TODO: no indexes on machineId/operatorId/productId/status/date although every
 // list query filters on them (Postgres does not auto-index FKs). Group 5 #1.
-// TODO: children below use default RESTRICT — onDelete: Cascade would let the DB
-// handle run deletion instead of manual deleteMany calls. Group 2 #4.
 model ProductionRun {
   id              String    @id @default(uuid())
   date            DateTime  @db.Date
@@ -195,8 +193,7 @@ model ProductionRun {
 }
 
 // One measured value per machine parameter per run — the unique pair enforces
-// that, and it is also what accidentally blocks double-completion today (see
-// the TOCTOU note in productionRuns.js).
+// that. Cascade: values are meaningless without their run, so they die with it.
 model RunParameterValue {
   id         String   @id @default(uuid())
   value      Float
@@ -205,7 +202,7 @@ model RunParameterValue {
   productionRunId    String
   machineParameterId String
 
-  productionRun    ProductionRun    @relation(fields: [productionRunId], references: [id])
+  productionRun    ProductionRun    @relation(fields: [productionRunId], references: [id], onDelete: Cascade)
   machineParameter MachineParameter @relation(fields: [machineParameterId], references: [id])
 
   @@unique([productionRunId, machineParameterId])
@@ -221,7 +218,7 @@ model MaterialUsage {
   productionRunId String
   materialId      String
 
-  productionRun ProductionRun @relation(fields: [productionRunId], references: [id])
+  productionRun ProductionRun @relation(fields: [productionRunId], references: [id], onDelete: Cascade)
   material      Material      @relation(fields: [materialId], references: [id])
 
   @@unique([productionRunId, materialId])
@@ -240,6 +237,6 @@ model RunOutput {
   productionRunId String
   productId       String
 
-  productionRun ProductionRun @relation(fields: [productionRunId], references: [id])
+  productionRun ProductionRun @relation(fields: [productionRunId], references: [id], onDelete: Cascade)
   product       Product       @relation(fields: [productId], references: [id])
 }

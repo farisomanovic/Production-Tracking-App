@@ -76,6 +76,10 @@ router.post('/', async (req, res) => {
         if (!name || !unit) {
             return res.status(400).json({ error: 'name and unit are required' })
         }
+        // The DB CHECK (stockQty >= 0) would reject this anyway, but as a raw 500.
+        if (stockQty !== undefined && (typeof stockQty !== 'number' || !Number.isFinite(stockQty) || stockQty < 0)) {
+            return res.status(400).json({ error: 'stockQty must be a number of at least 0' })
+        }
         // TODO: name has no unique constraint and the XLSX export matches material
         // columns BY NAME — duplicates silently merge in reports. todo.md Group 5 #5.
         const material = await prisma.material.create({
@@ -97,7 +101,8 @@ router.post('/', async (req, res) => {
  * outright (corrections). Send only one — if both are present, stockDelta wins.
  *
  * @param {import('express').Request} req - `params.id` UUID; any subset of name/unit/supplier/stockDelta/stockQty.
- * @param {import('express').Response} res - 200 → updated Material; 500 on failure (including unknown id).
+ * @param {import('express').Response} res - 200 → updated Material; 400 invalid numbers; 404 unknown id;
+ * 409 when a negative stockDelta would take stock below zero; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -107,8 +112,24 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { name, unit, supplier, stockQty, stockDelta } = req.body
-        const material = await prisma.material.update({
-            where: { id: req.params.id },
+
+        // Stock has a hard floor: the DB CHECK (stockQty >= 0) would reject these
+        // anyway, but as an unreadable 500 — validate here for a clear message.
+        if (stockQty !== undefined && (typeof stockQty !== 'number' || !Number.isFinite(stockQty) || stockQty < 0)) {
+            return res.status(400).json({ error: 'stockQty must be a number of at least 0' })
+        }
+        if (stockDelta !== undefined && (typeof stockDelta !== 'number' || !Number.isFinite(stockDelta))) {
+            return res.status(400).json({ error: 'stockDelta must be a number' })
+        }
+
+        // updateMany instead of update: a negative delta only applies when enough
+        // stock exists (the WHERE condition and the increment are one atomic
+        // statement — same pattern as run completion in productionRuns.js).
+        const { count } = await prisma.material.updateMany({
+            where: {
+                id: req.params.id,
+                ...(stockDelta !== undefined && stockDelta < 0 && { stockQty: { gte: -stockDelta } })
+            },
             data: {
                 ...(name !== undefined && { name }),
                 ...(unit !== undefined && { unit }),
@@ -118,6 +139,19 @@ router.put('/:id', async (req, res) => {
                     : stockQty !== undefined && { stockQty })
             }
         })
+        if (count === 0) {
+            // Nothing matched: either the id is unknown, or the guarded negative
+            // delta found too little stock — read the row to tell them apart.
+            const material = await prisma.material.findUnique({ where: { id: req.params.id } })
+            if (!material) {
+                return res.status(404).json({ error: 'Material not found' })
+            }
+            return res.status(409).json({
+                error: `Stock cannot go below zero: ${material.stockQty} ${material.unit} available, tried to remove ${-stockDelta}`
+            })
+        }
+        // updateMany returns only a count — re-read the row for the response body.
+        const material = await prisma.material.findUnique({ where: { id: req.params.id } })
         res.json(material)
     } catch (error) {
         console.error('PUT /materials material:', error)

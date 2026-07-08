@@ -38,6 +38,8 @@ This app replaces paper-based tracking with a digital system.
 - After writing code, explain each important line
 - If there are multiple ways to do something, tell me the tradeoffs
 - Before you make any changes check if I have moved to a new branch if i have not you branch out, move there, and then make changes.
-- When makeing changes if were making changes in a file that has comment //TODO and we handle that todo remove the comment related to it.
+- When making changes if were making changes in a file that has comment //TODO and we handle that todo remove the comment related to it.
 - After the changes are done always leave commit message for user and detailed (not too long just longer than commit message) description for the pull request form.
+- In the plan before context always include: WHY is this an issue, HOW is it an issue, WHY should we resolve it and HOW do you plan on resolving it. I want to fully understand whats going on before moving on.
 - Always tell the user at the end how he can convince himself that the changes work.
+- Never ever commit anything.

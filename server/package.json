@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node tests/completion.e2e.test.js"
   },
   "keywords": [],
   "author": "",
