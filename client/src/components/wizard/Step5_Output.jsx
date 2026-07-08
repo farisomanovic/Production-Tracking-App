@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { completeRun } from '../../api/productionRuns'
 import { getMachineProducts } from '../../api/machineProducts'
+import { buildEndTimestamp } from '../../lib/dates'
 import { common } from '../../styles/common'
 
 /**
@@ -187,10 +188,9 @@ async function handleComplete() {
     const payload = {
         // No timezone suffix on purpose: the DB column is a naive Timestamp, so
         // "what the wall clock said" is stored as-is (see todo.md Group 6 #3).
-        // TODO: this glues endTime onto the START date — a run ending after
-        // midnight is stored ending ~a day before it began. Roll the date
-        // forward when end < start. todo.md Group 6 #2.
-        endTime: `${data.date}T${endTime}:00.000`,
+        // The helper rolls the date to the next day for overnight runs
+        // (end wall-clock at or before start wall-clock).
+        endTime: buildEndTimestamp(data.date, data.startTime, endTime),
         parameterValues: data.parameterValues,
         materialUsages: data.materialUsages,
         outputs: outputs.map(o => ({

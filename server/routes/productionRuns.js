@@ -297,7 +297,8 @@ router.put('/:id', async (req, res) => {
  * `parameterValues[]` ({ machineParameterId, value }, min 1), `outputs[]`
  * ({ productId, quantityProduced, grossWeightKg?, scrapKg? }, min 1),
  * `materialUsages[]` optional, `energyEnd`/`notes` optional.
- * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid payload;
+ * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid payload
+ * (including an unparseable endTime or one at/before the run's startTime);
  * 404 unknown run; 409 already completed or insufficient stock; 500 on transaction failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -315,6 +316,27 @@ router.post('/:id/complete', async (req, res) => {
 
         if (!endTime) {
             return res.status(400).json({ error: 'endTime is required to complete a run' })
+        }
+        // Parse endTime up front: an unparseable string gives Invalid Date, and
+        // since NaN compares false to everything, it would sail past the
+        // startTime check below and blow up inside Prisma as a 500.
+        const end = new Date(endTime)
+        if (Number.isNaN(end.getTime())) {
+            return res.status(400).json({ error: 'endTime is not a valid timestamp' })
+        }
+        // A run cannot end at or before the moment it started. The client rolls
+        // overnight end times to the next day; this is the backstop for direct
+        // API calls and client bugs. startTime is immutable after creation
+        // (PUT never accepts it), so this pre-transaction read cannot go stale.
+        const existing = await prisma.productionRun.findUnique({
+            where: { id: req.params.id },
+            select: { startTime: true }
+        })
+        if (!existing) {
+            return res.status(404).json({ error: 'Production run not found' })
+        }
+        if (end <= existing.startTime) {
+            return res.status(400).json({ error: 'endTime must be after the run start time' })
         }
         if (!parameterValues || !Array.isArray(parameterValues) || parameterValues.length === 0) {
             return res.status(400).json({ error: 'At least one parameter value is required' })
@@ -355,9 +377,6 @@ router.post('/:id/complete', async (req, res) => {
         // reference another machine's machineParameterId, outputs.productId isn't
         // checked against MachineProduct, and a duplicated machineParameterId in
         // one payload hits @@unique → raw 500. todo.md Group 3 #6.
-        // TODO: no endTime > startTime check — combined with the client gluing
-        // endTime onto the START date, every overnight run (22:00→02:00) is stored
-        // ending before it began. todo.md Group 6 #2.
         const run = await prisma.$transaction(async (tx) => {
             // Compare-and-swap: the status check and the flip are ONE atomic
             // UPDATE ... WHERE status = 'in_progress'. Concurrent completions
@@ -367,7 +386,7 @@ router.post('/:id/complete', async (req, res) => {
                 where: { id: req.params.id, status: 'in_progress' },
                 data: {
                     status: 'completed',
-                    endTime: new Date(endTime),
+                    endTime: end,
                     ...(energyEnd !== undefined && { energyEnd }),
                     ...(notes !== undefined && { notes })
                 }

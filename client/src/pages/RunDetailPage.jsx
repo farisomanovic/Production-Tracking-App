@@ -12,6 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
+import { buildEndTimestamp } from '../lib/dates'
 import { common } from '../styles/common'
 
 /**
@@ -481,13 +482,17 @@ async function handleComplete() {
     setError(null)
 
     const datePart = run.date.split('T')[0]
+    // Recover the start wall-clock as "HH:mm" from the stored timestamp —
+    // same local conversion the summary display below uses.
+    const start = new Date(run.startTime)
+    const pad = (n) => String(n).padStart(2, '0')
+    const startHHmm = `${pad(start.getHours())}:${pad(start.getMinutes())}`
 
     try {
     const payload = {
-        // TODO: glues the end TIME onto the run's START date — an overnight run
-        // (22:00→02:00) is stored ending ~20h before it began. Roll the date
-        // forward when end < start. Same bug as wizard Step 5. todo.md Group 6 #2.
-        endTime: `${datePart}T${endTime}:00.000`,
+        // The helper rolls the date to the next day for overnight runs
+        // (end wall-clock at or before start wall-clock).
+        endTime: buildEndTimestamp(datePart, startHHmm, endTime),
         parameterValues: machineParameters.map(mp => ({
         machineParameterId: mp.id,
         value: Number(paramValues[mp.id])
