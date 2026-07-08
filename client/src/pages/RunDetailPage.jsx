@@ -12,6 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
+import { buildEndTimestamp } from '../lib/dates'
 import { common } from '../styles/common'
 
 /**
@@ -162,6 +163,51 @@ function formatTime(dateStr) {
     })
 }
 
+/**
+ * Formats the run's end time, marking ends that land on a later calendar day
+ * than the start — otherwise an overnight run's "02:00 AM" under the card's
+ * single Date row reads as if it happened on the start date.
+ *
+ * @param {string} startStr - The run's startTime ISO timestamp.
+ * @param {string} endStr - The run's endTime ISO timestamp; null while in progress.
+ * @returns {string} e.g. "02:00 AM (+1 day)", or "—" for missing values.
+ *
+ * @example
+ * formatEndTime('2026-07-07T22:00:00.000', '2026-07-08T02:00:00.000') // → "02:00 AM (+1 day)"
+ */
+function formatEndTime(startStr, endStr) {
+    if (!endStr) return '—'
+    const start = new Date(startStr)
+    const end = new Date(endStr)
+    // Compare local calendar days, not raw timestamps: 23:00 → 01:00 is only
+    // 2h apart but one day apart on the calendar, which is what the marker means.
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+    const days = Math.round((endDay - startDay) / 86400000)
+    if (days <= 0) return formatTime(endStr)
+    return `${formatTime(endStr)} (+${days} day${days > 1 ? 's' : ''})`
+}
+
+/**
+ * Formats the elapsed time between start and end as "Xh Ym". Legacy rows
+ * stored before the overnight endTime fix can hold end-before-start values —
+ * those show a minus sign rather than being hidden, so bad data stays visible.
+ *
+ * @param {string} startStr - The run's startTime ISO timestamp.
+ * @param {string} endStr - The run's endTime ISO timestamp; null while in progress.
+ * @returns {string} e.g. "4h 0m", or "—" when either timestamp is missing.
+ *
+ * @example
+ * formatDuration('2026-07-07T22:00:00.000', '2026-07-08T02:00:00.000') // → "4h 0m"
+ */
+function formatDuration(startStr, endStr) {
+    if (!startStr || !endStr) return '—'
+    const totalMinutes = Math.round((new Date(endStr) - new Date(startStr)) / 60000)
+    const sign = totalMinutes < 0 ? '-' : ''
+    const abs = Math.abs(totalMinutes)
+    return `${sign}${Math.floor(abs / 60)}h ${abs % 60}m`
+}
+
 if (loading) return <p style={styles.loadingText}>Loading run...</p>
 if (error) return <p style={styles.errorText}>{error}</p>
 if (!run) return <p style={styles.errorText}>Run not found.</p>
@@ -196,6 +242,8 @@ return (
         run={run}
         formatDate={formatDate}
         formatTime={formatTime}
+        formatEndTime={formatEndTime}
+        formatDuration={formatDuration}
         onDelete={handleDelete}
     />
     )}
@@ -481,13 +529,17 @@ async function handleComplete() {
     setError(null)
 
     const datePart = run.date.split('T')[0]
+    // Recover the start wall-clock as "HH:mm" from the stored timestamp —
+    // same local conversion the summary display below uses.
+    const start = new Date(run.startTime)
+    const pad = (n) => String(n).padStart(2, '0')
+    const startHHmm = `${pad(start.getHours())}:${pad(start.getMinutes())}`
 
     try {
     const payload = {
-        // TODO: glues the end TIME onto the run's START date — an overnight run
-        // (22:00→02:00) is stored ending ~20h before it began. Roll the date
-        // forward when end < start. Same bug as wizard Step 5. todo.md Group 6 #2.
-        endTime: `${datePart}T${endTime}:00.000`,
+        // The helper rolls the date to the next day for overnight runs
+        // (end wall-clock at or before start wall-clock).
+        endTime: buildEndTimestamp(datePart, startHHmm, endTime),
         parameterValues: machineParameters.map(mp => ({
         machineParameterId: mp.id,
         value: Number(paramValues[mp.id])
@@ -788,13 +840,16 @@ return (
  * @param {Object} props.run - Completed run aggregate with all relations.
  * @param {Function} props.formatDate - Parent's date formatter (shared so both views format identically).
  * @param {Function} props.formatTime - Parent's time formatter.
+ * @param {Function} props.formatEndTime - Parent's end-time formatter (adds the "+1 day" marker).
+ * @param {Function} props.formatDuration - Parent's start→end duration formatter.
  * @param {Function} props.onDelete - Called after the user confirms deletion.
  * @returns {JSX.Element}
  *
  * @example
- * <RunDetailView run={run} formatDate={formatDate} formatTime={formatTime} onDelete={handleDelete} />
+ * <RunDetailView run={run} formatDate={formatDate} formatTime={formatTime}
+ *   formatEndTime={formatEndTime} formatDuration={formatDuration} onDelete={handleDelete} />
  */
-function RunDetailView({ run, formatDate, formatTime, onDelete }) {
+function RunDetailView({ run, formatDate, formatTime, formatEndTime, formatDuration, onDelete }) {
 return (
     <div>
     <button
@@ -822,7 +877,8 @@ return (
         <InfoRow label='Warmup Start' value={formatTime(run.warmupStartTime)} />
         <InfoRow label='Production Start' value={formatTime(run.startTime)} />
         <InfoRow label='Stable Start' value={formatTime(run.stableStartTime)} />
-        <InfoRow label='End Time' value={formatTime(run.endTime)} />
+        <InfoRow label='End Time' value={formatEndTime(run.startTime, run.endTime)} />
+        <InfoRow label='Duration' value={formatDuration(run.startTime, run.endTime)} />
         </div>
     </div>
 

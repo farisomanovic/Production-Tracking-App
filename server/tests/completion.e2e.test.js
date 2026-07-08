@@ -1,9 +1,10 @@
 /**
  * @file completion.e2e.test.js
  * @description End-to-end tests for the run-completion transaction: the
- * double-completion race, the material stock floor, payload validation, and
- * cascade deletion. Talks to the REAL running server and database — start the
- * dev server first (`npm run dev`), then run `npm test` from server/.
+ * double-completion race, the material stock floor, payload validation,
+ * endTime guards, and cascade deletion. Talks to the REAL running server and
+ * database — start the dev server first (`npm run dev`), then run `npm test`
+ * from server/.
  *
  * Only run this against a development database. It creates real runs and moves
  * real stock while it works — it deletes every run it creates and reverses
@@ -48,7 +49,9 @@ async function createRun() {
         })
     })
     if (r.status !== 201) throw new Error(`run creation failed: ${r.status} ${JSON.stringify(await j(r))}`)
-    return (await r.json()).id
+    // Full run, not just the id: the endTime-guard tests need the exact
+    // startTime the server stored.
+    return r.json()
 }
 const complete = (id, payload) => fetch(`${API}/production-runs/${id}/complete`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload)
@@ -57,7 +60,7 @@ const stockNow = async () => (await prisma.material.findUnique({ where: { id: ma
 
 // ── Test A: two simultaneous completions — exactly one winner ────────────────
 console.log('\nA. Race: two parallel /complete calls')
-const runA = await createRun()
+const runA = (await createRun()).id
 const payloadA = basePayload([{ materialId: material.id, quantityUsed: 1 }])
 const [r1, r2] = await Promise.all([complete(runA, payloadA), complete(runA, payloadA)])
 const statuses = [r1.status, r2.status].sort()
@@ -89,7 +92,7 @@ check('stock restored', await stockNow() === stockBefore, `stock ${await stockNo
 
 // ── Test D: insufficient stock blocks completion atomically ──────────────────
 console.log('\nD. Insufficient stock')
-const runD = await createRun()
+const runD = (await createRun()).id
 const rD = await complete(runD, basePayload([{ materialId: material.id, quantityUsed: stockBefore + 999999 }]))
 const bodyD = await j(rD)
 check('completion → 409', rD.status === 409, `got ${rD.status}`)
@@ -141,6 +144,23 @@ const rG4 = await put({ stockDelta: -2 })
 check('normal delivery + correction still work', rG3.status === 200 && rG4.status === 200,
     `got ${rG3.status}/${rG4.status}`)
 check('stock back to start', await stockNow() === stockBefore, `stock ${await stockNow()}`)
+
+// ── Test H: endTime guards — a run cannot end at/before its start ────────────
+console.log('\nH. endTime guards (overnight-run backstop)')
+const runH = await createRun()
+const hourBefore = new Date(new Date(runH.startTime).getTime() - 3600_000).toISOString()
+const rH1 = await complete(runH.id, { ...basePayload([]), endTime: hourBefore })
+check('endTime before startTime → 400', rH1.status === 400, `got ${rH1.status}`)
+// Echo the stored startTime back verbatim: proves the rule is <=, not just <.
+const rH2 = await complete(runH.id, { ...basePayload([]), endTime: runH.startTime })
+check('endTime equal to startTime → 400', rH2.status === 400, `got ${rH2.status}`)
+const rH3 = await complete(runH.id, { ...basePayload([]), endTime: 'banana' })
+check('unparseable endTime → 400', rH3.status === 400, `got ${rH3.status}`)
+const runHState = await prisma.productionRun.findUnique({ where: { id: runH.id } })
+check('run still in_progress after rejected attempts', runHState.status === 'in_progress')
+const rH4 = await complete(runH.id, basePayload([]))
+check('valid later endTime still completes → 200', rH4.status === 200, `got ${rH4.status}`)
+await fetch(`${API}/production-runs/${runH.id}`, { method: 'DELETE' })
 
 console.log(`\n${pass} passed, ${fail} failed`)
 await prisma.$disconnect()
