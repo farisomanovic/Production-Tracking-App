@@ -144,4 +144,6 @@ check('stock back to start', await stockNow() === stockBefore, `stock ${await st
 
 console.log(`\n${pass} passed, ${fail} failed`)
 await prisma.$disconnect()
-process.exit(fail === 0 ? 0 : 1)
+// exitCode instead of process.exit(): exit() kills the process mid-teardown and
+// can trip a libuv assertion on Windows while Prisma's engine is still closing.
+process.exitCode = fail === 0 ? 0 : 1
