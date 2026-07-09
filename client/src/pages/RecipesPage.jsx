@@ -111,10 +111,6 @@ function RecipesPage() {
    */
   async function handleSubmit() {
     if (!name.trim() || !selectedProductId || items.length === 0) return
-    // TODO: exact float equality — 33.33+33.33+33.34 works, but three items of
-    // 33.333… would sum to 99.999… and never enable saving even though the
-    // SERVER would accept it (rounded check). Align the two rules.
-    // todo.md Group 3 #3.
     if (getTotalPercentage() !== 100) return
 
     try {
