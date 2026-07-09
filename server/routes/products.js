@@ -62,9 +62,9 @@ router.get('/:id', async (req, res) => {
 /**
  * Creates a product master record.
  *
- * @param {import('express').Request} req - `body.name`, `body.unit` (required); `body.code` (required by the
- * schema but NOT validated here); dimensions and description optional.
- * @param {import('express').Response} res - 201 → created Product; 400 missing name/unit; 500 on DB failure.
+ * @param {import('express').Request} req - `body.name`, `body.unit`, `body.code` (required);
+ * dimensions and description optional.
+ * @param {import('express').Response} res - 201 → created Product; 400 missing name/unit/code; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -74,11 +74,8 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body
-        // TODO: code is required by the schema but not checked here — omitting it
-        // throws a raw Prisma error and returns 500 instead of a clear 400.
-        // Either validate it or make the column optional. todo.md Group 3 #1.
-        if (!name || !unit) {
-            return res.status(400).json({ error: 'name and unit are required' })
+        if (!name || !unit || !code) {
+            return res.status(400).json({ error: 'name, unit and code are required' })
         }
         const product = await prisma.product.create({
             data: { name, code,
