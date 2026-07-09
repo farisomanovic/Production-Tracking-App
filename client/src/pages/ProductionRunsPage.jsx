@@ -461,7 +461,10 @@ export default function ProductionRunsPage() {
               ...paramNames.map(sanitizeCellText),
               ...materialNames.map(n => sanitizeCellText(`${n} Used (kg)`)),
               'Quantity Produced',
-              'Gross Weight (kg)',
+              'Neto per Unit (kg)',
+              'Total Neto (kg)',
+              'Bruto per Unit (kg)',
+              'Total Bruto (kg)',
               'Scrap (kg)',
               'Notes'
           ]
@@ -521,9 +524,16 @@ export default function ProductionRunsPage() {
                   ...paramValues,
                   ...materialValues,
                   totalQty,
-                  // Gross column keeps its "total kg" meaning: the run stores a
-                  // per-unit bruto, so multiply back by the produced quantity.
-                  // Blank ('') for runs without weights — Excel's SUM skips blanks.
+                  // The run stores per-unit neto/bruto; totals multiply back by
+                  // the produced quantity. Per-unit values go in raw (rounding
+                  // would lose precision on light products), totals are rounded
+                  // to hide float-multiplication noise. Blank ('') for runs
+                  // without weights — Excel's SUM skips blanks.
+                  run.netWeightPerUnit != null ? run.netWeightPerUnit : '',
+                  run.netWeightPerUnit != null
+                      ? Number((totalQty * run.netWeightPerUnit).toFixed(1))
+                      : '',
+                  run.grossWeightPerUnit != null ? run.grossWeightPerUnit : '',
                   run.grossWeightPerUnit != null
                       ? Number((totalQty * run.grossWeightPerUnit).toFixed(1))
                       : '',
@@ -551,7 +561,9 @@ export default function ProductionRunsPage() {
           const lastDataRowNumber = rows.length + 1
           const summaryRowNumber = lastDataRowNumber + 1
           const materialStartIndex = headers.findIndex(header => header === sanitizeCellText(`${materialNames[0]} Used (kg)`))
-          const totalColumnHeaders = ['Quantity Produced', 'Gross Weight (kg)', 'Scrap (kg)']
+          // Per-unit columns get no SUM on purpose: adding per-unit weights
+          // across different runs is a meaningless number on the report.
+          const totalColumnHeaders = ['Quantity Produced', 'Total Neto (kg)', 'Total Bruto (kg)', 'Scrap (kg)']
 
           // Label and value fused into one formula cell ("Broj radnih dana: 22")
           // because the label column doubles as the count column — a separate
