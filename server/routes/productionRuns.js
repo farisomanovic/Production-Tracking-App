@@ -174,9 +174,10 @@ router.post('/', async (req, res) => {
         if (!date || !startTime || !operatorId || !machineId || !productId || !recipeId) {
             return res.status(400).json({ error: 'date, startTime, operatorId, machineId, productId and recipeId are required' })
         }
-        const operator = await prisma.operator.findUnique({
-            where: { id: operatorId }
-        })
+        const [operator, machine] = await Promise.all([
+            prisma.operator.findUnique({ where: { id: operatorId } }),
+            prisma.machine.findUnique({ where: { id: machineId } })
+        ])
 
         // Runs record real shop-floor events, so future dates are operator error.
         // setUTCHours(23,59,59) makes "today anywhere on Earth" pass regardless of
@@ -194,10 +195,12 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Operator is inactive or does not exist' })
         }
 
-        // TODO: asymmetry — the operator is checked for existence AND active, the
-        // machine for neither: a deactivated machine is accepted silently and a
-        // nonexistent one becomes P2003 → 500. Mirror the operator check.
-        // todo.md Group 3 #2.
+        // Same backstop for machines: a deactivated machine must not accept new runs,
+        // and a nonexistent one must not fall through to Prisma's P2003 → 500.
+        if (!machine || !machine.active) {
+            return res.status(400).json({ error: 'Machine is inactive or does not exist' })
+        }
+
         // TODO: machineId/productId/recipeId are trusted independently — nothing
         // verifies the MachineProduct link exists or that recipe.productId matches,
         // so a "Frankenstein" run can be created via direct API call.
