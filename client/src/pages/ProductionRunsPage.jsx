@@ -504,8 +504,6 @@ export default function ProductionRunsPage() {
               // per run, so per-product output detail is deliberately lost here
               // (it stays visible on the run detail page).
               const totalQty = run.runOutputs.reduce((sum, o) => sum + Number(o.quantityProduced || 0), 0)
-              const totalGross = run.runOutputs.reduce((sum, o) => sum + Number(o.grossWeightKg || 0), 0)
-              const totalScrap = run.runOutputs.reduce((sum, o) => sum + Number(o.scrapKg || 0), 0)
 
               return [
                   formatExportDate(run.date),
@@ -523,8 +521,13 @@ export default function ProductionRunsPage() {
                   ...paramValues,
                   ...materialValues,
                   totalQty,
-                  Number(totalGross.toFixed(1)),
-                  Number(totalScrap.toFixed(1)),
+                  // Gross column keeps its "total kg" meaning: the run stores a
+                  // per-unit bruto, so multiply back by the produced quantity.
+                  // Blank ('') for runs without weights — Excel's SUM skips blanks.
+                  run.grossWeightPerUnit != null
+                      ? Number((totalQty * run.grossWeightPerUnit).toFixed(1))
+                      : '',
+                  run.scrapKg != null ? run.scrapKg : '',
                   sanitizeCellText(run.notes)
               ]
           })

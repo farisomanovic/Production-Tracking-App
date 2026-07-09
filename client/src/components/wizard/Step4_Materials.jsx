@@ -1,8 +1,10 @@
 /**
  * @file Step4_Materials.jsx
  * @description Wizard step 4: record actual kg used per recipe material, with a
- * calculator that derives the amounts from produced quantity × unit weight ×
+ * calculator that derives the amounts from (quantity × neto weight + scrap) ×
  * recipe percentages so the operator doesn't do mental math at the machine.
+ * Bruto (per-unit gross weight) is recorded here too but never enters the
+ * formula — packaging weight isn't made of raw material.
  */
 import { useState, useEffect } from 'react'
 import { getRecipeById } from '../../api/recipes'
@@ -14,9 +16,11 @@ import { common } from '../../styles/common'
  * @component
  * @param {Object} props
  * @param {Object} props.data - Accumulated wizard formData; `recipeId` drives the fetch,
- * `materialUsages` restores previous answers.
+ * `materialUsages` and the calculator fields restore previous answers (or the
+ * last-run prefill seeded by NewRunPage).
  * @param {string} props.runId - The created run's UUID (unused here, passed for step API symmetry).
- * @param {Function} props.onNext - Called with `{ materialUsages: [{ materialId, quantityUsed }], quantityProduced }`.
+ * @param {Function} props.onNext - Called with `{ materialUsages: [{ materialId, quantityUsed }],
+ * quantityProduced, netWeightPerUnit, grossWeightPerUnit, scrapKg }` (weights are null when left blank).
  * @returns {JSX.Element}
  *
  * @example
@@ -33,6 +37,8 @@ const [error, setError] = useState(null)
 // drop it) while undefined still becomes an empty input.
 const [quantityProduced, setQuantityProduced] = useState(String(data.quantityProduced ?? ''))
 const [netWeightPerUnit, setNetWeightPerUnit] = useState(String(data.netWeightPerUnit ?? ''))
+const [grossWeightPerUnit, setGrossWeightPerUnit] = useState(String(data.grossWeightPerUnit ?? ''))
+const [scrapKg, setScrapKg] = useState(String(data.scrapKg ?? ''))
 
 const recipeId = data.recipeId
 const initialMaterialUsages = data.materialUsages
@@ -70,20 +76,24 @@ useEffect(() => {
 
 /**
  * Fills every material input from total weight × recipe percentage:
- * total kg = quantity × net weight per unit, split by each item's share.
+ * total kg = quantity × neto weight per unit + scrap, split by each item's
+ * share. Scrap counts because wasted material still came off the shelf.
+ * Bruto is deliberately NOT a parameter — packaging isn't raw material.
  *
  * @param {string|number} qty - Produced quantity (pieces).
- * @param {string|number} nw - Net weight of one piece in kg.
- * @returns {void} No-op until both inputs are non-zero numbers.
+ * @param {string|number} nw - Neto weight of one piece in kg.
+ * @param {string|number} scrap - Total scrap for the run in kg.
+ * @returns {void} No-op while every input is empty/zero.
  *
  * @example
- * recalculateMaterials('500', '1.5') // 750 kg total → 70% item gets "525"
+ * recalculateMaterials('500', '1.5', '10') // 760 kg total → 70% item gets "532"
  */
-function recalculateMaterials(qty, nw) {
-    const q = Number(qty)
-    const n = Number(nw)
-    if (!q || !n || recipeItems.length === 0) return
-    const totalKg = q * n
+function recalculateMaterials(qty, nw, scrap) {
+    const q = Number(qty) || 0
+    const n = Number(nw) || 0
+    const s = Number(scrap) || 0
+    const totalKg = q * n + s
+    if (!totalKg || recipeItems.length === 0) return
     const computed = {}
     recipeItems.forEach(item => {
     // toFixed(2) then parseFloat: round to 2 decimals for sane kg values but
@@ -109,13 +119,13 @@ function recalculateMaterials(qty, nw) {
  */
 function handleQuantityChange(value) {
     setQuantityProduced(value)
-    recalculateMaterials(value, netWeightPerUnit)
+    recalculateMaterials(value, netWeightPerUnit, scrapKg)
 }
 
 /**
- * Updates unit weight and re-derives all material amounts.
+ * Updates neto unit weight and re-derives all material amounts.
  *
- * @param {string} value - Raw input string from the net-weight field.
+ * @param {string} value - Raw input string from the neto-weight field.
  * @returns {void}
  *
  * @example
@@ -123,7 +133,36 @@ function handleQuantityChange(value) {
  */
 function handleNetWeightChange(value) {
     setNetWeightPerUnit(value)
-    recalculateMaterials(quantityProduced, value)
+    recalculateMaterials(quantityProduced, value, scrapKg)
+}
+
+/**
+ * Updates total scrap and re-derives all material amounts — scrapped kg
+ * consumed material too, so it feeds the same recipe split.
+ *
+ * @param {string} value - Raw input string from the scrap field.
+ * @returns {void}
+ *
+ * @example
+ * handleScrapChange('10')
+ */
+function handleScrapChange(value) {
+    setScrapKg(value)
+    recalculateMaterials(quantityProduced, netWeightPerUnit, value)
+}
+
+/**
+ * Updates bruto unit weight. Record-only: bruto includes packaging, which is
+ * not raw material, so it never triggers a material recalculation.
+ *
+ * @param {string} value - Raw input string from the bruto-weight field.
+ * @returns {void}
+ *
+ * @example
+ * handleGrossWeightChange('1.6')
+ */
+function handleGrossWeightChange(value) {
+    setGrossWeightPerUnit(value)
 }
 
 /**
@@ -146,8 +185,10 @@ function handleChange(materialId, newValue) {
 // ─── VALIDATION & SUBMIT ─────────────────────────────────────────────────────
 
 /**
- * Requires a positive number for every material, then passes usage rows and
- * the produced quantity (which step 5 uses to prefill its first output).
+ * Requires a positive number for every material, then passes usage rows, the
+ * produced quantity (which step 5 uses to prefill its first output), and the
+ * run-level weights (null when blank, so step 5 can skip them cleanly and a
+ * revisit restores them as empty inputs via String(null ?? '')).
  *
  * @returns {void} Calls onNext on success; sets an error message otherwise.
  *
@@ -184,7 +225,13 @@ function handleNext() {
     quantityUsed: Number(values[item.materialId])
     }))
 
-    onNext({ materialUsages, quantityProduced: Number(quantityProduced) })
+    onNext({
+    materialUsages,
+    quantityProduced: Number(quantityProduced),
+    netWeightPerUnit: netWeightPerUnit !== '' ? Number(netWeightPerUnit) : null,
+    grossWeightPerUnit: grossWeightPerUnit !== '' ? Number(grossWeightPerUnit) : null,
+    scrapKg: scrapKg !== '' ? Number(scrapKg) : null
+    })
 }
 
 if (loading) return <p style={common.loadingText}>Loading materials...</p>
@@ -211,7 +258,7 @@ return (
         <>
         <div style={styles.calculator}>
             <p style={styles.calcLabel}>Quick Calculator</p>
-            <div style={styles.calcRow}>
+            <div style={styles.calcGrid}>
             <div style={styles.calcField}>
                 <label style={common.label}>Quantity Produced</label>
                 <div style={common.inputRow}>
@@ -228,7 +275,7 @@ return (
                 </div>
             </div>
             <div style={styles.calcField}>
-                <label style={common.label}>Net Weight per Unit</label>
+                <label style={common.label}>Neto Weight per Unit</label>
                 <div style={common.inputRow}>
                 <input
                     style={styles.calcInput}
@@ -238,6 +285,36 @@ return (
                     placeholder='e.g. 1.5'
                     min='0'
                     step='0.01'
+                />
+                <span style={common.unit}>kg</span>
+                </div>
+            </div>
+            <div style={styles.calcField}>
+                <label style={common.label}>Bruto Weight per Unit</label>
+                <div style={common.inputRow}>
+                <input
+                    style={styles.calcInput}
+                    type='number'
+                    value={grossWeightPerUnit}
+                    onChange={e => handleGrossWeightChange(e.target.value)}
+                    placeholder='e.g. 1.6'
+                    min='0'
+                    step='0.01'
+                />
+                <span style={common.unit}>kg</span>
+                </div>
+            </div>
+            <div style={styles.calcField}>
+                <label style={common.label}>Scrap (total)</label>
+                <div style={common.inputRow}>
+                <input
+                    style={styles.calcInput}
+                    type='number'
+                    value={scrapKg}
+                    onChange={e => handleScrapChange(e.target.value)}
+                    placeholder='e.g. 10'
+                    min='0'
+                    step='0.1'
                 />
                 <span style={common.unit}>kg</span>
                 </div>
@@ -314,8 +391,9 @@ calcLabel: {
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
 },
-calcRow: {
-    display: 'flex',
+calcGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
     gap: '1rem',
 },
 calcField: {

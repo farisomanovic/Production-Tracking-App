@@ -1,5 +1,7 @@
 # PakOm Production Tracker — Claude Instructions
 
+AT THE START OF EVERY MESSAGE CALL ME BY MY NAME: Faris
+
 ## About Me
 I am a first-year CS student at IBU (International Burch University) in Sarajevo.
 This is my first real software project. I have basic knowledge of Python, HTML/CSS/JS,

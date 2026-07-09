@@ -68,6 +68,12 @@ function NewRunPage() {
     recipeId: '',
     parameterValues: [],
     materialUsages: [],
+    // Step 4's calculator slice: null (not '') marks "never entered", which
+    // both the last-run prefill and step 5's payload spreads rely on.
+    quantityProduced: null,
+    netWeightPerUnit: null,
+    grossWeightPerUnit: null,
+    scrapKg: null,
     outputs: [],
     endTime: '',
     energyEnd: '',
@@ -146,9 +152,11 @@ function NewRunPage() {
   }
 
   /**
-   * Creates the run from steps 1–2 data, then tries to prefill step 3 with the
-   * parameter values of the last completed run on the same machine + product —
-   * settings rarely change between runs of the same product.
+   * Creates the run from steps 1–2 data, then tries to prefill steps 3–5 from
+   * the last completed run on the same machine + product: parameter values,
+   * actual material usages (copied verbatim, not recomputed), total produced
+   * quantity, and the run-level weights — settings and yields rarely change
+   * between runs of the same product.
    *
    * @param {Object} data - The merged formData (passed explicitly to avoid stale state).
    * @returns {Promise<void>} Resolves after the step advances or the error state is set.
@@ -201,18 +209,44 @@ function NewRunPage() {
         const lastRunSummary = lastRunRes.data[0]
 
         if (lastRunSummary) {
-          // Second request because the list endpoint doesn't include
-          // runParameterValues — only the detail endpoint does.
+          // Second request because the list endpoint doesn't include the
+          // children (parameters, usages, outputs) — only the detail does.
           const lastRunDetail = await getRunById(lastRunSummary.id)
           const lastRun = lastRunDetail.data
 
+          const prefill = {}
+
           if (lastRun.runParameterValues && lastRun.runParameterValues.length > 0) {
-            const prefilled = lastRun.runParameterValues.map(pv => ({
+            prefill.parameterValues = lastRun.runParameterValues.map(pv => ({
                 machineParameterId: pv.machineParameterId,
                 value: pv.value
             }))
-            setFormData(prev => ({ ...prev, parameterValues: prefilled }))
           }
+
+          // Copied verbatim (not recomputed from the calculator) so any manual
+          // corrections the operator made last time carry over.
+          if (lastRun.materialUsages && lastRun.materialUsages.length > 0) {
+            prefill.materialUsages = lastRun.materialUsages.map(mu => ({
+                materialId: mu.materialId,
+                quantityUsed: mu.quantityUsed
+            }))
+          }
+
+          // SUM across all outputs: the calculator's quantity is the run total
+          // even when several products came off the machine.
+          if (lastRun.runOutputs && lastRun.runOutputs.length > 0) {
+            prefill.quantityProduced = lastRun.runOutputs.reduce(
+                (sum, o) => sum + o.quantityProduced, 0
+            )
+          }
+
+          // != null guards: pre-migration runs have no neto (and possibly no
+          // bruto/scrap) — leave those fields blank instead of seeding "null".
+          if (lastRun.netWeightPerUnit != null) prefill.netWeightPerUnit = lastRun.netWeightPerUnit
+          if (lastRun.grossWeightPerUnit != null) prefill.grossWeightPerUnit = lastRun.grossWeightPerUnit
+          if (lastRun.scrapKg != null) prefill.scrapKg = lastRun.scrapKg
+
+          setFormData(prev => ({ ...prev, ...prefill }))
         }
       } catch (err) {
         console.error('Could not fetch last run for pre-fill:', err)
