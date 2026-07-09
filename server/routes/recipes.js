@@ -143,15 +143,13 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'At least one recipe item is required' })
         }
 
-        // Math.round gives ±0.5 tolerance on purpose: three items of 33.33%
-        // sum to 99.99 due to float representation and must still pass.
-        // TODO: only the SUM is checked — a single item can be negative or > 100 if
-        // the rest compensate, and a non-numeric percentage makes the total NaN
-        // (message reads "Currently: NaN%"). Validate each item: number, > 0, <= 100.
-        // Also: the client requires exactly 100 while this accepts 99.5–100.4 —
-        // pick one rule. todo.md Group 3 #3.
+        for (const item of items) {
+            if (!(typeof item.percentage === 'number' && item.percentage > 0 && item.percentage <= 100)) {
+                return res.status(400).json({ error: 'Each recipe item needs a percentage greater than 0 and at most 100' })
+            }
+        }
         const total = items.reduce((sum, item) => sum + item.percentage, 0)
-        if (Math.round(total) !== 100) {
+        if (total !== 100) {
             return res.status(400).json({ error: `Recipe items must add up to 100%. Currently: ${total}%` })
         }
 
