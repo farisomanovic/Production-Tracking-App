@@ -18,6 +18,18 @@ class RunAlreadyCompletedError extends Error {}
 class UnknownMaterialError extends Error {}
 class InsufficientStockError extends Error {}
 
+// Shared by POST and PUT below: new Date() never throws on a garbage string,
+// it silently produces an Invalid Date that only surfaces once Prisma tries
+// to write it — this turns that into a 400 naming the offending field instead.
+function parseDateOr400(res, value, fieldName) {
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) {
+        res.status(400).json({ error: `${fieldName} is not a valid timestamp` })
+        return null
+    }
+    return parsed
+}
+
 // ─── LIST & DETAIL ───────────────────────────────────────────────────────────
 
 /**
@@ -174,6 +186,22 @@ router.post('/', async (req, res) => {
         if (!date || !startTime || !operatorId || !machineId || !productId || !recipeId) {
             return res.status(400).json({ error: 'date, startTime, operatorId, machineId, productId and recipeId are required' })
         }
+
+        const parsedDate = parseDateOr400(res, date, 'date')
+        if (!parsedDate) return
+        const parsedStartTime = parseDateOr400(res, startTime, 'startTime')
+        if (!parsedStartTime) return
+        let parsedWarmupStartTime
+        if (warmupStartTime !== undefined) {
+            parsedWarmupStartTime = parseDateOr400(res, warmupStartTime, 'warmupStartTime')
+            if (!parsedWarmupStartTime) return
+        }
+        let parsedStableStartTime
+        if (stableStartTime !== undefined) {
+            parsedStableStartTime = parseDateOr400(res, stableStartTime, 'stableStartTime')
+            if (!parsedStableStartTime) return
+        }
+
         const [operator, machine] = await Promise.all([
             prisma.operator.findUnique({ where: { id: operatorId } }),
             prisma.machine.findUnique({ where: { id: machineId } })
@@ -182,10 +210,9 @@ router.post('/', async (req, res) => {
         // Runs record real shop-floor events, so future dates are operator error.
         // setUTCHours(23,59,59) makes "today anywhere on Earth" pass regardless of
         // the server's timezone — a deliberate loose bound.
-        const selectedDate = new Date(date)
         const today = new Date()
         today.setUTCHours(23, 59, 59, 999)
-        if (selectedDate > today) {
+        if (parsedDate > today) {
             return res.status(400).json({ error: 'Production run date cannot be in the future' })
         }
 
@@ -205,18 +232,16 @@ router.post('/', async (req, res) => {
         // verifies the MachineProduct link exists or that recipe.productId matches,
         // so a "Frankenstein" run can be created via direct API call.
         // todo.md Group 3 #7.
-        // TODO: new Date() on unparseable strings produces Invalid Date → Prisma
-        // throws → 500. Guard with Number.isNaN(d.getTime()) → 400. Group 3 #4.
         const run = await prisma.productionRun.create({
             data: {
-                date: new Date(date),
-                startTime: new Date(startTime),
+                date: parsedDate,
+                startTime: parsedStartTime,
                 operatorId,
                 machineId,
                 productId,
                 recipeId,
-                ...(warmupStartTime !== undefined && { warmupStartTime: new Date(warmupStartTime) }),
-                ...(stableStartTime !== undefined && { stableStartTime: new Date(stableStartTime) }),
+                ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
+                ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
                 ...(energyStart !== undefined && { energyStart }),
                 ...(notes !== undefined && { notes }),
                 ...(potentialBuyer !== undefined && { potentialBuyer })
@@ -261,6 +286,22 @@ router.put('/:id', async (req, res) => {
             endTime
         } = req.body
 
+        let parsedWarmupStartTime
+        if (warmupStartTime !== undefined) {
+            parsedWarmupStartTime = parseDateOr400(res, warmupStartTime, 'warmupStartTime')
+            if (!parsedWarmupStartTime) return
+        }
+        let parsedStableStartTime
+        if (stableStartTime !== undefined) {
+            parsedStableStartTime = parseDateOr400(res, stableStartTime, 'stableStartTime')
+            if (!parsedStableStartTime) return
+        }
+        let parsedEndTime
+        if (endTime !== undefined) {
+            parsedEndTime = parseDateOr400(res, endTime, 'endTime')
+            if (!parsedEndTime) return
+        }
+
         // TODO: no UI calls this endpoint yet (the client's updateRun helper is
         // unused) — run headers are uneditable after creation. Either build the
         // edit screen or drop the route. todo.md Group 8 #2.
@@ -269,11 +310,11 @@ router.put('/:id', async (req, res) => {
             data: {
                 ...(notes !== undefined && { notes }),
                 ...(potentialBuyer !== undefined && { potentialBuyer }),
-                ...(warmupStartTime !== undefined && { warmupStartTime: new Date(warmupStartTime) }),
-                ...(stableStartTime !== undefined && { stableStartTime: new Date(stableStartTime) }),
+                ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
+                ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
                 ...(energyStart !== undefined && { energyStart }),
                 ...(energyEnd !== undefined && { energyEnd }),
-                ...(endTime !== undefined && { endTime: new Date(endTime) })
+                ...(parsedEndTime !== undefined && { endTime: parsedEndTime })
             },
             include: {
                 operator: true,
