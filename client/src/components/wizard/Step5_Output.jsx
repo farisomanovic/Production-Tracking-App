@@ -16,8 +16,9 @@ import { common } from '../../styles/common'
  *
  * @component
  * @param {Object} props
- * @param {Object} props.data - Accumulated wizard formData: parameterValues and materialUsages
- * from steps 3–4 ride along in the final payload; `productId`/`quantityProduced` prefill row 1.
+ * @param {Object} props.data - Accumulated wizard formData: parameterValues, materialUsages,
+ * and the run-level weights (netWeightPerUnit/grossWeightPerUnit/scrapKg) from steps 3–4
+ * ride along in the final payload; `productId`/`quantityProduced` prefill row 1.
  * @param {string} props.runId - UUID of the run created after step 2 — the completion target.
  * @returns {JSX.Element}
  *
@@ -44,9 +45,7 @@ const [outputs, setOutputs] = useState(() => {
     return [{
     id: Date.now(),
     productId: data.productId,
-    quantityProduced: data.quantityProduced ? String(data.quantityProduced) : '',
-    grossWeightKg: '',
-    scrapKg: ''
+    quantityProduced: data.quantityProduced ? String(data.quantityProduced) : ''
     }]
 })
 
@@ -80,7 +79,7 @@ useEffect(() => {
  * Updates one field of one output row, identified by its local list key.
  *
  * @param {number} id - Local row id (Date.now()-based key, not a server id).
- * @param {string} field - One of "productId" | "quantityProduced" | "grossWeightKg" | "scrapKg".
+ * @param {string} field - One of "productId" | "quantityProduced".
  * @param {string} value - Raw input value; converted to Number only on submit.
  * @returns {void}
  *
@@ -105,9 +104,7 @@ function addOutput() {
     setOutputs(prev => [...prev, {
     id: Date.now(),
     productId: '',
-    quantityProduced: '',
-    grossWeightKg: '',
-    scrapKg: ''
+    quantityProduced: ''
     }])
 }
 
@@ -130,7 +127,7 @@ function removeOutput(id) {
 
 /**
  * Checks completion requirements before submit: end time present, every output
- * row fully filled, quantities positive (scrap may be zero — a perfect run).
+ * row fully filled, quantities positive.
  *
  * @returns {boolean} true when the payload is safe to send; false after setting an error.
  *
@@ -145,9 +142,7 @@ function validate() {
 
     const allOutputsFilled = outputs.every(o =>
     o.productId &&
-    o.quantityProduced !== '' &&
-    o.grossWeightKg !== '' &&
-    o.scrapKg !== ''
+    o.quantityProduced !== ''
     )
 
     if (!allOutputsFilled) {
@@ -156,13 +151,11 @@ function validate() {
     }
 
     const allPositive = outputs.every(o =>
-    Number(o.quantityProduced) > 0 &&
-    Number(o.grossWeightKg) > 0 &&
-    Number(o.scrapKg) >= 0
+    Number(o.quantityProduced) > 0
     )
 
     if (!allPositive) {
-    setError('Quantities must be positive. Scrap can be zero.')
+    setError('Quantities must be positive.')
     return false
     }
 
@@ -195,10 +188,13 @@ async function handleComplete() {
         materialUsages: data.materialUsages,
         outputs: outputs.map(o => ({
         productId: o.productId,
-        quantityProduced: Number(o.quantityProduced),
-        grossWeightKg: Number(o.grossWeightKg),
-        scrapKg: Number(o.scrapKg)
+        quantityProduced: Number(o.quantityProduced)
         })),
+        // != null (not truthiness): a scrap of 0 is a real value that must be
+        // sent — a perfect run's zero scrap should overwrite nothing silently.
+        ...(data.netWeightPerUnit != null && { netWeightPerUnit: data.netWeightPerUnit }),
+        ...(data.grossWeightPerUnit != null && { grossWeightPerUnit: data.grossWeightPerUnit }),
+        ...(data.scrapKg != null && { scrapKg: data.scrapKg }),
         // TODO: truthiness drops a legitimate meter reading of 0 — use
         // energyEnd !== '' instead. todo.md Group 7 #2.
         ...(energyEnd && { energyEnd: Number(energyEnd) }),
@@ -313,40 +309,6 @@ return (
                 min='0'
                 step='1'
             />
-            </div>
-        </div>
-
-        {/* Gross Weight */}
-        <div style={common.field}>
-            <label style={common.label}>Gross Weight *</label>
-            <div style={common.inputRow}>
-            <input
-                style={styles.input}
-                type='number'
-                value={output.grossWeightKg}
-                onChange={e => handleOutputChange(output.id, 'grossWeightKg', e.target.value)}
-                placeholder='0.0'
-                min='0'
-                step='0.1'
-            />
-            <span style={common.unit}>kg</span>
-            </div>
-        </div>
-
-        {/* Scrap */}
-        <div style={common.field}>
-            <label style={common.label}>Scrap *</label>
-            <div style={common.inputRow}>
-            <input
-                style={styles.input}
-                type='number'
-                value={output.scrapKg}
-                onChange={e => handleOutputChange(output.id, 'scrapKg', e.target.value)}
-                placeholder='0.0'
-                min='0'
-                step='0.1'
-            />
-            <span style={common.unit}>kg</span>
             </div>
         </div>
 

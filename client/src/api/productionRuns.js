@@ -77,8 +77,9 @@ export function updateRun(id, data) {
  *
  * @param {string} id - ProductionRun UUID.
  * @param {Object} data - `{ endTime, parameterValues: [{ machineParameterId, value }],
- * outputs: [{ productId, quantityProduced, grossWeightKg?, scrapKg? }] }` required;
- * `{ materialUsages: [{ materialId, quantityUsed }], energyEnd, notes }` optional.
+ * outputs: [{ productId, quantityProduced }] }` required;
+ * `{ materialUsages: [{ materialId, quantityUsed }], energyEnd, notes,
+ * netWeightPerUnit, grossWeightPerUnit, scrapKg }` optional (run-level weights, ≥ 0).
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = completed run aggregate.
  * @throws {import('axios').AxiosError} 400 invalid payload; 404 unknown run;
  * 409 already completed or insufficient material stock.
@@ -88,7 +89,8 @@ export function updateRun(id, data) {
  *   endTime: '2026-07-04T14:30:00.000',
  *   parameterValues: [{ machineParameterId: '31f0…', value: 210 }],
  *   materialUsages: [{ materialId: 'a9d2…', quantityUsed: 480 }],
- *   outputs: [{ productId: 'c771…', quantityProduced: 500, grossWeightKg: 510, scrapKg: 10 }]
+ *   outputs: [{ productId: 'c771…', quantityProduced: 500 }],
+ *   netWeightPerUnit: 1.5, grossWeightPerUnit: 1.6, scrapKg: 10
  * })
  */
 export function completeRun(id, data) {

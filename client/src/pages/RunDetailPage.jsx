@@ -36,6 +36,9 @@ const [products, setProducts] = useState([])
 const [lastRunParameterValues, setLastRunParameterValues] = useState([])
 const [lastRunMaterialUsages, setLastRunMaterialUsages] = useState([])
 const [lastRunQuantityProduced, setLastRunQuantityProduced] = useState('')
+const [lastRunNetWeightPerUnit, setLastRunNetWeightPerUnit] = useState('')
+const [lastRunGrossWeightPerUnit, setLastRunGrossWeightPerUnit] = useState('')
+const [lastRunScrapKg, setLastRunScrapKg] = useState('')
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState(null)
 
@@ -86,8 +89,23 @@ useEffect(() => {
                         quantityUsed: mu.quantityUsed
                     })))
                 }
+                // SUM across all outputs: the calculator's quantity is the run
+                // total even when several products came off the machine.
                 if (lastRun.runOutputs && lastRun.runOutputs.length > 0) {
-                    setLastRunQuantityProduced(String(lastRun.runOutputs[0].quantityProduced))
+                    setLastRunQuantityProduced(String(
+                        lastRun.runOutputs.reduce((sum, o) => sum + o.quantityProduced, 0)
+                    ))
+                }
+                // != null guards: pre-migration runs have no neto (and possibly
+                // no bruto/scrap) — leave those fields blank instead of "null".
+                if (lastRun.netWeightPerUnit != null) {
+                    setLastRunNetWeightPerUnit(String(lastRun.netWeightPerUnit))
+                }
+                if (lastRun.grossWeightPerUnit != null) {
+                    setLastRunGrossWeightPerUnit(String(lastRun.grossWeightPerUnit))
+                }
+                if (lastRun.scrapKg != null) {
+                    setLastRunScrapKg(String(lastRun.scrapKg))
                 }
             }
         } catch (err) {
@@ -234,6 +252,9 @@ return (
             lastRunParameterValues={lastRunParameterValues}
             lastRunMaterialUsages={lastRunMaterialUsages}
             lastRunQuantityProduced={lastRunQuantityProduced}
+            lastRunNetWeightPerUnit={lastRunNetWeightPerUnit}
+            lastRunGrossWeightPerUnit={lastRunGrossWeightPerUnit}
+            lastRunScrapKg={lastRunScrapKg}
             onCompleted={() => navigate('/runs')}
             onDelete={handleDelete}
         />
@@ -266,7 +287,10 @@ return (
  * @param {Array} props.products - Products this machine may output.
  * @param {Array} props.lastRunParameterValues - Prefill values from the last completed matching run.
  * @param {Array} props.lastRunMaterialUsages - Prefill usage from the last completed matching run.
- * @param {string} props.lastRunQuantityProduced - Prefill quantity from the last run's first output.
+ * @param {string} props.lastRunQuantityProduced - Prefill quantity: SUM across the last run's outputs.
+ * @param {string} props.lastRunNetWeightPerUnit - Prefill neto (per-unit kg) from the last run.
+ * @param {string} props.lastRunGrossWeightPerUnit - Prefill bruto (per-unit kg) from the last run.
+ * @param {string} props.lastRunScrapKg - Prefill total scrap kg from the last run.
  * @param {Function} props.onCompleted - Called after successful completion (parent navigates away).
  * @param {Function} props.onDelete - Called to cancel/abandon this in-progress run (parent navigates away).
  * @returns {JSX.Element}
@@ -274,10 +298,11 @@ return (
  * @example
  * <RunCompleteView run={run} machineParameters={mps} products={prods}
  *   lastRunParameterValues={[]} lastRunMaterialUsages={[]}
- *   lastRunQuantityProduced="" onCompleted={() => navigate('/runs')}
- *   onDelete={handleDelete} />
+ *   lastRunQuantityProduced="" lastRunNetWeightPerUnit=""
+ *   lastRunGrossWeightPerUnit="" lastRunScrapKg=""
+ *   onCompleted={() => navigate('/runs')} onDelete={handleDelete} />
  */
-function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, lastRunMaterialUsages, lastRunQuantityProduced, onCompleted, onDelete }) {
+function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, lastRunMaterialUsages, lastRunQuantityProduced, lastRunNetWeightPerUnit, lastRunGrossWeightPerUnit, lastRunScrapKg, onCompleted, onDelete }) {
 
 const [endTime, setEndTime] = useState('')
 const [energyEnd, setEnergyEnd] = useState('')
@@ -307,14 +332,14 @@ const [materialValues, setMaterialValues] = useState(() => {
 })
 
 const [quantityProduced, setQuantityProduced] = useState(lastRunQuantityProduced)
-const [netWeightPerUnit, setNetWeightPerUnit] = useState('')
+const [netWeightPerUnit, setNetWeightPerUnit] = useState(lastRunNetWeightPerUnit)
+const [grossWeightPerUnit, setGrossWeightPerUnit] = useState(lastRunGrossWeightPerUnit)
+const [scrapKg, setScrapKg] = useState(lastRunScrapKg)
 
 const [outputs, setOutputs] = useState(() => [{
     id: Date.now(),
     productId: run.productId,
-    quantityProduced: lastRunQuantityProduced,
-    grossWeightKg: '',
-    scrapKg: ''
+    quantityProduced: lastRunQuantityProduced
 }])
 
 const [isSubmitting, setIsSubmitting] = useState(false)
@@ -350,22 +375,26 @@ function handleMaterialChange(materialId, value) {
 
 /**
  * Fills every material input from total weight × recipe percentage
- * (total kg = quantity × net weight per unit).
+ * (total kg = quantity × neto weight per unit + scrap — wasted material still
+ * came off the shelf). Bruto is deliberately NOT a parameter: packaging weight
+ * isn't raw material.
  *
  * @param {string|number} qty - Produced quantity (pieces).
- * @param {string|number} nw - Net weight of one piece in kg.
- * @returns {void} No-op until both inputs are non-zero numbers.
+ * @param {string|number} nw - Neto weight of one piece in kg.
+ * @param {string|number} scrap - Total scrap for the run in kg.
+ * @returns {void} No-op while every input is empty/zero.
  *
  * @example
- * recalculateMaterials('500', '1.5')
+ * recalculateMaterials('500', '1.5', '10')
  */
 // TODO: replaces ALL material inputs, including hand-corrected ones — same
 // behavior (and same fix) as wizard Step 4's calculator.
-function recalculateMaterials(qty, nw) {
-    const q = Number(qty)
-    const n = Number(nw)
-    if (!q || !n || run.recipe.recipeItems.length === 0) return
-    const totalKg = q * n
+function recalculateMaterials(qty, nw, scrap) {
+    const q = Number(qty) || 0
+    const n = Number(nw) || 0
+    const s = Number(scrap) || 0
+    const totalKg = q * n + s
+    if (!totalKg || run.recipe.recipeItems.length === 0) return
     const computed = {}
     run.recipe.recipeItems.forEach(item => {
     // toFixed(2)+parseFloat: 2-decimal kg without trailing zeros.
@@ -389,11 +418,11 @@ function recalculateMaterials(qty, nw) {
  */
 function handleQuantityChange(value) {
     setQuantityProduced(value)
-    recalculateMaterials(value, netWeightPerUnit)
+    recalculateMaterials(value, netWeightPerUnit, scrapKg)
 }
 
 /**
- * Updates the calculator's unit weight and re-derives material amounts.
+ * Updates the calculator's neto unit weight and re-derives material amounts.
  *
  * @param {string} value - Raw input string.
  * @returns {void}
@@ -403,19 +432,48 @@ function handleQuantityChange(value) {
  */
 function handleNetWeightChange(value) {
     setNetWeightPerUnit(value)
-    recalculateMaterials(quantityProduced, value)
+    recalculateMaterials(quantityProduced, value, scrapKg)
+}
+
+/**
+ * Updates the calculator's total scrap and re-derives material amounts —
+ * scrapped kg consumed material too, so it feeds the same recipe split.
+ *
+ * @param {string} value - Raw input string.
+ * @returns {void}
+ *
+ * @example
+ * handleScrapChange('10')
+ */
+function handleScrapChange(value) {
+    setScrapKg(value)
+    recalculateMaterials(quantityProduced, netWeightPerUnit, value)
+}
+
+/**
+ * Updates the calculator's bruto unit weight. Record-only: bruto includes
+ * packaging, which is not raw material, so it never triggers a recalculation.
+ *
+ * @param {string} value - Raw input string.
+ * @returns {void}
+ *
+ * @example
+ * handleGrossWeightChange('1.6')
+ */
+function handleGrossWeightChange(value) {
+    setGrossWeightPerUnit(value)
 }
 
 /**
  * Updates one field of one output row by its local list key.
  *
  * @param {number} id - Local row id (React key only, never sent to the server).
- * @param {string} field - "productId" | "quantityProduced" | "grossWeightKg" | "scrapKg".
+ * @param {string} field - "productId" | "quantityProduced".
  * @param {string} value - Raw input value.
  * @returns {void}
  *
  * @example
- * handleOutputChange(1751623945000, 'scrapKg', '10')
+ * handleOutputChange(1751623945000, 'quantityProduced', '500')
  */
 function handleOutputChange(id, field, value) {
     setOutputs(prev => prev.map(o =>
@@ -435,9 +493,7 @@ function addOutput() {
     setOutputs(prev => [...prev, {
     id: Date.now(),
     productId: '',
-    quantityProduced: '',
-    grossWeightKg: '',
-    scrapKg: ''
+    quantityProduced: ''
     }])
 }
 
@@ -458,7 +514,7 @@ function removeOutput(id) {
 
 /**
  * Checks completion requirements: end time set, all parameters and materials
- * filled, every output row complete with positive quantities (scrap may be 0).
+ * filled, every output row complete with positive quantities.
  *
  * @returns {boolean} true when the payload is safe to send; false after setting an error.
  *
@@ -491,9 +547,7 @@ function validate() {
 
     const allOutputsFilled = outputs.every(o =>
     o.productId &&
-    o.quantityProduced !== '' &&
-    o.grossWeightKg !== '' &&
-    o.scrapKg !== ''
+    o.quantityProduced !== ''
     )
     if (!allOutputsFilled) {
     setError('Please fill in all fields for every output row.')
@@ -501,12 +555,10 @@ function validate() {
     }
 
     const allPositive = outputs.every(o =>
-    Number(o.quantityProduced) > 0 &&
-    Number(o.grossWeightKg) > 0 &&
-    Number(o.scrapKg) >= 0
+    Number(o.quantityProduced) > 0
     )
     if (!allPositive) {
-    setError('Quantities must be positive. Scrap can be zero.')
+    setError('Quantities must be positive.')
     return false
     }
 
@@ -550,10 +602,13 @@ async function handleComplete() {
         })),
         outputs: outputs.map(o => ({
         productId: o.productId,
-        quantityProduced: Number(o.quantityProduced),
-        grossWeightKg: Number(o.grossWeightKg),
-        scrapKg: Number(o.scrapKg)
+        quantityProduced: Number(o.quantityProduced)
         })),
+        // !== '' (not truthiness): a scrap of 0 is a real value that must be
+        // sent — a perfect run's zero scrap is still worth recording.
+        ...(netWeightPerUnit !== '' && { netWeightPerUnit: Number(netWeightPerUnit) }),
+        ...(grossWeightPerUnit !== '' && { grossWeightPerUnit: Number(grossWeightPerUnit) }),
+        ...(scrapKg !== '' && { scrapKg: Number(scrapKg) }),
         // TODO: truthiness drops a legitimate 0 meter reading — use
         // energyEnd !== ''. todo.md Group 7 #2.
         ...(energyEnd && { energyEnd: Number(energyEnd) }),
@@ -618,7 +673,7 @@ return (
     {run.recipe.recipeItems.length > 0 && (
         <div style={styles.calculator}>
         <p style={styles.calcLabel}>Quick Calculator</p>
-        <div style={styles.calcRow}>
+        <div style={styles.calcGrid}>
             <div style={styles.calcField}>
             <label style={common.label}>Quantity Produced</label>
             <div style={common.inputRow}>
@@ -635,7 +690,7 @@ return (
             </div>
             </div>
             <div style={styles.calcField}>
-            <label style={common.label}>Net Weight per Unit</label>
+            <label style={common.label}>Neto Weight per Unit</label>
             <div style={common.inputRow}>
                 <input
                 style={styles.calcInput}
@@ -645,6 +700,36 @@ return (
                 placeholder='e.g. 1.5'
                 min='0'
                 step='0.01'
+                />
+                <span style={common.unit}>kg</span>
+            </div>
+            </div>
+            <div style={styles.calcField}>
+            <label style={common.label}>Bruto Weight per Unit</label>
+            <div style={common.inputRow}>
+                <input
+                style={styles.calcInput}
+                type='number'
+                value={grossWeightPerUnit}
+                onChange={e => handleGrossWeightChange(e.target.value)}
+                placeholder='e.g. 1.6'
+                min='0'
+                step='0.01'
+                />
+                <span style={common.unit}>kg</span>
+            </div>
+            </div>
+            <div style={styles.calcField}>
+            <label style={common.label}>Scrap (total)</label>
+            <div style={common.inputRow}>
+                <input
+                style={styles.calcInput}
+                type='number'
+                value={scrapKg}
+                onChange={e => handleScrapChange(e.target.value)}
+                placeholder='e.g. 10'
+                min='0'
+                step='0.1'
                 />
                 <span style={common.unit}>kg</span>
             </div>
@@ -727,38 +812,6 @@ return (
                 min='0'
                 step='1'
             />
-            </div>
-
-            <div style={common.field}>
-            <label style={common.label}>Gross Weight *</label>
-            <div style={common.inputRow}>
-                <input
-                style={styles.input}
-                type='number'
-                value={output.grossWeightKg}
-                onChange={e => handleOutputChange(output.id, 'grossWeightKg', e.target.value)}
-                placeholder='0.0'
-                min='0'
-                step='0.1'
-                />
-                <span style={common.unit}>kg</span>
-            </div>
-            </div>
-
-            <div style={common.field}>
-            <label style={common.label}>Scrap *</label>
-            <div style={common.inputRow}>
-                <input
-                style={styles.input}
-                type='number'
-                value={output.scrapKg}
-                onChange={e => handleOutputChange(output.id, 'scrapKg', e.target.value)}
-                placeholder='0.0'
-                min='0'
-                step='0.1'
-                />
-                <span style={common.unit}>kg</span>
-            </div>
             </div>
 
         </div>
@@ -945,6 +998,28 @@ return (
         </div>
     )}
 
+    {/* Run-level weights: != null (not truthiness) so a scrap of 0 still
+        renders "0 kg"; runs recorded before weights existed hide the card. */}
+    {(run.netWeightPerUnit != null || run.grossWeightPerUnit != null || run.scrapKg != null) && (
+        <div style={styles.section}>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Weights</p>
+        <div style={styles.infoCard}>
+            <InfoRow
+                label='Neto (per unit)'
+                value={run.netWeightPerUnit != null ? `${run.netWeightPerUnit} kg` : '—'}
+            />
+            <InfoRow
+                label='Bruto (per unit)'
+                value={run.grossWeightPerUnit != null ? `${run.grossWeightPerUnit} kg` : '—'}
+            />
+            <InfoRow
+                label='Scrap (total)'
+                value={run.scrapKg != null ? `${run.scrapKg} kg` : '—'}
+            />
+        </div>
+        </div>
+    )}
+
     {run.runOutputs.length > 0 && (
         <div style={styles.section}>
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Outputs</p>
@@ -953,8 +1028,6 @@ return (
             <p style={styles.outputTitle}>Output {index + 1}</p>
             <InfoRow label='Product' value={output.product.name} />
             <InfoRow label='Quantity' value={output.quantityProduced} />
-            <InfoRow label='Gross Weight' value={`${output.grossWeightKg} kg`} />
-            <InfoRow label='Scrap' value={`${output.scrapKg} kg`} />
             </div>
         ))}
         </div>
@@ -1219,8 +1292,9 @@ calcLabel: {
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
 },
-calcRow: {
-    display: 'flex',
+calcGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
     gap: '1rem',
 },
 calcField: {

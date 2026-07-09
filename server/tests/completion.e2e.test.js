@@ -37,7 +37,10 @@ const basePayload = (usage) => ({
     endTime: new Date().toISOString(),
     parameterValues: [{ machineParameterId, value: 210 }],
     materialUsages: usage,
-    outputs: [{ productId: template.productId, quantityProduced: 1 }]
+    outputs: [{ productId: template.productId, quantityProduced: 1 }],
+    // Run-level weights (optional in the API) ride along so the happy paths
+    // exercise their persistence too — Test H asserts they come back.
+    netWeightPerUnit: 1.5, grossWeightPerUnit: 1.6, scrapKg: 2
 })
 async function createRun() {
     const r = await fetch(`${API}/production-runs`, {
@@ -109,7 +112,9 @@ const cases = [
     ['string quantityUsed', basePayload([{ materialId: material.id, quantityUsed: '5' }])],
     ['zero quantityProduced', { ...basePayload([]), outputs: [{ productId: template.productId, quantityProduced: 0 }] }],
     ['non-numeric parameter value', { ...basePayload([]), parameterValues: [{ machineParameterId, value: 'hot' }] }],
-    ['negative scrapKg', { ...basePayload([]), outputs: [{ productId: template.productId, quantityProduced: 1, scrapKg: -1 }] }],
+    ['negative scrapKg', { ...basePayload([]), scrapKg: -1 }],
+    ['negative netWeightPerUnit', { ...basePayload([]), netWeightPerUnit: -0.5 }],
+    ['string grossWeightPerUnit', { ...basePayload([]), grossWeightPerUnit: 'heavy' }],
     ['unknown material', basePayload([{ materialId: 'no-such-material', quantityUsed: 1 }])]
 ]
 for (const [label, payload] of cases) {
@@ -160,6 +165,12 @@ const runHState = await prisma.productionRun.findUnique({ where: { id: runH.id }
 check('run still in_progress after rejected attempts', runHState.status === 'in_progress')
 const rH4 = await complete(runH.id, basePayload([]))
 check('valid later endTime still completes → 200', rH4.status === 200, `got ${rH4.status}`)
+const bodyH = await j(rH4)
+check('run-level weights persisted',
+    bodyH.netWeightPerUnit === 1.5 && bodyH.grossWeightPerUnit === 1.6 && bodyH.scrapKg === 2,
+    `got ${bodyH.netWeightPerUnit}/${bodyH.grossWeightPerUnit}/${bodyH.scrapKg}`)
+check('outputs carry no weight fields',
+    bodyH.runOutputs?.[0]?.grossWeightKg === undefined && bodyH.runOutputs?.[0]?.scrapKg === undefined)
 await fetch(`${API}/production-runs/${runH.id}`, { method: 'DELETE' })
 
 console.log(`\n${pass} passed, ${fail} failed`)

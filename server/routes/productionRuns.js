@@ -295,8 +295,9 @@ router.put('/:id', async (req, res) => {
  *
  * @param {import('express').Request} req - `params.id` UUID. Body: `endTime` (required),
  * `parameterValues[]` ({ machineParameterId, value }, min 1), `outputs[]`
- * ({ productId, quantityProduced, grossWeightKg?, scrapKg? }, min 1),
- * `materialUsages[]` optional, `energyEnd`/`notes` optional.
+ * ({ productId, quantityProduced }, min 1), `materialUsages[]` optional,
+ * `energyEnd`/`notes` optional, run-level weights `netWeightPerUnit`/
+ * `grossWeightPerUnit`/`scrapKg` optional (numbers ≥ 0).
  * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid payload
  * (including an unparseable endTime or one at/before the run's startTime);
  * 404 unknown run; 409 already completed or insufficient stock; 500 on transaction failure.
@@ -307,12 +308,14 @@ router.put('/:id', async (req, res) => {
  * // { "endTime": "2026-07-04T14:30:00.000",
  * //   "parameterValues": [{ "machineParameterId": "31f0…", "value": 210 }],
  * //   "materialUsages": [{ "materialId": "a9d2…", "quantityUsed": 480 }],
- * //   "outputs": [{ "productId": "c771…", "quantityProduced": 500, "grossWeightKg": 510, "scrapKg": 10 }] }
+ * //   "outputs": [{ "productId": "c771…", "quantityProduced": 500 }],
+ * //   "netWeightPerUnit": 1.5, "grossWeightPerUnit": 1.6, "scrapKg": 10 }
  * // → 200 { id: "ab12…", status: "completed", … }
  */
 router.post('/:id/complete', async (req, res) => {
     try {
-        const { endTime, energyEnd, notes, parameterValues, materialUsages, outputs } = req.body
+        const { endTime, energyEnd, notes, parameterValues, materialUsages, outputs,
+            netWeightPerUnit, grossWeightPerUnit, scrapKg } = req.body
 
         if (!endTime) {
             return res.status(400).json({ error: 'endTime is required to complete a run' })
@@ -367,9 +370,17 @@ router.post('/:id/complete', async (req, res) => {
             if (!o.productId || !isFiniteNumber(o.quantityProduced) || o.quantityProduced <= 0) {
                 return res.status(400).json({ error: 'Each output needs a productId and a quantityProduced greater than 0' })
             }
-            if ((o.grossWeightKg !== undefined && (!isFiniteNumber(o.grossWeightKg) || o.grossWeightKg < 0)) ||
-                (o.scrapKg !== undefined && (!isFiniteNumber(o.scrapKg) || o.scrapKg < 0))) {
-                return res.status(400).json({ error: 'grossWeightKg and scrapKg must be numbers of at least 0 when provided' })
+        }
+        // Run-level weights are optional (old clients / rework runs may omit
+        // them), but when present they must be real numbers — 0 is legitimate
+        // (a run can genuinely produce zero scrap).
+        for (const [name, value] of [
+            ['netWeightPerUnit', netWeightPerUnit],
+            ['grossWeightPerUnit', grossWeightPerUnit],
+            ['scrapKg', scrapKg]
+        ]) {
+            if (value !== undefined && (!isFiniteNumber(value) || value < 0)) {
+                return res.status(400).json({ error: `${name} must be a number of at least 0 when provided` })
             }
         }
 
@@ -388,7 +399,10 @@ router.post('/:id/complete', async (req, res) => {
                     status: 'completed',
                     endTime: end,
                     ...(energyEnd !== undefined && { energyEnd }),
-                    ...(notes !== undefined && { notes })
+                    ...(notes !== undefined && { notes }),
+                    ...(netWeightPerUnit !== undefined && { netWeightPerUnit }),
+                    ...(grossWeightPerUnit !== undefined && { grossWeightPerUnit }),
+                    ...(scrapKg !== undefined && { scrapKg })
                 }
             })
             if (count === 0) {
@@ -457,9 +471,7 @@ router.post('/:id/complete', async (req, res) => {
                 data: outputs.map(o => ({
                     productionRunId: req.params.id,
                     productId: o.productId,
-                    quantityProduced: o.quantityProduced,
-                    ...(o.grossWeightKg !== undefined && { grossWeightKg: o.grossWeightKg }),
-                    ...(o.scrapKg !== undefined && { scrapKg: o.scrapKg })
+                    quantityProduced: o.quantityProduced
                 }))
             })
 

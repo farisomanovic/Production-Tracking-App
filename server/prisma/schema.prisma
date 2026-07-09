@@ -177,6 +177,12 @@ model ProductionRun {
   potentialBuyer  String?
   status          String    @default("in_progress")
 
+  // Run-level weights, written at completion. Neto/bruto are per-unit
+  // averages across all outputs; scrap is the run's total waste in kg.
+  netWeightPerUnit   Float?
+  grossWeightPerUnit Float?
+  scrapKg            Float?
+
   operatorId String
   machineId  String
   productId  String
@@ -225,14 +231,12 @@ model MaterialUsage {
 }
 
 // Deliberately NO unique pair here: one run may output the same product in
-// several batches (separate rows with their own weight/scrap).
+// several batches. Rows are product + quantity only; weights live on the run.
 // TODO: productionRunId has no index (the other children get one from their
 // @@unique prefix) — detail reads and deletes scan. todo.md Group 5 #1.
 model RunOutput {
   id               String  @id @default(uuid())
   quantityProduced Float
-  grossWeightKg    Float?
-  scrapKg          Float?
 
   productionRunId String
   productId       String
