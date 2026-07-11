@@ -173,6 +173,32 @@ check('outputs carry no weight fields',
     bodyH.runOutputs?.[0]?.grossWeightKg === undefined && bodyH.runOutputs?.[0]?.scrapKg === undefined)
 await fetch(`${API}/production-runs/${runH.id}`, { method: 'DELETE' })
 
+// ── Test I: delete-vs-complete race — no interleaving corrupts stock ─────────
+console.log('\nI. Race: /complete vs DELETE on the same in_progress run')
+const runI = (await createRun()).id
+const payloadI = basePayload([{ materialId: material.id, quantityUsed: 1 }])
+const [rI1, rI2] = await Promise.all([
+    complete(runI, payloadI),
+    fetch(`${API}/production-runs/${runI}`, { method: 'DELETE' })
+])
+// DELETE always succeeds: it either deletes the still-in_progress run (it won
+// the lock) or deletes the just-completed run after /complete committed first
+// (it lost the lock, re-read committed state, restored stock, then deleted).
+check('delete always → 200', rI2.status === 200, `got ${rI2.status}`)
+// /complete → 200 (won the lock) or 404 (DELETE removed the row first, so its
+// updateMany matched 0 rows and hit the !exists branch) — never 409, since
+// that status means racing against ANOTHER /complete, not a DELETE.
+check('complete → 200 or 404, never 409/500',
+    rI1.status === 200 || rI1.status === 404, `got ${rI1.status}`)
+check('stock ends back at stockBefore regardless of interleaving',
+    await stockNow() === stockBefore, `stock ${await stockNow()}`)
+const runIGone = await prisma.productionRun.findUnique({ where: { id: runI } })
+check('run no longer exists', runIGone === null)
+const orphansI = await prisma.runParameterValue.count({ where: { productionRunId: runI } })
+    + await prisma.materialUsage.count({ where: { productionRunId: runI } })
+    + await prisma.runOutput.count({ where: { productionRunId: runI } })
+check('zero orphaned child rows', orphansI === 0, `${orphansI} orphans`)
+
 console.log(`\n${pass} passed, ${fail} failed`)
 await prisma.$disconnect()
 // exitCode instead of process.exit(): exit() kills the process mid-teardown and
