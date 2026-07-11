@@ -585,18 +585,26 @@ router.post('/:id/complete', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         await prisma.$transaction(async (tx) => {
-            // Read inside the transaction so the status/materialUsages snapshot
-            // used below can't go stale from a /complete committing in between.
+            // Lock the row before reading: SELECT ... FOR UPDATE blocks until any
+            // concurrent transaction holding this row (e.g. /complete's updateMany
+            // CAS) commits or rolls back, so this read always sees committed state,
+            // never a stale pre-commit snapshot. Symmetrically: if THIS delete wins
+            // the lock first, /complete's updateMany (WHERE status = 'in_progress')
+            // blocks until this transaction's delete commits, then its WHERE
+            // matches 0 rows against the now-vanished run and cleanly 404s.
+            const locked = await tx.$queryRaw`
+                SELECT "id" FROM "ProductionRun" WHERE "id" = ${req.params.id} FOR UPDATE
+            `
+            if (locked.length === 0) {
+                throw new RunNotFoundError()
+            }
+
             const run = await tx.productionRun.findUnique({
                 where: { id: req.params.id },
                 include: {
                     materialUsages: true
                 }
             })
-
-            if (!run) {
-                throw new RunNotFoundError()
-            }
 
             // Only completed runs ever decremented stock, so only they get it back.
             // Sequential loop for the same single-connection reason as /complete.
