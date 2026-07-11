@@ -7,7 +7,10 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
-    "test": "node tests/completion.e2e.test.js"
+    "dev:test": "node --env-file=.env.test index.js",
+    "migrate:test": "node --env-file=.env.test node_modules/prisma/build/index.js migrate deploy",
+    "seed:test": "node --env-file=.env.test prisma/seed-test.js",
+    "test": "node --env-file=.env.test tests/completion.e2e.test.js"
   },
   "keywords": [],
   "author": "",
