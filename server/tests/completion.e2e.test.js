@@ -2,18 +2,27 @@
  * @file completion.e2e.test.js
  * @description End-to-end tests for the run-completion transaction: the
  * double-completion race, the material stock floor, payload validation,
- * endTime guards, and cascade deletion. Talks to the REAL running server and
- * database — start the dev server first (`npm run dev`), then run `npm test`
- * from server/.
+ * endTime guards, cascade deletion, and the delete-vs-complete race. Talks to
+ * a REAL running server and database — but a dedicated test one, never your
+ * real data.
  *
- * Only run this against a development database. It creates real runs and moves
- * real stock while it works — it deletes every run it creates and reverses
- * every stock movement, so a clean pass leaves the database exactly as it was,
- * but a crash halfway through could leave a test run behind.
+ * Two terminals: `npm run dev:test` (starts a server against
+ * production_tracker_test on the port from .env.test), then `npm test` (this
+ * file) in another. Your normal `npm run dev` / real data are never touched —
+ * assertTestDatabase.js refuses to run if DATABASE_URL isn't the test
+ * database. Run `npm run seed:test` once beforehand (and any time you want to
+ * reset the test database to its known baseline).
+ *
+ * It still creates real runs and moves real stock *in the test database*
+ * while it works, deleting every run it creates and reversing every stock
+ * movement — a clean pass leaves it exactly as seed-test.js left it, but a
+ * crash halfway through could leave a test run behind (harmless: it's fake
+ * data, just re-run `npm run seed:test` to reset).
  */
+import '../lib/assertTestDatabase.js'
 import prisma from '../lib/prisma.js'
 
-const API = 'http://localhost:3000/api'
+const API = `http://localhost:${process.env.PORT}/api`
 let pass = 0, fail = 0
 function check(label, ok, detail = '') {
     if (ok) { pass++; console.log(`  PASS  ${label}`) }
