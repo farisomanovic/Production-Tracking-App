@@ -149,7 +149,7 @@ router.post('/', async (req, res) => {
             }
         }
         const total = items.reduce((sum, item) => sum + item.percentage, 0)
-        if (total !== 100) {
+        if (Math.abs(total - 100) > 0.001) {
             return res.status(400).json({ error: `Recipe items must add up to 100%. Currently: ${total}%` })
         }
 

@@ -100,9 +100,13 @@ function RecipesPage() {
     return items.reduce((sum, item) => sum + item.percentage, 0)
   }
 
+  function isTotalValid(total) {
+    return Math.abs(total - 100) <= 0.001
+  }
+
   /**
    * Creates the recipe from the draft, then resets the form and reloads the list.
-   * Requires exactly 100% client-side (stricter than the server's rounded check).
+   * Requires the item total to be within 0.001 of 100% (see isTotalValid).
    *
    * @returns {Promise<void>} Resolves after reload or after the error state is set.
    *
@@ -111,7 +115,7 @@ function RecipesPage() {
    */
   async function handleSubmit() {
     if (!name.trim() || !selectedProductId || items.length === 0) return
-    if (getTotalPercentage() !== 100) return
+    if (!isTotalValid(getTotalPercentage())) return
 
     try {
       await createRecipe({
@@ -246,7 +250,7 @@ function RecipesPage() {
               ))}
               <div style={styles.totalRow}>
                 <span style={styles.totalLabel}>Total</span>
-                <span style={totalPercentage === 100 ? styles.totalGood : styles.totalBad}>
+                <span style={isTotalValid(totalPercentage) ? styles.totalGood : styles.totalBad}>
                   {totalPercentage}%
                 </span>
               </div>
@@ -256,8 +260,8 @@ function RecipesPage() {
           <button
             style={{
               ...common.button,
-              opacity: totalPercentage === 100 && name.trim() ? 1 : 0.4,
-              cursor: totalPercentage === 100 && name.trim() ? 'pointer' : 'not-allowed'
+              opacity: isTotalValid(totalPercentage) && name.trim() ? 1 : 0.4,
+              cursor: isTotalValid(totalPercentage) && name.trim() ? 'pointer' : 'not-allowed'
             }}
             onClick={handleSubmit}
           >
