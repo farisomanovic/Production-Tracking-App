@@ -202,9 +202,15 @@ router.post('/', async (req, res) => {
             if (!parsedStableStartTime) return
         }
 
-        const [operator, machine] = await Promise.all([
+        const [operator, machine, machineProductLink, recipe, activeRunOnMachine] = await Promise.all([
             prisma.operator.findUnique({ where: { id: operatorId } }),
-            prisma.machine.findUnique({ where: { id: machineId } })
+            prisma.machine.findUnique({ where: { id: machineId } }),
+            // Existence of this link proves both that productId is real and that
+            // the machine is configured to make it — the wizard's dropdowns already
+            // enforce this, this is the backstop for direct API calls.
+            prisma.machineProduct.findFirst({ where: { machineId, productId } }),
+            prisma.recipe.findUnique({ where: { id: recipeId } }),
+            prisma.productionRun.findFirst({ where: { machineId, status: 'in_progress' } })
         ])
 
         // Runs record real shop-floor events, so future dates are operator error.
@@ -228,10 +234,21 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Machine is inactive or does not exist' })
         }
 
-        // TODO: machineId/productId/recipeId are trusted independently — nothing
-        // verifies the MachineProduct link exists or that recipe.productId matches,
-        // so a "Frankenstein" run can be created via direct API call.
-        // todo.md Group 3 #7.
+        if (!machineProductLink) {
+            return res.status(400).json({ error: 'This product is not assigned to the selected machine' })
+        }
+
+        if (!recipe) {
+            return res.status(400).json({ error: 'Recipe does not exist' })
+        }
+        if (recipe.productId !== productId) {
+            return res.status(400).json({ error: 'Recipe does not belong to the selected product' })
+        }
+
+        if (activeRunOnMachine) {
+            return res.status(400).json({ error: 'Machine already has a run in progress' })
+        }
+
         const run = await prisma.productionRun.create({
             data: {
                 date: parsedDate,

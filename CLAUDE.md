@@ -4,9 +4,11 @@
 
 - **NEVER** delete, modify, or corrupt existing data in the database. There is real production data in there.
 - **NEVER** run destructive database commands (DROP, DELETE, TRUNCATE) unless I explicitly ask for it.
+- **NEVER** run `prisma migrate` or any schema-altering command without asking me first.
 - **NEVER** commit anything. Leave the commit message and a PR description for me to do manually.
 - **NEVER** push to any branch.
-- When testing, use separate test data or read-only queries. If you need to test writes, ask me first.
+- Tests must NEVER touch the real `production_tracker` database. Use a separate test database or mock the Prisma client. If test isolation is not set up yet for something you need, stop and ask me.
+- When testing manually, use separate test data or read-only queries. If you need to test writes, ask me first.
 
 ## About Me
 
@@ -22,16 +24,49 @@ I want to deeply understand every line of code, not copy-paste solutions.
 
 ## How to Work With Me
 
-- When sending a message to me always start it with calling me by my name Faris.
+- When sending a message to me, always start it by calling me by my name, Faris.
 - Act as a rigorous, honest mentor. Do not default to agreement.
 - Point out weaknesses, bad patterns, and flawed assumptions. Explain why they are wrong.
-- Before writing any code, explain the approach: WHY is this needed, WHAT is the current problem, HOW will we solve it, and WHAT are the tradeoffs.
-- After you finish making changes always tell me how I can convince myself that the changes made are good and working.
 - After writing code, explain each important line or block. Use real-life analogies for new concepts.
 - If there are multiple approaches, present the tradeoffs and let me decide.
 - Do not rush. If something needs 10 lines of explanation, write 10 lines.
-- At the end of every task, tell me exactly how to verify the changes work (what to click, what URL to visit, what to check in the database, what to look for in the terminal).
 - When making changes in a file that has `// TODO` comments, remove any that are resolved by the current changes.
+
+## Planning Protocol (Tiered)
+
+**Full plan** — required when my prompt contains `[PLAN]`, OR when the task touches any of: the Prisma schema, transactions, stock logic (`stockQty`), or production run completion/deletion. The plan file must contain these 6 headers before the context section:
+
+1. WHAT is the current problem
+2. HOW can I reproduce that problem so I am convinced myself it's a problem
+3. WHY is it a problem
+4. WHY should it be resolved
+5. HOW will we solve it
+6. WHAT are the tradeoffs
+
+**Light plan** — for everything else: a 2–3 sentence approach summary before writing code. No plan file needed.
+
+If you are unsure which tier applies, use the full plan.
+
+## Execution Rules
+
+- **Scope discipline:** Only change what the current task requires. If you notice an unrelated problem, bug, or improvement opportunity, add it to `todo.md` (correctly placed, no duplicates) — do NOT fix it in this task.
+- **Checkpoints:** For any task that touches more than one layer (schema / backend / frontend), pause after completing each layer, summarize what you changed and why, and wait for me to say continue. For single-file trivial tasks, no checkpoint needed.
+- **One task per session:** Each session handles one todo.md item. If I try to start a second task in the same session, remind me to `/clear` and start fresh.
+
+## Testing Rules
+
+*(Active once the Vitest/Supertest suite exists. Until then, flag that tests are missing but do not block.)*
+
+- Any task that changes behavior includes tests for that behavior as part of the task — not as a separate future task.
+- Run the full test suite (`npm test`) before declaring any task done. Show me the output.
+- Test depth is proportional to damage-if-silently-broken:
+  - **Thorough:** production run completion, run deletion with stock restoration, all stock (`stockQty`) math, Prisma transactions.
+  - **Happy path + main failure case:** every API route.
+  - **Skip:** UI components, styling, trivial reads. Never test Prisma or Express themselves.
+
+## Verification
+
+At the end of every task, tell me exactly how to convince myself the changes are good and working: what to click, what URL to visit, what to check in the database, what to look for in the terminal. Do not put this in the plan — only after the work is finished.
 
 ## Project Overview
 
@@ -104,7 +139,7 @@ Production tracking web app for PakOm d.o.o., a family manufacturing business in
 - **Before making any changes:** Check if I have created a branch. If not, create a branch and switch to it before writing any code.
 - **Branch naming:** `fix/` for bugs, `feature/` for new features, `chore/` for non-code changes
 - **Commit convention:** `type: short description` in present tense (e.g., `fix: prevent negative stock on material usage`)
-- **After changes are done:** Provide a commit message and a PR description (concise but more detailed than the commit message).
+- **After changes are done:** Provide a commit message and a PR description (concise but more detailed than the commit message). The commit body should explain WHY the change was made — the diff already shows what.
 - `.gitignore` and `CLAUDE.md` changes go directly on `main` — no branch needed.
 
 ## Architectural Decisions Already Made
