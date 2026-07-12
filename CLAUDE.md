@@ -55,8 +55,6 @@ If you are unsure which tier applies, use the full plan.
 
 ## Testing Rules
 
-*(Active once the Vitest/Supertest suite exists. Until then, flag that tests are missing but do not block.)*
-
 - Any task that changes behavior includes tests for that behavior as part of the task — not as a separate future task.
 - Run the full test suite (`npm test`) before declaring any task done. Show me the output.
 - Test depth is proportional to damage-if-silently-broken:

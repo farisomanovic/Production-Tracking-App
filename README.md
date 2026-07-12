@@ -21,12 +21,14 @@ production-tracker/
 |   |   `-- main.jsx            # React entry point
 |   `-- package.json
 |-- server/                    # Node.js + Express + Prisma backend
-|   |-- index.js                # Express app, middleware, router mounts
+|   |-- app.js                  # Express app: middleware + router mounts (exported for tests)
+|   |-- index.js                # Entry point: loads .env, starts listening
 |   |-- lib/prisma.js           # Shared PrismaClient instance
 |   |-- prisma/
 |   |   |-- schema.prisma       # Data model
 |   |   `-- migrations/         # Migration history
-|   `-- routes/                 # One Express router per resource
+|   |-- routes/                 # One Express router per resource
+|   `-- tests/                  # Vitest + Supertest API tests (see Testing)
 |-- todo.md                    # Known bugs / tech debt, ranked by severity
 |-- knowledge-gaps.md          # Personal study notes (concepts I got wrong + corrections)
 `-- README.md
@@ -92,7 +94,7 @@ Defined in `server/prisma/schema.prisma`.
 
 ## Known Limitations
 
-This is a student project under active development — several things are intentionally not production-hardened yet (no auth, open CORS, no stock floor check, etc). See [`todo.md`](./todo.md) for the full, prioritized list of known issues and the order they're planned to be tackled in.
+This is a student project under active development — several things are intentionally not production-hardened yet (no auth, open CORS, etc).
 
 ## Setup
 
@@ -140,9 +142,36 @@ npm run dev
 
 Vite prints the local URL, typically `http://localhost:5173`.
 
+## Testing
+
+Backend API tests live in `server/tests/` and run with Vitest + Supertest. They hit a real, **separate** PostgreSQL database — never `production_tracker`. `server/lib/assertTestDatabase.js` refuses to run against the real database, so a misconfigured environment fails loudly instead of touching production data.
+
+One-time setup:
+
+```sql
+-- in psql:
+CREATE DATABASE production_tracker_test;
+```
+
+```bash
+cd server
+cp .env.test.example .env.test   # adjust credentials if yours differ
+npm run migrate:test             # apply migrations to the test database
+```
+
+Running tests:
+
+```bash
+npm test              # full API suite — reseeds the test DB itself, no server needed
+npm run test:watch    # re-runs on save (reseeds only on launch; test files clean up
+                      # after themselves, and `npm run seed:test` resets anytime)
+npm run test:e2e      # older completion/stock e2e suite — needs `npm run dev:test`
+                      # running in a second terminal first
+```
+
 ## Development Commands
 
-**Backend** (`server/`): `npm run dev` (nodemon), `npm start`, `npx prisma generate`, `npx prisma migrate dev`
+**Backend** (`server/`): `npm run dev` (nodemon), `npm start`, `npm test` (Vitest API suite), `npm run test:e2e`, `npx prisma generate`, `npx prisma migrate dev`
 
 **Frontend** (`client/`): `npm run dev`, `npm run lint`, `npm run build`, `npm run preview`
 

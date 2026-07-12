@@ -1,64 +1,16 @@
 /**
  * @file index.js
- * @description Express entry point: builds the app, registers global middleware,
- * mounts one router per domain resource, and starts listening. Only wiring belongs
- * here — route logic lives in ./routes/*.js, database access in ./lib/prisma.js.
+ * @description Server entry point: loads the environment, then starts the app
+ * listening. All app wiring (middleware, routers) lives in app.js — the split
+ * lets tests import the app without reading .env or starting a server.
  */
+// MUST stay the first import: app.js reads process.env.CLIENT_ORIGIN while it
+// is being evaluated, and ESM executes static imports in declaration order.
 import 'dotenv/config'
-import express from 'express'
-import cors from 'cors'
-import operatorsRouter from './routes/operators.js'
-import machinesRouter from './routes/machines.js'
-import parametersRouter from './routes/parameters.js'
-import productsRouter from './routes/products.js'
-import materialsRouter from './routes/materials.js'
-import machineParametersRouter from './routes/machineParameters.js'
-import machineProductsRouter from './routes/machineProducts.js'
-import recipesRouter from './routes/recipes.js'
-import productionRunsRouter from './routes/productionRuns.js'
+import app from './app.js'
 
-const app = express()
 const PORT = process.env.PORT || 3000
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN }))
-// Registered before the routers on purpose: express.json() is what fills req.body,
-// and Express runs middleware strictly in registration order — moved below the
-// routers, every handler would see req.body === undefined.
-app.use(express.json())
-
-// TODO: no authentication — anyone who can reach this host can read and mutate all
-// data. Auth middleware belongs here, above the routers, so every /api route is
-// gated in one place. See todo.md Group 1 #4.
-app.use('/api/operators', operatorsRouter)
-app.use('/api/machines', machinesRouter)
-app.use('/api/parameters', parametersRouter)
-app.use('/api/products', productsRouter)
-app.use('/api/materials', materialsRouter)
-app.use('/api/machine-parameters', machineParametersRouter)
-app.use('/api/machine-products', machineProductsRouter)
-app.use('/api/recipes', recipesRouter)
-app.use('/api/production-runs', productionRunsRouter)
-
-/**
- * Health check that proves the process is up without touching the database —
- * useful to distinguish "server down" from "database down" while debugging.
- *
- * @param {import('express').Request} req - Unused.
- * @param {import('express').Response} res - Always 200 with a static JSON body.
- * @returns {void}
- *
- * @example
- * // GET http://localhost:3000/ping
- * // → 200 { "message": "Server is alive!" }
- */
-app.get('/ping', (req, res) => {
-  res.json({ message: 'Server is alive!' })
-})
-
-// TODO: no central error middleware — every router hand-rolls try/catch and most
-// failures collapse to a generic 500. One `app.use((err, req, res, next) => …)`
-// registered here, LAST (Express only treats 4-arg functions as error handlers),
-// would fix the wrong status codes in one place. See todo.md Group 4 #5.
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })
