@@ -13,9 +13,6 @@
  * three DISTINCT materials or it would die on the unique constraint before
  * ever reaching the tolerance logic.
  *
- * Deliberately NOT tested: an unknown materialId currently surfaces as a raw
- * 500 (P2003 — known gap, todo.md Group 4 #5). Asserting that would enshrine
- * a bug as a contract.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
@@ -147,6 +144,17 @@ describe('POST /api/recipes — percentage validation', () => {
         })
         expect(res.status).toBe(201)
         expect(res.body.recipeItems).toHaveLength(3)
+    })
+})
+
+describe('POST /api/recipes — bad reference', () => {
+    it('rejects an unknown materialId with 400 (P2003, central error middleware)', async () => {
+        const res = await post({
+            ...validPayload(),
+            items: [{ materialId: crypto.randomUUID(), percentage: 100 }]
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('One or more referenced records do not exist')
     })
 })
 

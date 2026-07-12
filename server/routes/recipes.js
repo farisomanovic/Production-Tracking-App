@@ -25,23 +25,18 @@ const router = Router()
  * //          recipeItems: [{ percentage: 70, material: { name: "PP granulat" } }] }]
  */
 router.get('/', async (req, res) => {
-    try {
-        const recipes = await prisma.recipe.findMany({
-            orderBy: { name: 'asc' },
-            include: {
-                product: true,
-                recipeItems: {
-                    include: {
-                        material: true
-                    }
+    const recipes = await prisma.recipe.findMany({
+        orderBy: { name: 'asc' },
+        include: {
+            product: true,
+            recipeItems: {
+                include: {
+                    material: true
                 }
             }
-        })
-        res.json(recipes)
-    } catch (error) {
-        console.error('GET all /recipes error:', error)
-        res.status(500).json({ error: 'Failed to fetch recipes' })
-    }
+        }
+    })
+    res.json(recipes)
 })
 
 /**
@@ -57,24 +52,19 @@ router.get('/', async (req, res) => {
  * // → 200 [{ id: "d1e2…", name: "Standard mix", isDefault: true, … }]
  */
 router.get('/by-product/:productId', async (req, res) => {
-    try {
-        const { productId } = req.params
+    const { productId } = req.params
 
-        const recipes = await prisma.recipe.findMany({
-            where: { productId },
-            orderBy: { name: 'asc' },
-            include: {
-                product: true,
-                recipeItems: {
-                    include: { material: true }
-                }
+    const recipes = await prisma.recipe.findMany({
+        where: { productId },
+        orderBy: { name: 'asc' },
+        include: {
+            product: true,
+            recipeItems: {
+                include: { material: true }
             }
-        })
-        res.json(recipes)
-    } catch (error) {
-        console.error('GET /recipes/by-product error:', error)
-        res.status(500).json({ error: 'Failed to fetch recipes' })
-    }
+        }
+    })
+    res.json(recipes)
 })
 
 /**
@@ -89,26 +79,21 @@ router.get('/by-product/:productId', async (req, res) => {
  * // → 200 { id: "d1e2…", name: "Standard mix", recipeItems: [ … ] }
  */
 router.get('/:id', async (req, res) => {
-    try {
-        const recipe = await prisma.recipe.findUnique({
-            where: { id: req.params.id },
-            include: {
-                product: true,
-                recipeItems: {
-                    include: {
-                        material: true
-                    }
+    const recipe = await prisma.recipe.findUnique({
+        where: { id: req.params.id },
+        include: {
+            product: true,
+            recipeItems: {
+                include: {
+                    material: true
                 }
             }
-        })
-        if (!recipe) {
-            return res.status(404).json({ error: 'Recipe not found' })
         }
-        res.json(recipe)
-    } catch (error) {
-        console.error('GET single /recipes/:id error:', error)
-        res.status(500).json({ error: 'Failed to fetch recipe' })
+    })
+    if (!recipe) {
+        return res.status(404).json({ error: 'Recipe not found' })
     }
+    res.json(recipe)
 })
 
 // ─── WRITES ──────────────────────────────────────────────────────────────────
@@ -119,7 +104,7 @@ router.get('/:id', async (req, res) => {
  *
  * @param {import('express').Request} req - `body.name`, `body.productId`, `body.items[]`
  * ({ materialId, percentage, plannedQtyKg? }) required; `body.isDefault`, `body.notes` optional.
- * @param {import('express').Response} res - 201 → created Recipe aggregate; 400 invalid formula; 500 on DB failure.
+ * @param {import('express').Response} res - 201 → created Recipe aggregate; 400 invalid formula or bad reference; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -130,62 +115,55 @@ router.get('/:id', async (req, res) => {
  * // → 201 { id: "4fe1…", name: "Regranulat mix", recipeItems: [ …2 items ] }
  */
 router.post('/', async (req, res) => {
-    try {
-        const { name, productId, isDefault, notes, items } = req.body
+    const { name, productId, isDefault, notes, items } = req.body
 
-        if (!name || !productId) {
-            return res.status(400).json({ error: 'name and productId are required' })
-        }
-
-        // A recipe with no items would let a run start with nothing to consume —
-        // material usage and the Step 4 calculator both assume at least one row.
-        if (!items || !Array.isArray(items) || items.length === 0) {
-            return res.status(400).json({ error: 'At least one recipe item is required' })
-        }
-
-        for (const item of items) {
-            if (!(typeof item.percentage === 'number' && item.percentage > 0 && item.percentage <= 100)) {
-                return res.status(400).json({ error: 'Each recipe item needs a percentage greater than 0 and at most 100' })
-            }
-        }
-        const total = items.reduce((sum, item) => sum + item.percentage, 0)
-        if (Math.abs(total - 100) > 0.001) {
-            return res.status(400).json({ error: `Recipe items must add up to 100%. Currently: ${total}%` })
-        }
-
-        const recipe = await prisma.recipe.create({
-            data: {
-                name,
-                productId,
-                ...(isDefault !== undefined && { isDefault }),
-                ...(notes !== undefined && { notes }),
-                recipeItems: {
-                    // Nested create instead of separate inserts: Prisma wraps the
-                    // header + items in one implicit transaction, so a failed item
-                    // can never leave behind a recipe with half a formula.
-                    create: items.map(item => ({
-                        materialId: item.materialId,
-                        percentage: item.percentage,
-                        ...(item.plannedQtyKg !== undefined && { plannedQtyKg: item.plannedQtyKg })
-                    }))
-                }
-            },
-            include: {
-                product: true,
-                recipeItems: {
-                    include: {
-                        material: true
-                    }
-                }
-            }
-        })
-        res.status(201).json(recipe)
-    } catch (error) {
-        // TODO: a bad materialId/productId arrives as P2003 and becomes a 500 —
-        // should be a 400 naming the invalid reference. todo.md Group 4 #5.
-        console.error('POST /recipes error:', error)
-        res.status(500).json({ error: 'Failed to create recipe' })
+    if (!name || !productId) {
+        return res.status(400).json({ error: 'name and productId are required' })
     }
+
+    // A recipe with no items would let a run start with nothing to consume —
+    // material usage and the Step 4 calculator both assume at least one row.
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'At least one recipe item is required' })
+    }
+
+    for (const item of items) {
+        if (!(typeof item.percentage === 'number' && item.percentage > 0 && item.percentage <= 100)) {
+            return res.status(400).json({ error: 'Each recipe item needs a percentage greater than 0 and at most 100' })
+        }
+    }
+    const total = items.reduce((sum, item) => sum + item.percentage, 0)
+    if (Math.abs(total - 100) > 0.001) {
+        return res.status(400).json({ error: `Recipe items must add up to 100%. Currently: ${total}%` })
+    }
+
+    const recipe = await prisma.recipe.create({
+        data: {
+            name,
+            productId,
+            ...(isDefault !== undefined && { isDefault }),
+            ...(notes !== undefined && { notes }),
+            recipeItems: {
+                // Nested create instead of separate inserts: Prisma wraps the
+                // header + items in one implicit transaction, so a failed item
+                // can never leave behind a recipe with half a formula.
+                create: items.map(item => ({
+                    materialId: item.materialId,
+                    percentage: item.percentage,
+                    ...(item.plannedQtyKg !== undefined && { plannedQtyKg: item.plannedQtyKg })
+                }))
+            }
+        },
+        include: {
+            product: true,
+            recipeItems: {
+                include: {
+                    material: true
+                }
+            }
+        }
+    })
+    res.status(201).json(recipe)
 })
 
 /**
@@ -194,7 +172,7 @@ router.post('/', async (req, res) => {
  * item-editing endpoint exists yet.
  *
  * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.isDefault`, `body.notes`.
- * @param {import('express').Response} res - 200 → updated Recipe aggregate; 500 on failure (including unknown id).
+ * @param {import('express').Response} res - 200 → updated Recipe aggregate; 404 unknown id; 500 on failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -202,33 +180,28 @@ router.post('/', async (req, res) => {
  * // → 200 { id: "d1e2…", name: "Standard mix", isDefault: true, … }
  */
 router.put('/:id', async (req, res) => {
-    try {
-        const { name, isDefault, notes } = req.body
-        // TODO: setting isDefault: true here does NOT clear the flag on the
-        // product's other recipes, so several "defaults" can coexist and the
-        // wizard auto-picks whichever it finds first. Wrap in a transaction that
-        // unsets siblings first. todo.md Group 5 #6.
-        const recipe = await prisma.recipe.update({
-            where: { id: req.params.id },
-            data: {
-                ...(name !== undefined && { name }),
-                ...(isDefault !== undefined && { isDefault }),
-                ...(notes !== undefined && { notes }),
-            },
-            include: {
-                product: true,
-                recipeItems: {
-                    include: {
-                        material: true
-                    }
+    const { name, isDefault, notes } = req.body
+    // TODO: setting isDefault: true here does NOT clear the flag on the
+    // product's other recipes, so several "defaults" can coexist and the
+    // wizard auto-picks whichever it finds first. Wrap in a transaction that
+    // unsets siblings first. todo.md Group 5 #6.
+    const recipe = await prisma.recipe.update({
+        where: { id: req.params.id },
+        data: {
+            ...(name !== undefined && { name }),
+            ...(isDefault !== undefined && { isDefault }),
+            ...(notes !== undefined && { notes }),
+        },
+        include: {
+            product: true,
+            recipeItems: {
+                include: {
+                    material: true
                 }
             }
-        })
-        res.json(recipe)
-    } catch (error) {
-        console.error('PUT /recipes/:id error:', error)
-        res.status(500).json({ error: 'Failed to update recipe' })
-    }
+        }
+    })
+    res.json(recipe)
 })
 
 export default router
