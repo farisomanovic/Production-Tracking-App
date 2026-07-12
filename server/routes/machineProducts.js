@@ -55,8 +55,10 @@ router.post('/', async (req, res, next) => {
         })
         res.status(201).json(link)
     } catch (error) {
+        // Status (409) is the central error middleware's call, not this route's —
+        // only the friendlier message is route-specific.
         if (error.code === 'P2002') {
-            return res.status(409).json({ error: 'This product is already linked to this machine' })
+            error.clientMessage = 'This product is already linked to this machine'
         }
         next(error)
     }

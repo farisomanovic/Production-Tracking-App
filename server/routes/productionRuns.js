@@ -133,7 +133,7 @@ router.get('/:id', async (req, res) => {
         }
     })
     if (!run) {
-        return res.status(404).json({ error: 'Production run not found' })
+        throw new RunNotFoundError()
     }
     res.json(run)
 })
@@ -374,7 +374,7 @@ router.post('/:id/complete', async (req, res) => {
         select: { startTime: true }
     })
     if (!existing) {
-        return res.status(404).json({ error: 'Production run not found' })
+        throw new RunNotFoundError()
     }
     if (end <= existing.startTime) {
         return res.status(400).json({ error: 'endTime must be after the run start time' })
