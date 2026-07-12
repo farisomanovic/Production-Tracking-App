@@ -10,7 +10,7 @@
  *
  * Rows created here use the VT-ERR prefix; beforeAll/afterAll clean up leftovers.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import request from 'supertest'
 import app from '../../app.js'
 import prisma from '../../lib/prisma.js'
@@ -94,6 +94,32 @@ describe('central error middleware — Prisma error mapping', () => {
             .send({ machineId: baseline.machine.id, productId: baseline.product.id })
         expect(res.status).toBe(409)
         expect(res.body.error).toBe('This product is already linked to this machine')
+    })
+})
+
+describe('central error middleware — logging', () => {
+    it('does not console.error a routine, already-classified conflict', async () => {
+        // Pre-refactor, every route only console.error'd errors nothing else
+        // recognized — an expected 409 (duplicate link) was never logged.
+        // Locks that behavior in so a future change can't silently regress it.
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+        const res = await request(app)
+            .post('/api/machine-products')
+            .send({ machineId: baseline.machine.id, productId: baseline.product.id })
+        expect(res.status).toBe(409)
+        expect(errorSpy).not.toHaveBeenCalled()
+        errorSpy.mockRestore()
+    })
+
+    it('does console.error a genuinely unrecognized error (falls through to 500)', async () => {
+        // ?limit=abc is a known, pre-existing gap (todo.md Group 4 #2): Number('abc')
+        // is NaN and Prisma throws on it, unrecognized by any mapped branch —
+        // exactly the case that should still be logged.
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+        const res = await request(app).get('/api/production-runs?limit=abc')
+        expect(res.status).toBe(500)
+        expect(errorSpy).toHaveBeenCalledTimes(1)
+        errorSpy.mockRestore()
     })
 })
 

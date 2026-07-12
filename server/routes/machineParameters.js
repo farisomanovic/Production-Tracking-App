@@ -84,8 +84,9 @@ router.post('/', async (req, res, next) => {
     } catch (error) {
         // P2002 here means either unique pair (already linked) or unique
         // displayOrder collided — both surface as the friendlier duplicate message.
+        // Status (409) is the central error middleware's call, not this route's.
         if (error.code === 'P2002') {
-            return res.status(409).json({ error: 'This parameter is already linked to this machine' })
+            error.clientMessage = 'This parameter is already linked to this machine'
         }
         next(error)
     }
@@ -95,7 +96,7 @@ router.post('/', async (req, res, next) => {
  * Changes one link's displayOrder (form position).
  *
  * @param {import('express').Request} req - `params.id` link UUID; `body.displayOrder` (required integer).
- * @param {import('express').Response} res - 200 → updated link (with `parameter`); 400 missing displayOrder; 409 displayOrder collision; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → updated link (with `parameter`); 400 missing displayOrder; 404 unknown link id; 409 displayOrder collision; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -126,7 +127,7 @@ router.put('/:id', async (req, res) => {
  * Unlinks a parameter from a machine by link-table primary key.
  *
  * @param {import('express').Request} req - `params.id` is the MachineParameter link UUID (not the parameter id).
- * @param {import('express').Response} res - 200 → confirmation message; 409 if run history references this link; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → confirmation message; 404 unknown link id; 409 if run history references this link; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example

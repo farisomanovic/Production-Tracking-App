@@ -11,17 +11,16 @@ import { AppError } from '../lib/errors.js'
 
 // eslint-disable-next-line no-unused-vars
 export default function errorHandler(err, req, res, next) {
-    // Single logging point for every unhandled error, replacing the
-    // console.error that used to live in every route's catch block.
-    console.error(`${req.method} ${req.originalUrl}:`, err)
-
     if (err instanceof AppError) {
         return res.status(err.status).json({ error: err.message })
     }
 
-    // Unique constraint violation (e.g. a duplicate code/name).
+    // Unique constraint violation (e.g. a duplicate code/name). A route can
+    // tag the error with a friendlier, resource-specific message before
+    // forwarding it here (see machineParameters.js/machineProducts.js) — the
+    // status is always 409 regardless, so routes never need to restate it.
     if (err.code === 'P2002') {
-        return res.status(409).json({ error: 'A record with this value already exists' })
+        return res.status(409).json({ error: err.clientMessage || 'A record with this value already exists' })
     }
 
     // Foreign key constraint violation. Prisma doesn't distinguish direction,
@@ -35,7 +34,11 @@ export default function errorHandler(err, req, res, next) {
     // PrismaClientUnknownRequestError. Prefer the embedded Postgres SQLSTATE code
     // (23001 restrict_violation / 23503 foreign_key_violation — part of the SQL
     // standard, unaffected by message wording or locale) and fall back to matching
-    // the English phrase only if the code isn't present in the message.
+    // the English phrase only if the code isn't present in the message. This is
+    // the best signal available today — Prisma doesn't expose a stable code for
+    // this error class — so it fails safe (falls through to a 500, not a wrong
+    // status) if a future Prisma version reformats the message. Re-verify this
+    // detection after any Prisma major-version upgrade (todo.md Group 8).
     const sqlState = err.message?.match(/"code":\s*"(\d{5})"/)?.[1]
     const isForeignKeyViolation = err.code === 'P2003' ||
         (err.name === 'PrismaClientUnknownRequestError' &&
@@ -61,5 +64,12 @@ export default function errorHandler(err, req, res, next) {
         return res.status(expressStatus).json({ error: 'Malformed request' })
     }
 
+    // Only reached for errors nothing above recognized — matching the
+    // pre-refactor convention where routes only console.error'd truly
+    // unexpected failures, not routine, already-classified 4xx outcomes
+    // (a double-completed run, a duplicate code, a stock conflict). Keep
+    // this the last statement in the function: anything added below it
+    // would silently stop being logged on this fallback path.
+    console.error(`${req.method} ${req.originalUrl}:`, err)
     res.status(500).json({ error: 'Something went wrong' })
 }
