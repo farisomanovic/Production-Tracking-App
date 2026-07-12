@@ -21,17 +21,12 @@ const router = Router()
  * // → 200 [{ id: "88c1…", product: { name: "PP traka 12mm", code: "PP-12" } }]
  */
 router.get('/machine/:machineId', async (req, res) => {
-    try {
-        const links = await prisma.machineProduct.findMany({
-            where: { machineId: req.params.machineId },
-            orderBy: { product: { name: 'asc' } },
-            include: { product: true }
-        })
-        res.json(links)
-    } catch (error) {
-        console.error('GET all products for specific machine with product details Error:', error)
-        res.status(500).json({ error: 'Failed to fetch machine products' })
-    }
+    const links = await prisma.machineProduct.findMany({
+        where: { machineId: req.params.machineId },
+        orderBy: { product: { name: 'asc' } },
+        include: { product: true }
+    })
+    res.json(links)
 })
 
 /**
@@ -39,14 +34,14 @@ router.get('/machine/:machineId', async (req, res) => {
  * unique pair rather than a pre-check, so concurrent requests can't sneak past.
  *
  * @param {import('express').Request} req - `body.machineId`, `body.productId` (both required UUIDs).
- * @param {import('express').Response} res - 201 → created link; 400 missing ids or duplicate; 500 on DB failure.
+ * @param {import('express').Response} res - 201 → created link; 400 missing ids or bad reference; 409 duplicate; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
  * // POST /api/machine-products  { "machineId": "7cd0…", "productId": "c771…" }
  * // → 201 { id: "88c1…", machineId: "7cd0…", productId: "c771…" }
  */
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
     try {
         const { machineId, productId } = req.body
         if (!machineId || !productId) {
@@ -61,12 +56,9 @@ router.post('/', async (req, res) => {
         res.status(201).json(link)
     } catch (error) {
         if (error.code === 'P2002') {
-        return res.status(400).json({ error: 'This product is already linked to this machine' })
+            return res.status(409).json({ error: 'This product is already linked to this machine' })
         }
-        // TODO: a nonexistent machineId/productId arrives as P2003 and becomes a
-        // 500 — should be a 400 naming the bad reference. todo.md Group 4 #5.
-        console.error('POST link a product to a machine Error:', error)
-        res.status(500).json({ error: 'Failed to link product to machine' })
+        next(error)
     }
 })
 
@@ -75,7 +67,7 @@ router.post('/', async (req, res) => {
  * ProductionRun references the product directly, not this link row.
  *
  * @param {import('express').Request} req - `params.id` is the MachineProduct link UUID.
- * @param {import('express').Response} res - 200 → confirmation message; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → confirmation message; 404 unknown id; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -83,16 +75,10 @@ router.post('/', async (req, res) => {
  * // → 200 { message: "Product unlinked from machine successfully" }
  */
 router.delete('/:id', async (req, res) => {
-    try {
-        await prisma.machineProduct.delete({
-            where: { id: req.params.id }
-        })
-        res.json({ message: 'Product unlinked from machine successfully' })
-    } catch (error) {
-        // TODO: unknown id → P2025 → 500; should be 404. todo.md Group 4 #5.
-        console.error('DELETE unlink a product from a machine Error:', error)
-        res.status(500).json({ error: 'Failed to unlink product from machine' })
-    }
+    await prisma.machineProduct.delete({
+        where: { id: req.params.id }
+    })
+    res.json({ message: 'Product unlinked from machine successfully' })
 })
 
 export default router

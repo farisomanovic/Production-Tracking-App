@@ -23,18 +23,13 @@ const router = Router()
  * // → 200 [{ id: "b3f1…", name: "Amar", active: true }, …]
  */
 router.get('/', async (req, res) => {
-  try {
-    const operators = await prisma.operator.findMany({
-      orderBy: { name: 'asc' }
-    })
-    // TODO: dropdown consumers (new-run wizard) need only active operators but
-    // currently filter client-side — an unfiltered caller can still pick an
-    // inactive operator. Consider ?active=true support. todo.md Group 3 #8.
-    res.json(operators)
-  } catch (error) {
-    console.error('GET all /operators error:', error)
-    res.status(500).json({ error: 'Failed to fetch operators' })
-  }
+  const operators = await prisma.operator.findMany({
+    orderBy: { name: 'asc' }
+  })
+  // TODO: dropdown consumers (new-run wizard) need only active operators but
+  // currently filter client-side — an unfiltered caller can still pick an
+  // inactive operator. Consider ?active=true support. todo.md Group 3 #8.
+  res.json(operators)
 })
 
 /**
@@ -49,18 +44,13 @@ router.get('/', async (req, res) => {
  * // → 200 { id: "b3f1c2d4-…", name: "Amar", active: true }
  */
 router.get('/:id', async (req, res) => {
-  try {
-    const operator = await prisma.operator.findUnique({
-      where: { id: req.params.id }
-    })
-    if (!operator) {
-      return res.status(404).json({ error: 'Operator not found' })
-    }
-    res.json(operator)
-  } catch (error) {
-    console.error('GET single /operators error:', error)
-    res.status(500).json({ error: 'Failed to fetch operator' })
+  const operator = await prisma.operator.findUnique({
+    where: { id: req.params.id }
+  })
+  if (!operator) {
+    return res.status(404).json({ error: 'Operator not found' })
   }
+  res.json(operator)
 })
 
 /**
@@ -76,28 +66,23 @@ router.get('/:id', async (req, res) => {
  * // → 201 { id: "9a2e…", name: "Emina", active: true }
  */
 router.post('/', async (req, res) => {
-  try {
-    const { name } = req.body
-    // TODO: "   " passes this check — trim and enforce a minimum length before
-    // the database fills up with blank names. todo.md Group 3 #8.
-    if (!name) {
-      return res.status(400).json({ error: 'name is required' })
-    }
-    const operator = await prisma.operator.create({
-      data: { name }
-    })
-    res.status(201).json(operator)
-  } catch (error) {
-    console.error('POST /operators error:', error)
-    res.status(500).json({ error: 'Failed to create operator' })
+  const { name } = req.body
+  // TODO: "   " passes this check — trim and enforce a minimum length before
+  // the database fills up with blank names. todo.md Group 3 #8.
+  if (!name) {
+    return res.status(400).json({ error: 'name is required' })
   }
+  const operator = await prisma.operator.create({
+    data: { name }
+  })
+  res.status(201).json(operator)
 })
 
 /**
  * Partially updates an operator; `active: false` is the soft-delete path.
  *
  * @param {import('express').Request} req - `params.id` UUID; `body.name` and/or `body.active`, both optional.
- * @param {import('express').Response} res - 200 → updated Operator; 500 on failure (including unknown id).
+ * @param {import('express').Response} res - 200 → updated Operator; 404 unknown id; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -105,28 +90,20 @@ router.post('/', async (req, res) => {
  * // → 200 { id: "b3f1c2d4-…", name: "Amar", active: false }
  */
 router.put('/:id', async (req, res) => {
-  try {
-    const { name, active } = req.body
-    const operator = await prisma.operator.update({
-      where: { id: req.params.id },
-      data: {
-        // Spread-if-defined so omitted fields stay untouched — a plain
-        // `{ name, active }` would overwrite missing fields with undefined/null.
-        ...(name !== undefined && { name }),
-        ...(active !== undefined && { active }),
-      }
-    })
-    res.json(operator)
-  } catch (error) {
-    // TODO: an unknown id lands here as Prisma P2025 and becomes a 500 — it
-    // should map to 404. Central error middleware fixes this everywhere at once
-    // (todo.md Group 4 #5).
-    // TODO: deactivation is allowed even while this operator has an in_progress
-    // run, which orphans the live run's context. Check for open runs before
-    // accepting active: false. todo.md Group 3 #5.
-    console.error('PUT /operators error:', error)
-    res.status(500).json({ error: 'Failed to update operator' })
-  }
+  const { name, active } = req.body
+  // TODO: deactivation is allowed even while this operator has an in_progress
+  // run, which orphans the live run's context. Check for open runs before
+  // accepting active: false. todo.md Group 3 #5.
+  const operator = await prisma.operator.update({
+    where: { id: req.params.id },
+    data: {
+      // Spread-if-defined so omitted fields stay untouched — a plain
+      // `{ name, active }` would overwrite missing fields with undefined/null.
+      ...(name !== undefined && { name }),
+      ...(active !== undefined && { active }),
+    }
+  })
+  res.json(operator)
 })
 
 export default router

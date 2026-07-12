@@ -17,6 +17,7 @@ import machineParametersRouter from './routes/machineParameters.js'
 import machineProductsRouter from './routes/machineProducts.js'
 import recipesRouter from './routes/recipes.js'
 import productionRunsRouter from './routes/productionRuns.js'
+import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
 
@@ -55,8 +56,8 @@ app.get('/ping', (req, res) => {
   res.json({ message: 'Server is alive!' })
 })
 
-// TODO: no central error middleware — every router hand-rolls try/catch and most
-// failures collapse to a generic 500. One `app.use((err, req, res, next) => …)`
-// registered here, LAST (Express only treats 4-arg functions as error handlers),
-// would fix the wrong status codes in one place. See todo.md Group 4 #5.
+// Registered LAST: Express only treats 4-arg functions as error handlers, and
+// routing only reaches here for errors thrown/rejected anywhere above.
+app.use(errorHandler)
+
 export default app

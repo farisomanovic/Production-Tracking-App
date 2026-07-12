@@ -22,15 +22,10 @@ const router = Router()
  * // → 200 [{ id: "e01b…", name: "Melt temp", unit: "°C", description: null }]
  */
 router.get('/', async (req, res) => {
-    try {
-        const parameters = await prisma.parameter.findMany({
-            orderBy: { name: 'asc' }
-        })
-        res.json(parameters)
-    } catch (error) {
-        console.error('GET all /parameters error:', error)
-        res.status(500).json({ error: 'Failed to fetch parameters' })
-    }
+    const parameters = await prisma.parameter.findMany({
+        orderBy: { name: 'asc' }
+    })
+    res.json(parameters)
 })
 
 /**
@@ -45,18 +40,13 @@ router.get('/', async (req, res) => {
  * // → 200 { id: "e01b…", name: "Melt temp", unit: "°C", description: null }
  */
 router.get('/:id', async (req, res) => {
-    try {
-        const parameter = await prisma.parameter.findUnique({
-            where: { id: req.params.id }
-        })
-        if (!parameter) {
-            return res.status(404).json({ error: 'Parameter not found' })
-        }
-        res.json(parameter)
-    } catch (error) {
-        console.error('GET single /parameters error:', error)
-        res.status(500).json({ error: 'Failed to fetch parameter' })
+    const parameter = await prisma.parameter.findUnique({
+        where: { id: req.params.id }
+    })
+    if (!parameter) {
+        return res.status(404).json({ error: 'Parameter not found' })
     }
+    res.json(parameter)
 })
 
 /**
@@ -71,32 +61,27 @@ router.get('/:id', async (req, res) => {
  * // → 201 { id: "f4a9…", name: "Line speed", unit: "m/min", description: null }
  */
 router.post('/', async (req, res) => {
-    try {
-        const { name, unit, description } = req.body
-        if (!name) {
-            return res.status(400).json({ error: 'name is required' })
-        }
-        // TODO: name has no unique constraint, so two "Melt temp" parameters can
-        // coexist — and the XLSX export matches columns BY NAME, silently merging
-        // them. Needs @unique in the schema. todo.md Group 5 #5.
-        const parameter = await prisma.parameter.create({
-            data: { name,
-                ...(unit !== undefined && { unit }),
-                ...(description !== undefined && { description })
-            }
-        })
-        res.status(201).json(parameter)
-    } catch (error) {
-        console.error('POST /parameters error:', error)
-        res.status(500).json({ error: 'Failed to create parameter' })
+    const { name, unit, description } = req.body
+    if (!name) {
+        return res.status(400).json({ error: 'name is required' })
     }
+    // TODO: name has no unique constraint, so two "Melt temp" parameters can
+    // coexist — and the XLSX export matches columns BY NAME, silently merging
+    // them. Needs @unique in the schema. todo.md Group 5 #5.
+    const parameter = await prisma.parameter.create({
+        data: { name,
+            ...(unit !== undefined && { unit }),
+            ...(description !== undefined && { description })
+        }
+    })
+    res.status(201).json(parameter)
 })
 
 /**
  * Partially updates a parameter definition.
  *
  * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.unit`, `body.description`.
- * @param {import('express').Response} res - 200 → updated Parameter; 500 on failure (including unknown id).
+ * @param {import('express').Response} res - 200 → updated Parameter; 404 unknown id; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -104,23 +89,17 @@ router.post('/', async (req, res) => {
  * // → 200 { id: "e01b…", name: "Melt temp", unit: "°F", description: null }
  */
 router.put('/:id', async (req, res) => {
-    try {
-        const { name, unit, description } = req.body
-        const parameter = await prisma.parameter.update({
-            where: { id: req.params.id },
-            data: {
-                // Spread-if-defined keeps omitted fields untouched (partial update).
-                ...(name !== undefined && { name }),
-                ...(unit !== undefined && { unit }),
-                ...(description !== undefined && { description })
-            }
-        })
-        res.json(parameter)
-    } catch (error) {
-        // TODO: unknown id → P2025 → 500 here; should be 404. todo.md Group 4 #5.
-        console.error('PUT /parameters error:', error)
-        res.status(500).json({ error: 'Failed to update parameter' })
-    }
+    const { name, unit, description } = req.body
+    const parameter = await prisma.parameter.update({
+        where: { id: req.params.id },
+        data: {
+            // Spread-if-defined keeps omitted fields untouched (partial update).
+            ...(name !== undefined && { name }),
+            ...(unit !== undefined && { unit }),
+            ...(description !== undefined && { description })
+        }
+    })
+    res.json(parameter)
 })
 
 export default router
