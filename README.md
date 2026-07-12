@@ -81,20 +81,23 @@ Defined in `server/prisma/schema.prisma`.
 | `MachineParameter` | Which parameters a machine collects, and in what order (`displayOrder`). |
 | `MachineProduct` | Which products a machine is allowed to produce. |
 | `Recipe` / `RecipeItem` | A product's material formula (percentages should total 100). |
-| `ProductionRun` | The transactional record: operator, machine, product, recipe, timing, energy, status (`in_progress` -> `completed`), notes, buyer. |
-| `RunParameterValue`, `MaterialUsage`, `RunOutput` | Per-run measurements, material consumption, and produced quantities. |
+| `ProductionRun` | The transactional record: operator, machine, product, recipe, timing, energy, status (`in_progress` -> `completed`), notes, buyer, and run-level weights recorded at completion (`netWeightPerUnit`, `grossWeightPerUnit`, `scrapKg`). |
+| `RunParameterValue`, `MaterialUsage`, `RunOutput` | Per-run measurements, material consumption, and produced quantities (weights live on the run, not on outputs). |
 
 ## Key Behaviors
 
-- **Two-step run lifecycle:** a run is created (`in_progress`) with header info, then completed later with measurements, material usage, and outputs. Completion runs inside a single Prisma transaction that updates status, records usage, decrements material stock, and creates output rows together.
+- **Two-step run lifecycle:** a run is created (`in_progress`) with header info, then completed later with measurements, material usage, and outputs. Completion runs inside a single Prisma transaction that updates status, records usage, decrements material stock, and creates output rows together. Stock can never go negative — completing a run that would overdraw a material is rejected.
+- **Run creation is validated relationally:** the machine must exist and be active, be linked to the chosen product, and the recipe must belong to that product.
+- **Cancelling an abandoned run:** a run created by the wizard but never completed can be cancelled (deleted) from its detail page, so half-started runs don't linger as `in_progress`.
+- **Overnight runs:** an `endTime` earlier than `startTime` is rolled over to the next day instead of being rejected as invalid.
 - **Deleting a completed run** restores the material stock it had consumed and removes its dependent records, transactionally.
 - **Soft deletion:** operators and machines are never hard-deleted, only flagged `active: false`, so old runs keep valid references.
-- **Recipe validation:** recipe items must sum to 100% before a recipe can be saved.
+- **Recipe validation:** recipe items must sum to 100% (within a small floating-point tolerance) before a recipe can be saved, and each item's percentage must be greater than 0 and at most 100.
 - **Theme:** light/dark mode is toggled from the bottom nav and persisted to `localStorage`.
 
 ## Known Limitations
 
-This is a student project under active development — several things are intentionally not production-hardened yet (no auth, open CORS, etc).
+This is a student project under active development — several things are intentionally not production-hardened yet (no auth, no roles/permissions, etc).
 
 ## Setup
 
@@ -111,11 +114,15 @@ cd server
 npm install
 ```
 
-Create `server/.env`:
+Create `server/.env` (copy `server/.env.example` and adjust):
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/production_tracker?schema=public"
+PORT=3000
+CLIENT_ORIGIN=http://localhost:5173
 ```
+
+`PORT` is where Express listens; `CLIENT_ORIGIN` is the only origin CORS accepts.
 
 Generate the Prisma client and apply migrations:
 
@@ -141,6 +148,8 @@ npm run dev
 ```
 
 Vite prints the local URL, typically `http://localhost:5173`.
+
+The client reads the API base URL from `VITE_API_URL` and falls back to `http://localhost:3000/api`. If your backend runs elsewhere, copy `client/.env.example` to `client/.env` and adjust it.
 
 ## Testing
 
