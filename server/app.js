@@ -18,9 +18,14 @@ import machineProductsRouter from './routes/machineProducts.js'
 import recipesRouter from './routes/recipes.js'
 import productionRunsRouter from './routes/productionRuns.js'
 import errorHandler from './middleware/errorHandler.js'
+import { assertClientOriginConfigured } from './lib/assertClientOrigin.js'
 
 const app = express()
 
+// cors() treats a falsy origin option the same as origin: '*' (allow any
+// origin) — a missing env var must crash loudly here, not silently open
+// CORS to every site. See todo.md Group 1 #5.
+assertClientOriginConfigured(process.env.CLIENT_ORIGIN)
 app.use(cors({ origin: process.env.CLIENT_ORIGIN }))
 // Registered before the routers on purpose: express.json() is what fills req.body,
 // and Express runs middleware strictly in registration order — moved below the
