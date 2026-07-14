@@ -146,7 +146,8 @@ router.get('/:id', async (req, res) => {
  *
  * @param {import('express').Request} req - Required body: `date`, `startTime`, `operatorId`, `machineId`,
  * `productId`, `recipeId`. Optional: `warmupStartTime`, `stableStartTime`, `energyStart`, `notes`, `potentialBuyer`.
- * @param {import('express').Response} res - 201 → created run with relations; 400 on validation failure; 500 on DB failure.
+ * @param {import('express').Response} res - 201 → created run with relations; 400 on validation failure;
+ * 409 if the machine's in-progress slot was taken by a concurrent request; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -155,7 +156,7 @@ router.get('/:id', async (req, res) => {
  * //   "operatorId": "b3f1…", "machineId": "7cd0…", "productId": "c771…", "recipeId": "d1e2…" }
  * // → 201 { id: "ab12…", status: "in_progress", … }
  */
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
     const {
         date,
         startTime,
@@ -236,28 +237,43 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: 'Machine already has a run in progress' })
     }
 
-    const run = await prisma.productionRun.create({
-        data: {
-            date: parsedDate,
-            startTime: parsedStartTime,
-            operatorId,
-            machineId,
-            productId,
-            recipeId,
-            ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
-            ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
-            ...(energyStart !== undefined && { energyStart }),
-            ...(notes !== undefined && { notes }),
-            ...(potentialBuyer !== undefined && { potentialBuyer })
-        },
-        include: {
-            operator: true,
-            machine: true,
-            product: true,
-            recipe: true
+    try {
+        const run = await prisma.productionRun.create({
+            data: {
+                date: parsedDate,
+                startTime: parsedStartTime,
+                operatorId,
+                machineId,
+                productId,
+                recipeId,
+                ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
+                ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
+                ...(energyStart !== undefined && { energyStart }),
+                ...(notes !== undefined && { notes }),
+                ...(potentialBuyer !== undefined && { potentialBuyer })
+            },
+            include: {
+                operator: true,
+                machine: true,
+                product: true,
+                recipe: true
+            }
+        })
+        res.status(201).json(run)
+    } catch (error) {
+        // The activeRunOnMachine check above is a fast path for the normal
+        // case only — it isn't atomic with this create, so two near-simultaneous
+        // POSTs for the same machine can both pass it. The DB-level backstop is
+        // the partial unique index ProductionRun_one_in_progress_per_machine
+        // (migration 20260714120000_production_run_one_in_progress_per_machine):
+        // the race loser's create hits it and Prisma reports P2002 here. Same
+        // clientMessage as the fast-path check, same pattern as
+        // machineParameters.js's POST handler.
+        if (error.code === 'P2002') {
+            error.clientMessage = 'Machine already has a run in progress'
         }
-    })
-    res.status(201).json(run)
+        next(error)
+    }
 })
 
 /**
