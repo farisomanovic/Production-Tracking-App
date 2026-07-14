@@ -176,3 +176,26 @@ describe('POST /api/production-runs — happy path and busy machine', () => {
         await prisma.productionRun.delete({ where: { id: busyRun.id } })
     })
 })
+
+describe('POST /api/production-runs — concurrent race on the same machine', () => {
+    it('lets exactly one of two simultaneous requests win; the loser gets 409, not 400', async () => {
+        const payload = validPayload()
+        const [first, second] = await Promise.all([post(payload), post(payload)])
+
+        const statuses = [first.status, second.status].sort()
+        expect(statuses).toEqual([201, 409])
+
+        const winner = first.status === 201 ? first : second
+        const loser = first.status === 201 ? second : first
+        expect(loser.body.error).toBe('Machine already has a run in progress')
+
+        const inProgressRuns = await prisma.productionRun.findMany({
+            where: { machineId: baseline.machine.id, status: 'in_progress' }
+        })
+        expect(inProgressRuns).toHaveLength(1)
+        expect(inProgressRuns[0].id).toBe(winner.body.id)
+
+        const del = await request(app).delete(`/api/production-runs/${winner.body.id}`)
+        expect(del.status).toBe(200)
+    })
+})
