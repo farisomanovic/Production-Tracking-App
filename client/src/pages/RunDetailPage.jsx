@@ -387,8 +387,6 @@ function handleMaterialChange(materialId, value) {
  * @example
  * recalculateMaterials('500', '1.5', '10')
  */
-// TODO: replaces ALL material inputs, including hand-corrected ones — same
-// behavior (and same fix) as wizard Step 4's calculator.
 function recalculateMaterials(qty, nw, scrap) {
     const q = Number(qty) || 0
     const n = Number(nw) || 0
@@ -406,9 +404,25 @@ function recalculateMaterials(qty, nw, scrap) {
 }
 
 /**
- * Updates the calculator's quantity and re-derives material amounts.
- * Note: does NOT update the output rows below — the calculator quantity and
- * output quantity are independent fields here, unlike in the wizard.
+ * Re-derives all material amounts from the current calculator fields. The
+ * only call site for recalculateMaterials — operators trigger this
+ * explicitly via the "Recalculate" button so a hand-corrected material
+ * quantity is never overwritten by a calculator keystroke.
+ *
+ * @returns {void}
+ *
+ * @example
+ * <button onClick={handleRecalculate}>Recalculate</button>
+ */
+function handleRecalculate() {
+    recalculateMaterials(quantityProduced, netWeightPerUnit, scrapKg)
+}
+
+/**
+ * Updates the calculator's quantity. Does not touch material amounts — see
+ * handleRecalculate. Also does NOT update the output rows below — the
+ * calculator quantity and output quantity are independent fields here,
+ * unlike in the wizard.
  *
  * @param {string} value - Raw input string.
  * @returns {void}
@@ -418,11 +432,11 @@ function recalculateMaterials(qty, nw, scrap) {
  */
 function handleQuantityChange(value) {
     setQuantityProduced(value)
-    recalculateMaterials(value, netWeightPerUnit, scrapKg)
 }
 
 /**
- * Updates the calculator's neto unit weight and re-derives material amounts.
+ * Updates the calculator's neto unit weight. Does not touch material
+ * amounts — see handleRecalculate.
  *
  * @param {string} value - Raw input string.
  * @returns {void}
@@ -432,12 +446,11 @@ function handleQuantityChange(value) {
  */
 function handleNetWeightChange(value) {
     setNetWeightPerUnit(value)
-    recalculateMaterials(quantityProduced, value, scrapKg)
 }
 
 /**
- * Updates the calculator's total scrap and re-derives material amounts —
- * scrapped kg consumed material too, so it feeds the same recipe split.
+ * Updates the calculator's total scrap. Does not touch material amounts —
+ * see handleRecalculate.
  *
  * @param {string} value - Raw input string.
  * @returns {void}
@@ -447,7 +460,6 @@ function handleNetWeightChange(value) {
  */
 function handleScrapChange(value) {
     setScrapKg(value)
-    recalculateMaterials(quantityProduced, netWeightPerUnit, value)
 }
 
 /**
@@ -735,6 +747,13 @@ return (
             </div>
             </div>
         </div>
+        <button
+            type='button'
+            style={styles.addButton}
+            onClick={handleRecalculate}
+        >
+            Recalculate
+        </button>
         </div>
     )}
 
