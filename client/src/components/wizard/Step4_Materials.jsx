@@ -278,6 +278,7 @@ return (
                     type='number'
                     value={quantityProduced}
                     onChange={e => handleQuantityChange(e.target.value)}
+                    onWheel={e => e.target.blur()}
                     placeholder='e.g. 500'
                     min='0'
                     step='1'
@@ -293,6 +294,7 @@ return (
                     type='number'
                     value={netWeightPerUnit}
                     onChange={e => handleNetWeightChange(e.target.value)}
+                    onWheel={e => e.target.blur()}
                     placeholder='e.g. 1.5'
                     min='0'
                     step='0.01'
@@ -308,6 +310,7 @@ return (
                     type='number'
                     value={grossWeightPerUnit}
                     onChange={e => handleGrossWeightChange(e.target.value)}
+                    onWheel={e => e.target.blur()}
                     placeholder='e.g. 1.6'
                     min='0'
                     step='0.01'
@@ -323,6 +326,7 @@ return (
                     type='number'
                     value={scrapKg}
                     onChange={e => handleScrapChange(e.target.value)}
+                    onWheel={e => e.target.blur()}
                     placeholder='e.g. 10'
                     min='0'
                     step='0.1'
@@ -356,6 +360,7 @@ return (
                     type='number'
                     value={values[item.materialId] ?? ''}
                     onChange={e => handleChange(item.materialId, e.target.value)}
+                    onWheel={e => e.target.blur()}
                     placeholder='Enter kg used'
                     min='0'
                     step='0.1'

@@ -256,6 +256,7 @@ return (
         type='number'
         value={energyStart}
         onChange={e => setEnergyStart(e.target.value)}
+        onWheel={e => e.target.blur()}
         placeholder='e.g. 12400'
         />
     </div>
