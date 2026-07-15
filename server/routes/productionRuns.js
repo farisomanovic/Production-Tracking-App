@@ -13,6 +13,7 @@ import {
     UnknownMaterialError,
     InsufficientStockError
 } from '../lib/errors.js'
+import { hasDuplicates, allBelongTo } from '../lib/validation.js'
 
 const router = Router()
 
@@ -387,13 +388,24 @@ router.post('/:id/complete', async (req, res) => {
     // API calls and client bugs. startTime is immutable after creation
     // (PUT never accepts it), so this pre-transaction read cannot go stale.
     // Also pulls the run's machine/recipe context (their parameter list,
-    // product whitelist, and recipe items) in the same round trip — these
-    // small related sets are what the relational checks below validate against.
+    // product whitelist, and recipe items) in the same round trip — narrowed
+    // to just the id fields the relational checks below actually read, since
+    // these collections scale with how much a machine/recipe has configured.
     const existing = await prisma.productionRun.findUnique({
         where: { id: req.params.id },
-        include: {
-            machine: { include: { machineParameters: true, machineProducts: true } },
-            recipe: { include: { recipeItems: true } }
+        select: {
+            startTime: true,
+            machine: {
+                select: {
+                    machineParameters: { select: { id: true } },
+                    machineProducts: { select: { productId: true } }
+                }
+            },
+            recipe: {
+                select: {
+                    recipeItems: { select: { materialId: true } }
+                }
+            }
         }
     })
     if (!existing) {
@@ -449,11 +461,11 @@ router.post('/:id/complete', async (req, res) => {
     // @@unique constraint mid-transaction — check before the transaction so
     // the client gets a clean, specific 400 instead of a generic P2002 409.
     const machineParameterIds = parameterValues.map(p => p.machineParameterId)
-    if (new Set(machineParameterIds).size !== machineParameterIds.length) {
+    if (hasDuplicates(machineParameterIds)) {
         return res.status(400).json({ error: 'parameterValues contains a duplicate machineParameterId' })
     }
     const materialIds = (materialUsages || []).map(m => m.materialId)
-    if (new Set(materialIds).size !== materialIds.length) {
+    if (hasDuplicates(materialIds)) {
         return res.status(400).json({ error: 'materialUsages contains a duplicate materialId' })
     }
 
@@ -463,15 +475,15 @@ router.post('/:id/complete', async (req, res) => {
     // recipe could silently decrement unrelated stock, or an output could
     // record a product the machine isn't configured to make.
     const validMachineParameterIds = new Set(existing.machine.machineParameters.map(mp => mp.id))
-    if (machineParameterIds.some(id => !validMachineParameterIds.has(id))) {
+    if (!allBelongTo(machineParameterIds, validMachineParameterIds)) {
         return res.status(400).json({ error: "One or more parameterValues reference a machine parameter that does not belong to this run's machine" })
     }
     const validProductIds = new Set(existing.machine.machineProducts.map(mp => mp.productId))
-    if (outputs.some(o => !validProductIds.has(o.productId))) {
+    if (!allBelongTo(outputs.map(o => o.productId), validProductIds)) {
         return res.status(400).json({ error: "One or more outputs reference a product not assigned to this run's machine" })
     }
     const validMaterialIds = new Set(existing.recipe.recipeItems.map(ri => ri.materialId))
-    if (materialIds.some(id => !validMaterialIds.has(id))) {
+    if (!allBelongTo(materialIds, validMaterialIds)) {
         return res.status(400).json({ error: "One or more materialUsages reference a material that is not part of this run's recipe" })
     }
 

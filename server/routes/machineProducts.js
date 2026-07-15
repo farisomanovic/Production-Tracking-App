@@ -6,6 +6,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { machineHasRunInProgress } from '../lib/machineGuards.js'
 
 const router = Router()
 
@@ -69,7 +70,8 @@ router.post('/', async (req, res, next) => {
  * ProductionRun references the product directly, not this link row.
  *
  * @param {import('express').Request} req - `params.id` is the MachineProduct link UUID.
- * @param {import('express').Response} res - 200 → confirmation message; 404 unknown id; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → confirmation message; 404 unknown id;
+ * 409 if the machine has a run in progress; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -77,6 +79,17 @@ router.post('/', async (req, res, next) => {
  * // → 200 { message: "Product unlinked from machine successfully" }
  */
 router.delete('/:id', async (req, res) => {
+    const link = await prisma.machineProduct.findUnique({
+        where: { id: req.params.id },
+        select: { machineId: true }
+    })
+    // 409, not 400: this rejects because of a conflicting CURRENT state (a run
+    // in progress), not bad input. Known residual race: this is a plain
+    // read-then-act, not transaction-wrapped, so a run created in the gap
+    // between this check and the delete below could still slip through.
+    if (link && await machineHasRunInProgress(link.machineId)) {
+        return res.status(409).json({ error: 'Cannot unlink this product while the machine has a run in progress' })
+    }
     await prisma.machineProduct.delete({
         where: { id: req.params.id }
     })
