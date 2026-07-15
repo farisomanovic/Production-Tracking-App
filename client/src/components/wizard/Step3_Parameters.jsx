@@ -140,6 +140,7 @@ return (
                 type='number'
                 value={values[mp.id] ?? ''}
                 onChange={e => handleChange(mp.id, e.target.value)}
+                onWheel={e => e.target.blur()}
                 placeholder='Enter value'
             />
             </div>

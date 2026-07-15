@@ -246,6 +246,7 @@ return (
         type='number'
         value={energyEnd}
         onChange={e => setEnergyEnd(e.target.value)}
+        onWheel={e => e.target.blur()}
         placeholder='e.g. 12500'
         />
     </div>
@@ -305,6 +306,7 @@ return (
                 type='number'
                 value={output.quantityProduced}
                 onChange={e => handleOutputChange(output.id, 'quantityProduced', e.target.value)}
+                onWheel={e => e.target.blur()}
                 placeholder='0'
                 min='0'
                 step='1'

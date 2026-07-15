@@ -121,6 +121,7 @@ function MaterialsPage() {
           placeholder="Stock Quantity (optional)"
           value={stockQty}
           onChange={(e) => setStockQty(e.target.value)}
+          onWheel={(e) => e.target.blur()}
         />
         <button style={common.button} onClick={handleSubmit}>
           Add Material

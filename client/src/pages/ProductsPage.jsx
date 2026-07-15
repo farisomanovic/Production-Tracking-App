@@ -96,6 +96,7 @@ function ProductsPage() {
           placeholder="Width Mm (optional)"
           value={widthMm}
           onChange={(e) => setWidthMm(e.target.value)}
+          onWheel={(e) => e.target.blur()}
         />
         <input
           style={common.input}
@@ -103,6 +104,7 @@ function ProductsPage() {
           placeholder="Thickness Mm (optional)"
           value={thicknessMm}
           onChange={(e) => setThicknessMm(e.target.value)}
+          onWheel={(e) => e.target.blur()}
         />
         <input
           style={common.input}
@@ -110,6 +112,7 @@ function ProductsPage() {
           placeholder="Length M (optional)"
           value={lengthM}
           onChange={(e) => setLengthM(e.target.value)}
+          onWheel={(e) => e.target.blur()}
         />
         <input
           style={common.input}

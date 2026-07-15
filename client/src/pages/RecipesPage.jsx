@@ -226,6 +226,7 @@ function RecipesPage() {
               placeholder="%"
               value={percentage}
               onChange={(e) => setPercentage(e.target.value)}
+              onWheel={(e) => e.target.blur()}
             />
             <button style={styles.addItemButton} onClick={handleAddItem}>
               Add
