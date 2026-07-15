@@ -354,7 +354,8 @@ router.put('/:id', async (req, res) => {
  * `energyEnd`/`notes` optional, run-level weights `netWeightPerUnit`/
  * `grossWeightPerUnit`/`scrapKg` optional (numbers ≥ 0).
  * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid payload
- * (including an unparseable endTime or one at/before the run's startTime);
+ * (including an unparseable endTime, one at/before the run's startTime, a duplicate id within
+ * `parameterValues`/`materialUsages`, or any id that doesn't belong to this run's machine/recipe);
  * 404 unknown run; 409 already completed or insufficient stock; 500 on transaction failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -385,9 +386,15 @@ router.post('/:id/complete', async (req, res) => {
     // overnight end times to the next day; this is the backstop for direct
     // API calls and client bugs. startTime is immutable after creation
     // (PUT never accepts it), so this pre-transaction read cannot go stale.
+    // Also pulls the run's machine/recipe context (their parameter list,
+    // product whitelist, and recipe items) in the same round trip — these
+    // small related sets are what the relational checks below validate against.
     const existing = await prisma.productionRun.findUnique({
         where: { id: req.params.id },
-        select: { startTime: true }
+        include: {
+            machine: { include: { machineParameters: true, machineProducts: true } },
+            recipe: { include: { recipeItems: true } }
+        }
     })
     if (!existing) {
         throw new RunNotFoundError()
@@ -438,10 +445,36 @@ router.post('/:id/complete', async (req, res) => {
         }
     }
 
-    // TODO: no relational validation of the payload — parameterValues can
-    // reference another machine's machineParameterId, outputs.productId isn't
-    // checked against MachineProduct, and a duplicated machineParameterId in
-    // one payload hits @@unique → raw 500. todo.md Group 3 #6.
+    // Duplicate ids within one payload hit RunParameterValue's/MaterialUsage's
+    // @@unique constraint mid-transaction — check before the transaction so
+    // the client gets a clean, specific 400 instead of a generic P2002 409.
+    const machineParameterIds = parameterValues.map(p => p.machineParameterId)
+    if (new Set(machineParameterIds).size !== machineParameterIds.length) {
+        return res.status(400).json({ error: 'parameterValues contains a duplicate machineParameterId' })
+    }
+    const materialIds = (materialUsages || []).map(m => m.materialId)
+    if (new Set(materialIds).size !== materialIds.length) {
+        return res.status(400).json({ error: 'materialUsages contains a duplicate materialId' })
+    }
+
+    // Each id must belong to THIS run's machine/recipe, not just exist
+    // somewhere in the database — otherwise a parameter reading could be
+    // filed under another machine's config, a material outside the run's
+    // recipe could silently decrement unrelated stock, or an output could
+    // record a product the machine isn't configured to make.
+    const validMachineParameterIds = new Set(existing.machine.machineParameters.map(mp => mp.id))
+    if (machineParameterIds.some(id => !validMachineParameterIds.has(id))) {
+        return res.status(400).json({ error: "One or more parameterValues reference a machine parameter that does not belong to this run's machine" })
+    }
+    const validProductIds = new Set(existing.machine.machineProducts.map(mp => mp.productId))
+    if (outputs.some(o => !validProductIds.has(o.productId))) {
+        return res.status(400).json({ error: "One or more outputs reference a product not assigned to this run's machine" })
+    }
+    const validMaterialIds = new Set(existing.recipe.recipeItems.map(ri => ri.materialId))
+    if (materialIds.some(id => !validMaterialIds.has(id))) {
+        return res.status(400).json({ error: "One or more materialUsages reference a material that is not part of this run's recipe" })
+    }
+
     const run = await prisma.$transaction(async (tx) => {
         // Compare-and-swap: the status check and the flip are ONE atomic
         // UPDATE ... WHERE status = 'in_progress'. Concurrent completions
