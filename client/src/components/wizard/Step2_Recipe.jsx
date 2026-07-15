@@ -16,12 +16,14 @@ import { common } from '../../styles/common'
  * @param {Object} props.data - Accumulated wizard formData; `productId` drives the fetch,
  * `recipeId` restores a previous selection.
  * @param {Function} props.onNext - Called with `{ recipeId }`; the parent then creates the run.
+ * @param {boolean} props.isSubmitting - True while the parent's createRun call is in flight;
+ * disables Next so a double-click can't fire two run-creation requests.
  * @returns {JSX.Element}
  *
  * @example
- * <Step2_Recipe data={formData} onNext={handleStepNext} />
+ * <Step2_Recipe data={formData} onNext={handleStepNext} isSubmitting={isSubmitting} />
  */
-export default function Step2_Recipe({ data, onNext }) {
+export default function Step2_Recipe({ data, onNext, isSubmitting }) {
 
 const [recipes, setRecipes] = useState([])
 const [recipeId, setRecipeId] = useState(data.recipeId || '')
@@ -70,6 +72,8 @@ loadRecipes()
  * <button onClick={handleNext}>Next →</button>
  */
 function handleNext() {
+    if (isSubmitting) return
+
     if (!recipeId) {
     setError('Please select a recipe before continuing.')
     return
@@ -125,8 +129,12 @@ return (
         </div>
     )}
 
-    <button style={common.nextButton} onClick={handleNext}>
-        Next →
+    <button
+        style={{ ...common.nextButton, opacity: isSubmitting ? 0.6 : 1 }}
+        onClick={handleNext}
+        disabled={isSubmitting}
+    >
+        {isSubmitting ? 'Creating Run...' : 'Next →'}
     </button>
     </div>
 )

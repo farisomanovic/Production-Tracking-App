@@ -93,6 +93,11 @@ function NewRunPage() {
    * <Step1_BasicInfo data={formData} onNext={handleStepNext} />
    */
   async function handleStepNext(stepData) {
+    // Belt-and-suspenders: the Step 2 button disables itself on isSubmitting,
+    // but this closes the gap if a second click's handler already fired
+    // before that re-render lands.
+    if (isSubmitting) return
+
     // Local merge used immediately because setFormData is asynchronous — reading
     // formData right after setting it would hand stale data to handleCreateRun.
     const updatedData = { ...formData, ...stepData }
@@ -301,6 +306,7 @@ function NewRunPage() {
           <Step2_Recipe
             data={formData}
             onNext={handleStepNext}
+            isSubmitting={isSubmitting}
           />
         )
       case 3:
