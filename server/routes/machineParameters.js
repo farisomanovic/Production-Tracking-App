@@ -6,6 +6,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { machineHasRunInProgress } from '../lib/machineGuards.js'
 
 const router = Router()
 
@@ -127,7 +128,8 @@ router.put('/:id', async (req, res) => {
  * Unlinks a parameter from a machine by link-table primary key.
  *
  * @param {import('express').Request} req - `params.id` is the MachineParameter link UUID (not the parameter id).
- * @param {import('express').Response} res - 200 → confirmation message; 404 unknown link id; 409 if run history references this link; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → confirmation message; 404 unknown link id;
+ * 409 if run history references this link, or if the machine has a run in progress; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -135,6 +137,18 @@ router.put('/:id', async (req, res) => {
  * // → 200 { message: "Parameter unlinked from machine successfully" }
  */
 router.delete('/:id', async (req, res) => {
+    const link = await prisma.machineParameter.findUnique({
+        where: { id: req.params.id },
+        select: { machineId: true }
+    })
+    // 409, not 400: this rejects because of a conflicting CURRENT state (a run
+    // in progress), not bad input — matches how a history-referenced delete
+    // already 409s via P2003 below. Known residual race: this is a plain
+    // read-then-act, not transaction-wrapped, so a run created in the gap
+    // between this check and the delete below could still slip through.
+    if (link && await machineHasRunInProgress(link.machineId)) {
+        return res.status(409).json({ error: 'Cannot unlink this parameter while the machine has a run in progress' })
+    }
     // Once any completed run recorded a value for this link, RunParameterValue's
     // RESTRICT foreign key makes this delete throw P2003, which the central
     // error middleware maps to 409 (DELETE → "still referenced" reading).
