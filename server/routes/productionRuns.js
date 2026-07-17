@@ -284,7 +284,9 @@ router.post('/', async (req, res, next) => {
  *
  * @param {import('express').Request} req - `params.id` UUID; any subset of `notes`, `potentialBuyer`,
  * `warmupStartTime`, `stableStartTime`, `energyStart`, `energyEnd`, `endTime`.
- * @param {import('express').Response} res - 200 → updated run with relations; 404 unknown id; 500 on failure.
+ * @param {import('express').Response} res - 200 → updated run with relations; 400 an unparseable
+ * warmupStartTime/stableStartTime/endTime, or an endTime at/before startTime; 404 unknown id;
+ * 409 run is already completed (immutable once completed).
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -316,6 +318,23 @@ router.put('/:id', async (req, res) => {
     if (endTime !== undefined) {
         parsedEndTime = parseDateOr400(res, endTime, 'endTime')
         if (!parsedEndTime) return
+    }
+
+    // A completed run is meant to be an immutable log of what happened on
+    // the floor, and endTime must obey the same > startTime rule /complete
+    // enforces below — this route skipped both checks.
+    const existing = await prisma.productionRun.findUnique({
+        where: { id: req.params.id },
+        select: { startTime: true, status: true }
+    })
+    if (!existing) {
+        throw new RunNotFoundError()
+    }
+    if (existing.status === 'completed') {
+        throw new RunAlreadyCompletedError()
+    }
+    if (parsedEndTime !== undefined && parsedEndTime <= existing.startTime) {
+        return res.status(400).json({ error: 'endTime must be after the run start time' })
     }
 
     // TODO: no UI calls this endpoint yet (the client's updateRun helper is
