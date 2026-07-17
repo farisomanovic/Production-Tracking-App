@@ -103,7 +103,9 @@ router.get('/:id', async (req, res) => {
  * that the formula is complete (items exist and percentages total 100).
  *
  * @param {import('express').Request} req - `body.name`, `body.productId`, `body.items[]`
- * ({ materialId, percentage, plannedQtyKg? }) required; `body.isDefault`, `body.notes` optional.
+ * ({ materialId, percentage, plannedQtyKg? }) required; each item needs a unique, non-empty
+ * `materialId`, a `percentage` in (0, 100], and — if present — a positive `plannedQtyKg`.
+ * `body.isDefault`, `body.notes` optional.
  * @param {import('express').Response} res - 201 → created Recipe aggregate; 400 invalid formula or bad reference; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -127,9 +129,23 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: 'At least one recipe item is required' })
     }
 
+    const seenMaterialIds = new Set()
     for (const item of items) {
+        if (!item.materialId) {
+            return res.status(400).json({ error: 'Each recipe item needs a materialId' })
+        }
+        if (seenMaterialIds.has(item.materialId)) {
+            return res.status(400).json({ error: 'Each material can only appear once in a recipe' })
+        }
+        seenMaterialIds.add(item.materialId)
+
         if (!(typeof item.percentage === 'number' && item.percentage > 0 && item.percentage <= 100)) {
             return res.status(400).json({ error: 'Each recipe item needs a percentage greater than 0 and at most 100' })
+        }
+
+        if (item.plannedQtyKg !== undefined &&
+            !(typeof item.plannedQtyKg === 'number' && Number.isFinite(item.plannedQtyKg) && item.plannedQtyKg > 0)) {
+            return res.status(400).json({ error: 'plannedQtyKg must be a positive number when provided' })
         }
     }
     const total = items.reduce((sum, item) => sum + item.percentage, 0)
