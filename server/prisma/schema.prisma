@@ -140,7 +140,8 @@ model Material {
 
 // A product can have several formulas (e.g. virgin vs. regranulate mix), and one
 // formula can now be reused across several products via RecipeProduct.
-// isDefault marks the one the wizard preselects.
+// isDefault marks the one the wizard preselects. Soft-deleted via `active`,
+// same reasoning as Operator/Machine: ProductionRun history keeps a valid FK.
 // TODO: nothing enforces ONE default per product — several can be flagged and the
 // wizard picks arbitrarily. todo.md Group 5 #6.
 model Recipe {
@@ -148,6 +149,7 @@ model Recipe {
   name      String
   isDefault Boolean  @default(false)
   notes     String?
+  active    Boolean  @default(true)
 
   products       RecipeProduct[]
   recipeItems    RecipeItem[]

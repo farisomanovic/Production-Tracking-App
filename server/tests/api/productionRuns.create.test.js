@@ -24,6 +24,7 @@ let inactiveOperator
 let inactiveMachine
 let unlinkedProduct
 let recipeOfUnlinkedProduct
+let inactiveRecipe
 
 async function cleanup(machineId) {
     // in_progress runs on the baseline machine can only be leftovers from a
@@ -52,6 +53,9 @@ beforeAll(async () => {
     })
     recipeOfUnlinkedProduct = await prisma.recipe.create({
         data: { name: `${PREFIX} other recipe`, products: { create: [{ productId: unlinkedProduct.id }] } }
+    })
+    inactiveRecipe = await prisma.recipe.create({
+        data: { name: `${PREFIX} inactive recipe`, active: false, products: { create: [{ productId: baseline.product.id }] } }
     })
 })
 
@@ -152,6 +156,12 @@ describe('POST /api/production-runs — relational validation (PR #24)', () => {
         const res = await post({ ...validPayload(), recipeId: crypto.randomUUID() })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('Recipe does not exist')
+    })
+
+    it('rejects an inactive recipe with 400', async () => {
+        const res = await post({ ...validPayload(), recipeId: inactiveRecipe.id })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Recipe is inactive')
     })
 
     it("rejects another product's recipe with 400", async () => {

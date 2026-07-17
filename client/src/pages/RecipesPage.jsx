@@ -2,11 +2,12 @@
  * @file RecipesPage.jsx
  * @description Admin page for recipes: build a material formula item by item
  * with a live percentage total, and save only when it reaches exactly 100%.
- * Editing existing recipes has no UI yet.
+ * Also handles activate/deactivate (soft delete). Editing name/composition of
+ * an existing recipe has no UI yet.
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAllRecipes, createRecipe } from '../api/recipes'
+import { getAllRecipes, createRecipe, updateRecipe } from '../api/recipes'
 import { getAllMaterials } from '../api/materials'
 import { getAllProducts } from '../api/products'
 import { useApi } from '../hooks/useApi'
@@ -158,6 +159,45 @@ function RecipesPage() {
       reloadRecipes()
     } catch (err) {
       setActionError('Failed to create recipe')
+      console.error(err)
+    }
+  }
+
+  /**
+   * Soft-deletes a recipe (active: false) — hides it from the wizard's Step 2
+   * while keeping it (and any run history referencing it) intact.
+   *
+   * @param {string} id - Recipe UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleDeactivate('d1e2…')
+   */
+  async function handleDeactivate(id) {
+    try {
+      await updateRecipe(id, { active: false })
+      reloadRecipes()
+    } catch (err) {
+      setActionError('Failed to deactivate recipe')
+      console.error(err)
+    }
+  }
+
+  /**
+   * Reactivates a soft-deleted recipe so the wizard can offer it again.
+   *
+   * @param {string} id - Recipe UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleActivate('d1e2…')
+   */
+  async function handleActivate(id) {
+    try {
+      await updateRecipe(id, { active: true })
+      reloadRecipes()
+    } catch (err) {
+      setActionError('Failed to activate recipe')
       console.error(err)
     }
   }
@@ -314,7 +354,27 @@ function RecipesPage() {
                 </span>
               )}
             </div>
-            <span style={common.arrow}>›</span>
+            <div style={styles.cardRight}>
+              <span style={recipe.active ? styles.badgeActive : styles.badgeInactive}>
+                {recipe.active ? 'Active' : 'Inactive'}
+              </span>
+              {recipe.active ? (
+                <button
+                  style={styles.deactivateButton}
+                  onClick={(e) => { e.stopPropagation(); handleDeactivate(recipe.id) }}
+                >
+                  Deactivate
+                </button>
+              ) : (
+                <button
+                  style={styles.activateButton}
+                  onClick={(e) => { e.stopPropagation(); handleActivate(recipe.id) }}
+                >
+                  Activate
+                </button>
+              )}
+              <span style={common.arrow}>›</span>
+            </div>
           </div>
         ))}
       </div>
@@ -453,6 +513,43 @@ const styles = {
     color: 'var(--color-danger-strong)',
     fontSize: '13px',
     fontWeight: 'bold',
+  },
+  cardRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  badgeActive: {
+    fontSize: '12px',
+    color: 'var(--color-success-strong)',
+    backgroundColor: 'var(--color-success-surface)',
+    padding: '4px 8px',
+    borderRadius: '12px',
+  },
+  badgeInactive: {
+    fontSize: '12px',
+    color: 'var(--color-danger-strong)',
+    backgroundColor: 'var(--color-danger-surface)',
+    padding: '4px 8px',
+    borderRadius: '12px',
+  },
+  deactivateButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: 'var(--color-danger-surface)',
+    color: 'var(--color-danger-strong)',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
+  activateButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: 'var(--color-success-surface)',
+    color: 'var(--color-success-strong)',
+    fontSize: '12px',
+    cursor: 'pointer',
   },
 }
 
