@@ -89,6 +89,27 @@ describe('POST /api/recipes — item list shape', () => {
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('At least one recipe item is required')
     })
+
+    it('rejects a missing materialId with 400', async () => {
+        const res = await post({
+            ...validPayload(),
+            items: [{ percentage: 100 }]
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Each recipe item needs a materialId')
+    })
+
+    it('rejects a materialId repeated within one payload with 400', async () => {
+        const res = await post({
+            ...validPayload(),
+            items: [
+                { materialId: baseline.material.id, percentage: 60 },
+                { materialId: baseline.material.id, percentage: 40 }
+            ]
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Each material can only appear once in a recipe')
+    })
 })
 
 describe('POST /api/recipes — percentage validation', () => {
@@ -144,6 +165,36 @@ describe('POST /api/recipes — percentage validation', () => {
         })
         expect(res.status).toBe(201)
         expect(res.body.recipeItems).toHaveLength(3)
+    })
+})
+
+describe('POST /api/recipes — plannedQtyKg validation', () => {
+    it('rejects a string plannedQtyKg with 400', async () => {
+        const res = await post({
+            ...validPayload(),
+            items: [{ materialId: baseline.material.id, percentage: 100, plannedQtyKg: '5' }]
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('plannedQtyKg must be a positive number when provided')
+    })
+
+    it('rejects a zero or negative plannedQtyKg with 400', async () => {
+        const res = await post({
+            ...validPayload(),
+            items: [{ materialId: baseline.material.id, percentage: 100, plannedQtyKg: 0 }]
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('plannedQtyKg must be a positive number when provided')
+    })
+
+    it('accepts a positive plannedQtyKg and round-trips it', async () => {
+        const res = await post({
+            ...validPayload(),
+            items: [{ materialId: baseline.material.id, percentage: 100, plannedQtyKg: 12.5 }]
+        })
+        expect(res.status).toBe(201)
+        expect(res.body.recipeItems).toHaveLength(1)
+        expect(res.body.recipeItems[0].plannedQtyKg).toBe(12.5)
     })
 })
 
