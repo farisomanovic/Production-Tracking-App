@@ -71,19 +71,18 @@ export function createRecipe(data) {
 }
 
 /**
- * Updates recipe metadata (name/isDefault/notes) — items cannot be changed
- * through the API at all today.
+ * Updates recipe metadata (name/isDefault/notes), and also doubles as the
+ * activate/deactivate call via `active` — items cannot be changed through the
+ * API at all today.
  *
  * @param {string} id - Recipe UUID.
- * @param {Object} data - Any subset of `{ name, isDefault, notes }`.
+ * @param {Object} data - Any subset of `{ name, isDefault, notes, active }`.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = updated Recipe aggregate.
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example
- * await updateRecipe('d1e2…', { isDefault: true })
+ * await updateRecipe('d1e2…', { active: false })
  */
-// TODO: unused — RecipesPage only creates; there is no edit UI yet.
-// todo.md Group 8 #2.
 export function updateRecipe(id, data) {
   return api.put(`/recipes/${id}`, data)
 }

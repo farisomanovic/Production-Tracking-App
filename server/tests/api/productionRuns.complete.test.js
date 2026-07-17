@@ -160,3 +160,22 @@ describe('POST /api/production-runs/:id/complete — relational validation (Grou
         expect(res.body.status).toBe('completed')
     })
 })
+
+describe('POST /api/production-runs/:id/complete — recipe deactivated after the run started', () => {
+    it('rejects completion once the run\'s recipe has been deactivated', async () => {
+        // The run was created (via beforeEach, above) while the recipe was
+        // still active — deactivating it now reproduces an admin retiring a
+        // formula mid-run, which /complete must not silently accept.
+        await prisma.recipe.update({ where: { id: baseline.recipe.id }, data: { active: false } })
+        try {
+            const res = await complete(validPayload())
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Cannot complete a run whose recipe has been deactivated')
+        } finally {
+            // baseline.recipe is shared by every test file in this run (files
+            // execute one at a time — see vitest.config.js — but leaving it
+            // inactive would break every later test relying on it).
+            await prisma.recipe.update({ where: { id: baseline.recipe.id }, data: { active: true } })
+        }
+    })
+})

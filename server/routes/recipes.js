@@ -42,11 +42,12 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * Lists the recipes linked to one product — this is what the wizard's Step 2
- * uses, so a recipe not linked to this product can never even be offered.
+ * Lists the active recipes linked to one product — this is what the wizard's
+ * Step 2 uses, so a recipe not linked to this product, or deactivated, can
+ * never even be offered.
  *
  * @param {import('express').Request} req - `params.productId` is the product UUID.
- * @param {import('express').Response} res - 200 → Recipe[] (possibly empty) with relations; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → active Recipe[] (possibly empty) with relations; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -56,8 +57,11 @@ router.get('/', async (req, res) => {
 router.get('/by-product/:productId', async (req, res) => {
     const { productId } = req.params
 
+    // Hardcoded active-only filter, not a ?active= query param — this is a
+    // narrow, purpose-built endpoint (the wizard's only consumer), matching
+    // how this codebase favors that over generic query flags.
     const recipes = await prisma.recipe.findMany({
-        where: { products: { some: { productId } } },
+        where: { products: { some: { productId } }, active: true },
         orderBy: { name: 'asc' },
         include: {
             products: {
@@ -197,30 +201,35 @@ router.post('/', async (req, res) => {
 })
 
 /**
- * Updates recipe metadata only. Items are deliberately untouchable here —
- * changing composition would require re-validating the 100% total, and no
- * item-editing endpoint exists yet.
+ * Updates recipe metadata, and also doubles as the soft-delete toggle via
+ * `active` — mirroring PUT /operators/:id and PUT /machines/:id, no dedicated
+ * activate/deactivate endpoint exists (todo.md Group 3 #13). Items are
+ * deliberately untouchable here — changing composition would require
+ * re-validating the 100% total, and no item-editing endpoint exists yet.
  *
- * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.isDefault`, `body.notes`.
+ * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.isDefault`, `body.notes`, `body.active`.
  * @param {import('express').Response} res - 200 → updated Recipe aggregate; 404 unknown id; 500 on failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // PUT /api/recipes/d1e2…  { "isDefault": true }
- * // → 200 { id: "d1e2…", name: "Standard mix", isDefault: true, … }
+ * // PUT /api/recipes/d1e2…  { "active": false }
+ * // → 200 { id: "d1e2…", name: "Standard mix", active: false, … }
  */
 router.put('/:id', async (req, res) => {
-    const { name, isDefault, notes } = req.body
+    const { name, isDefault, notes, active } = req.body
     // TODO: setting isDefault: true here does NOT clear the flag on the
     // product's other recipes, so several "defaults" can coexist and the
     // wizard auto-picks whichever it finds first. Wrap in a transaction that
     // unsets siblings first. todo.md Group 5 #6.
+    // TODO: active: false is accepted even while a run in_progress references
+    // this recipe, same unfixed gap as Operator/Machine. todo.md Group 3 #5.
     const recipe = await prisma.recipe.update({
         where: { id: req.params.id },
         data: {
             ...(name !== undefined && { name }),
             ...(isDefault !== undefined && { isDefault }),
             ...(notes !== undefined && { notes }),
+            ...(active !== undefined && { active }),
         },
         include: {
             products: {

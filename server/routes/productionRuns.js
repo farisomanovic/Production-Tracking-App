@@ -235,6 +235,11 @@ router.post('/', async (req, res, next) => {
     if (!recipe) {
         return res.status(400).json({ error: 'Recipe does not exist' })
     }
+    // Same backstop pattern as operator/machine above: Step 2 only ever offers
+    // active recipes, this guards direct API calls.
+    if (!recipe.active) {
+        return res.status(400).json({ error: 'Recipe is inactive' })
+    }
     if (!recipe.products.some(link => link.productId === productId)) {
         return res.status(400).json({ error: 'Recipe does not belong to the selected product' })
     }
@@ -380,7 +385,8 @@ router.put('/:id', async (req, res) => {
  * `grossWeightPerUnit`/`scrapKg` optional (numbers ≥ 0).
  * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid payload
  * (including an unparseable endTime, one at/before the run's startTime, a duplicate id within
- * `parameterValues`/`materialUsages`, or any id that doesn't belong to this run's machine/recipe);
+ * `parameterValues`/`materialUsages`, any id that doesn't belong to this run's machine/recipe,
+ * or the run's recipe having been deactivated since the run started);
  * 404 unknown run; 409 already completed or insufficient stock; 500 on transaction failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -427,6 +433,7 @@ router.post('/:id/complete', async (req, res) => {
             },
             recipe: {
                 select: {
+                    active: true,
                     recipeItems: { select: { materialId: true } }
                 }
             }
@@ -434,6 +441,14 @@ router.post('/:id/complete', async (req, res) => {
     })
     if (!existing) {
         throw new RunNotFoundError()
+    }
+    // A recipe can be deactivated after a run already started on it — block
+    // completion rather than silently recording output/material usage against
+    // a formula the business has retired. The run itself is not stranded: it
+    // can still be deleted (no stock was decremented yet) or the recipe can be
+    // reactivated to let this run finish.
+    if (!existing.recipe.active) {
+        return res.status(400).json({ error: 'Cannot complete a run whose recipe has been deactivated' })
     }
     if (end <= existing.startTime) {
         return res.status(400).json({ error: 'endTime must be after the run start time' })
