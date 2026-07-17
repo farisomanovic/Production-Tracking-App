@@ -42,11 +42,14 @@ model Machine {
 
 // A measurement TYPE (e.g. "Melt temp"), not a value — values live in
 // RunParameterValue, and machine assignment lives in MachineParameter.
-// TODO: name is not unique, but the XLSX export matches columns by name —
-// two parameters with the same name silently merge in reports. todo.md Group 5 #5.
+// name is @unique because the XLSX export matches columns by name, not id —
+// a duplicate name would silently merge two parameters' data into one report
+// column. Machine/Operator/Recipe deliberately do NOT get the same treatment:
+// they have `active` soft-delete and legitimately reuse a name after
+// deactivating the old row (see Recipe), which a plain @unique would break.
 model Parameter {
   id          String  @id @default(uuid())
-  name        String
+  name        String  @unique
   unit        String?
   description String?
 
@@ -134,10 +137,11 @@ model RecipeProduct {
 // deletion and manual deliveries — all in kg-equivalent of `unit`. A DB-level
 // CHECK (stockQty >= 0) exists in the completion_race_and_stock_floor migration;
 // Prisma's schema language cannot express it, so it lives in raw SQL only.
-// TODO: name is not unique; export matches material columns by name. Group 5 #5.
+// name is @unique — same reasoning as Parameter.name above: the XLSX export
+// matches material columns by name, not id.
 model Material {
   id       String @id @default(uuid())
-  name     String
+  name     String @unique
   unit     String
   supplier String?
   stockQty Float  @default(0)

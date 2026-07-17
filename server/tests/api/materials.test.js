@@ -79,6 +79,15 @@ describe('POST /api/materials', () => {
         expect(res.status).toBe(201)
         expect(res.body.stockQty).toBe(500)
     })
+
+    it('rejects a duplicate name with 409', async () => {
+        const existing = await createMaterial()
+        const res = await request(app)
+            .post('/api/materials')
+            .send({ name: existing.name, unit: 'kg' })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A material with this name already exists')
+    })
 })
 
 describe('PUT /api/materials/:id — stockDelta (relative adjust)', () => {
@@ -170,5 +179,15 @@ describe('PUT /api/materials/:id — non-stock paths', () => {
         expect(res.status).toBe(200)
         expect(res.body.name).toBe(`${PREFIX} renamed`)
         expect(res.body.stockQty).toBe(100)
+    })
+
+    it('rejects renaming into an existing name with 409', async () => {
+        const existing = await createMaterial()
+        const material = await createMaterial()
+        const res = await request(app)
+            .put(`/api/materials/${material.id}`)
+            .send({ name: existing.name })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A material with this name already exists')
     })
 })
