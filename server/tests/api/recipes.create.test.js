@@ -234,4 +234,11 @@ describe('POST /api/recipes — happy path', () => {
         const percentages = res.body.recipeItems.map((item) => item.percentage).sort((a, b) => a - b)
         expect(percentages).toEqual([40, 60])
     })
+
+    it('ignores a client-sent isDefault — new links always start false, set via PUT /recipe-products/:id instead', async () => {
+        const res = await post({ ...validPayload(), isDefault: true })
+        expect(res.status).toBe(201)
+        expect(res.body.isDefault).toBeUndefined()
+        expect(res.body.products[0].isDefault).toBe(false)
+    })
 })

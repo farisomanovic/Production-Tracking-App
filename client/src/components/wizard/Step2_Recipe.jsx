@@ -45,9 +45,6 @@ async function loadRecipes() {
     // Preselect the default only when the user hasn't chosen before —
     // returning to this step must not overwrite an explicit choice.
     if (!initialRecipeId) {
-        // TODO: several recipes can be flagged isDefault (nothing enforces one
-        // per product) and find() just takes the first — the preselection is
-        // arbitrary in that case. todo.md Group 5 #6.
         const defaultRecipe = fetchedRecipes.find(r => r.isDefault === true)
         if (defaultRecipe) {
         setRecipeId(defaultRecipe.id)

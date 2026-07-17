@@ -13,6 +13,7 @@ import OperatorsPage from './pages/OperatorsPage'
 import MachinesPage from './pages/MachinesPage'
 import MachineDetailPage from './pages/MachineDetailPage'
 import ProductsPage from './pages/ProductsPage'
+import ProductDetailPage from './pages/ProductDetailPage'
 import MaterialsPage from './pages/MaterialsPage'
 import ParametersPage from './pages/ParametersPage'
 import RecipesPage from './pages/RecipesPage'
@@ -43,6 +44,7 @@ function App() {
           <Route path="/operators" element={<OperatorsPage />} />
           <Route path="/machines" element={<MachinesPage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/products/:productId" element={<ProductDetailPage />} />
           <Route path="/materials" element={<MaterialsPage />} />
           <Route path="/parameters" element={<ParametersPage />} />
           <Route path="/recipes" element={<RecipesPage />} />

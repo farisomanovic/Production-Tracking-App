@@ -29,6 +29,8 @@ export function getAllRecipes() {
  *
  * @example
  * const res = await getRecipesByProduct('c771…')
+ * // isDefault is scoped to THIS product — flattened server-side from the
+ * // RecipeProduct link, not a global flag on the recipe.
  * const preselected = res.data.find(r => r.isDefault)
  */
 export function getRecipesByProduct(productId) {
@@ -56,7 +58,8 @@ export function getRecipeById(id) {
  * productId (a recipe must always be linked to at least one product).
  *
  * @param {Object} data - `{ name, productIds: string[], items: [{ materialId, percentage, plannedQtyKg? }] }`
- * required; `{ isDefault, notes }` optional. Percentages must sum to 100.
+ * required; `{ notes }` optional. Percentages must sum to 100. New links always start
+ * isDefault:false — set a link's default via setRecipeProductDefault after creation.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = created Recipe aggregate (201).
  * @throws {import('axios').AxiosError} 400 on incomplete formula; network/5xx otherwise.
  *
@@ -71,12 +74,12 @@ export function createRecipe(data) {
 }
 
 /**
- * Updates recipe metadata (name/isDefault/notes), and also doubles as the
+ * Updates recipe metadata (name/notes), and also doubles as the
  * activate/deactivate call via `active` — items cannot be changed through the
- * API at all today.
+ * API at all today. isDefault is not settable here — see setRecipeProductDefault.
  *
  * @param {string} id - Recipe UUID.
- * @param {Object} data - Any subset of `{ name, isDefault, notes, active }`.
+ * @param {Object} data - Any subset of `{ name, notes, active }`.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = updated Recipe aggregate.
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *

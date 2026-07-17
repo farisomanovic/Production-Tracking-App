@@ -5,6 +5,7 @@
  * recipes are managed elsewhere.
  */
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getAllProducts, createProduct } from '../api/products'
 import { useApi } from '../hooks/useApi'
 import { common } from '../styles/common'
@@ -19,6 +20,7 @@ import { common } from '../styles/common'
  * <Route path="/products" element={<ProductsPage />} />
  */
 function ProductsPage() {
+  const navigate = useNavigate()
   const { data: products, loading, error, reload } = useApi(getAllProducts, 'Failed to load products')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
@@ -135,7 +137,11 @@ function ProductsPage() {
 
       <div style={common.list}>
         {products.map((product) => (
-        <div key={product.id} style={common.card}>
+        <div
+          key={product.id}
+          style={{ ...common.card, cursor: 'pointer' }}
+          onClick={() => navigate(`/products/${product.id}`)}
+        >
           <div style={common.cardLeft}>
             <span style={common.cardName}>{product.name}</span>
             <span style={common.cardType}>{product.code} — {product.unit}</span>
@@ -144,6 +150,7 @@ function ProductsPage() {
             {product.lengthM && <span style={common.cardType}>Length: {product.lengthM}m</span>}
             {product.description && <span style={common.cardType}>{product.description}</span>}
           </div>
+          <span style={common.arrow}>›</span>
         </div>
         ))}
       </div>
