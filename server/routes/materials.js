@@ -69,14 +69,20 @@ router.post('/', async (req, res) => {
     if (stockQty !== undefined && (typeof stockQty !== 'number' || !Number.isFinite(stockQty) || stockQty < 0)) {
         return res.status(400).json({ error: 'stockQty must be a number of at least 0' })
     }
-    // TODO: name has no unique constraint and the XLSX export matches material
-    // columns BY NAME — duplicates silently merge in reports. todo.md Group 5 #5.
-    const material = await prisma.material.create({
-        data: { name, unit,
-            ...(supplier !== undefined && { supplier }),
-            ...(stockQty !== undefined && { stockQty })
+    let material
+    try {
+        material = await prisma.material.create({
+            data: { name, unit,
+                ...(supplier !== undefined && { supplier }),
+                ...(stockQty !== undefined && { stockQty })
+            }
+        })
+    } catch (error) {
+        if (error.code === 'P2002') {
+            error.clientMessage = 'A material with this name already exists'
         }
-    })
+        throw error
+    }
     res.status(201).json(material)
 })
 
@@ -109,20 +115,28 @@ router.put('/:id', async (req, res) => {
     // updateMany instead of update: a negative delta only applies when enough
     // stock exists (the WHERE condition and the increment are one atomic
     // statement — same pattern as run completion in productionRuns.js).
-    const { count } = await prisma.material.updateMany({
-        where: {
-            id: req.params.id,
-            ...(stockDelta !== undefined && stockDelta < 0 && { stockQty: { gte: -stockDelta } })
-        },
-        data: {
-            ...(name !== undefined && { name }),
-            ...(unit !== undefined && { unit }),
-            ...(supplier !== undefined && { supplier }),
-            ...(stockDelta !== undefined
-                ? { stockQty: { increment: stockDelta } }
-                : stockQty !== undefined && { stockQty })
+    let count
+    try {
+        ;({ count } = await prisma.material.updateMany({
+            where: {
+                id: req.params.id,
+                ...(stockDelta !== undefined && stockDelta < 0 && { stockQty: { gte: -stockDelta } })
+            },
+            data: {
+                ...(name !== undefined && { name }),
+                ...(unit !== undefined && { unit }),
+                ...(supplier !== undefined && { supplier }),
+                ...(stockDelta !== undefined
+                    ? { stockQty: { increment: stockDelta } }
+                    : stockQty !== undefined && { stockQty })
+            }
+        }))
+    } catch (error) {
+        if (error.code === 'P2002') {
+            error.clientMessage = 'A material with this name already exists'
         }
-    })
+        throw error
+    }
     if (count === 0) {
         // Nothing matched: either the id is unknown, or the guarded negative
         // delta found too little stock — read the row to tell them apart.

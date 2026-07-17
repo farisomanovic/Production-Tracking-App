@@ -65,15 +65,20 @@ router.post('/', async (req, res) => {
     if (!name) {
         return res.status(400).json({ error: 'name is required' })
     }
-    // TODO: name has no unique constraint, so two "Melt temp" parameters can
-    // coexist — and the XLSX export matches columns BY NAME, silently merging
-    // them. Needs @unique in the schema. todo.md Group 5 #5.
-    const parameter = await prisma.parameter.create({
-        data: { name,
-            ...(unit !== undefined && { unit }),
-            ...(description !== undefined && { description })
+    let parameter
+    try {
+        parameter = await prisma.parameter.create({
+            data: { name,
+                ...(unit !== undefined && { unit }),
+                ...(description !== undefined && { description })
+            }
+        })
+    } catch (error) {
+        if (error.code === 'P2002') {
+            error.clientMessage = 'A parameter with this name already exists'
         }
-    })
+        throw error
+    }
     res.status(201).json(parameter)
 })
 
@@ -90,15 +95,23 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, unit, description } = req.body
-    const parameter = await prisma.parameter.update({
-        where: { id: req.params.id },
-        data: {
-            // Spread-if-defined keeps omitted fields untouched (partial update).
-            ...(name !== undefined && { name }),
-            ...(unit !== undefined && { unit }),
-            ...(description !== undefined && { description })
+    let parameter
+    try {
+        parameter = await prisma.parameter.update({
+            where: { id: req.params.id },
+            data: {
+                // Spread-if-defined keeps omitted fields untouched (partial update).
+                ...(name !== undefined && { name }),
+                ...(unit !== undefined && { unit }),
+                ...(description !== undefined && { description })
+            }
+        })
+    } catch (error) {
+        if (error.code === 'P2002') {
+            error.clientMessage = 'A parameter with this name already exists'
         }
-    })
+        throw error
+    }
     res.json(parameter)
 })
 
