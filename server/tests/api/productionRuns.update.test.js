@@ -82,6 +82,24 @@ describe('PUT /api/production-runs/:id', () => {
         expect(res.body.error).toBe('endTime must be after the run start time')
     })
 
+    it('rejects an explicit null warmupStartTime with 400', async () => {
+        const res = await put({ warmupStartTime: null })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('warmupStartTime is not a valid timestamp')
+    })
+
+    it('rejects an explicit null stableStartTime with 400', async () => {
+        const res = await put({ stableStartTime: null })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('stableStartTime is not a valid timestamp')
+    })
+
+    it('rejects an explicit null endTime with 400', async () => {
+        const res = await put({ endTime: null })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('endTime is not a valid timestamp')
+    })
+
     it('accepts an endTime after the run startTime', async () => {
         const future = new Date(Date.now() + 60_000).toISOString()
         const res = await put({ endTime: future })

@@ -96,6 +96,24 @@ describe('POST /api/production-runs — required fields and dates', () => {
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('Production run date cannot be in the future')
     })
+
+    it('rejects an explicit null warmupStartTime with 400', async () => {
+        const res = await post({ ...validPayload(), warmupStartTime: null })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('warmupStartTime is not a valid timestamp')
+    })
+
+    it('rejects an explicit null stableStartTime with 400', async () => {
+        const res = await post({ ...validPayload(), stableStartTime: null })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('stableStartTime is not a valid timestamp')
+    })
+
+    it('rejects a non-string warmupStartTime (e.g. a number) with 400', async () => {
+        const res = await post({ ...validPayload(), warmupStartTime: 12345 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('warmupStartTime is not a valid timestamp')
+    })
 })
 
 describe('POST /api/production-runs — relational validation (PR #24)', () => {
