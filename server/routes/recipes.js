@@ -20,8 +20,8 @@ const router = Router()
  *
  * @example
  * // GET /api/recipes
- * // → 200 [{ id: "d1e2…", name: "Standard mix", isDefault: true,
- * //          products: [{ id: "f0a1…", product: { name: "PP traka 12mm" } }],
+ * // → 200 [{ id: "d1e2…", name: "Standard mix",
+ * //          products: [{ id: "f0a1…", isDefault: true, product: { name: "PP traka 12mm" } }],
  * //          recipeItems: [{ percentage: 70, material: { name: "PP granulat" } }] }]
  */
 router.get('/', async (req, res) => {
@@ -64,15 +64,24 @@ router.get('/by-product/:productId', async (req, res) => {
         where: { products: { some: { productId } }, active: true },
         orderBy: { name: 'asc' },
         include: {
-            products: {
-                include: { product: true }
-            },
+            // Scoped to just this product's link — the where clause above
+            // guarantees exactly one match per recipe — so isDefault can be
+            // flattened onto the recipe below as "default FOR THIS PRODUCT".
+            products: { where: { productId } },
             recipeItems: {
                 include: { material: true }
             }
         }
     })
-    res.json(recipes)
+    // isDefault now lives on RecipeProduct (per-product), not Recipe — flatten
+    // this product's link's isDefault back onto the recipe object so callers
+    // (the wizard) don't need to know the shape changed. Never reuse this
+    // flattened value outside a by-product context; it is meaningless there.
+    const flattened = recipes.map(({ products, ...recipe }) => ({
+        ...recipe,
+        isDefault: products[0]?.isDefault ?? false
+    }))
+    res.json(flattened)
 })
 
 /**
@@ -116,7 +125,8 @@ router.get('/:id', async (req, res) => {
  * ({ materialId, percentage, plannedQtyKg? }) required; `productIds` must be a non-empty array
  * of product UUIDs (a recipe must always be linked to at least one product); each item needs
  * a unique, non-empty `materialId`, a `percentage` in (0, 100], and — if present — a positive
- * `plannedQtyKg`. `body.isDefault`, `body.notes` optional.
+ * `plannedQtyKg`. `body.notes` optional. A new recipe's links always start with
+ * isDefault:false — set a link's default via PUT /recipe-products/:id after creation.
  * @param {import('express').Response} res - 201 → created Recipe aggregate; 400 invalid formula or bad reference; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -128,7 +138,7 @@ router.get('/:id', async (req, res) => {
  * // → 201 { id: "4fe1…", name: "Regranulat mix", products: [ …1 link ], recipeItems: [ …2 items ] }
  */
 router.post('/', async (req, res) => {
-    const { name, productIds, isDefault, notes, items } = req.body
+    const { name, productIds, notes, items } = req.body
 
     if (!name || !productIds || !Array.isArray(productIds) || productIds.length === 0) {
         return res.status(400).json({ error: 'name and at least one productId are required' })
@@ -170,7 +180,6 @@ router.post('/', async (req, res) => {
     const recipe = await prisma.recipe.create({
         data: {
             name,
-            ...(isDefault !== undefined && { isDefault }),
             ...(notes !== undefined && { notes }),
             products: {
                 // Nested create instead of separate inserts: Prisma wraps the
@@ -206,8 +215,10 @@ router.post('/', async (req, res) => {
  * activate/deactivate endpoint exists (todo.md Group 3 #13). Items are
  * deliberately untouchable here — changing composition would require
  * re-validating the 100% total, and no item-editing endpoint exists yet.
+ * isDefault is not settable here at all — it lives on RecipeProduct now (one
+ * flag per linked product), so use PUT /recipe-products/:id instead.
  *
- * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.isDefault`, `body.notes`, `body.active`.
+ * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.notes`, `body.active`.
  * @param {import('express').Response} res - 200 → updated Recipe aggregate; 404 unknown id; 409 blocked by in-progress run; 500 on failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -216,11 +227,7 @@ router.post('/', async (req, res) => {
  * // → 200 { id: "d1e2…", name: "Standard mix", active: false, … }
  */
 router.put('/:id', async (req, res) => {
-    const { name, isDefault, notes, active } = req.body
-    // TODO: setting isDefault: true here does NOT clear the flag on the
-    // product's other recipes, so several "defaults" can coexist and the
-    // wizard auto-picks whichever it finds first. Wrap in a transaction that
-    // unsets siblings first. todo.md Group 5 #6.
+    const { name, notes, active } = req.body
     if (active === false) {
         const openRun = await prisma.productionRun.findFirst({
             where: { recipeId: req.params.id, status: 'in_progress' },
@@ -234,7 +241,6 @@ router.put('/:id', async (req, res) => {
         where: { id: req.params.id },
         data: {
             ...(name !== undefined && { name }),
-            ...(isDefault !== undefined && { isDefault }),
             ...(notes !== undefined && { notes }),
             ...(active !== undefined && { active }),
         },

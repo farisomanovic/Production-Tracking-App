@@ -28,8 +28,6 @@ export function getAllProducts() {
  * @example
  * const res = await getProductById('c771…')
  */
-// TODO: unused — no page imports this; delete it or build the screen that needs
-// it. todo.md Group 8 #2.
 export function getProductById(id) {
   return api.get(`/products/${id}`)
 }

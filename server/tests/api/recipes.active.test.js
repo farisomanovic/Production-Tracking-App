@@ -50,6 +50,12 @@ describe('PUT /api/recipes/:id — active toggle', () => {
         expect(res.status).toBe(200)
         expect(res.body.active).toBe(true)
     })
+
+    it('ignores a client-sent isDefault — it lives on RecipeProduct, not Recipe, and is set via PUT /recipe-products/:id', async () => {
+        const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ isDefault: true })
+        expect(res.status).toBe(200)
+        expect(res.body.isDefault).toBeUndefined()
+    })
 })
 
 describe('PUT /api/recipes/:id — blocked while a run is in progress', () => {

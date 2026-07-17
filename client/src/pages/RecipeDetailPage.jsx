@@ -126,7 +126,6 @@ function RecipeDetailPage() {
       </button>
 
       <h1 style={styles.heading}>{recipe.name}</h1>
-      {recipe.isDefault && <p style={styles.subtext}>Default recipe</p>}
       {recipe.notes && <p style={styles.subtext}>{recipe.notes}</p>}
 
       <section style={styles.section}>
@@ -179,12 +178,15 @@ function RecipeDetailPage() {
                   <span style={common.cardType}>{lp.product.code}</span>
                 )}
               </div>
-              <button
-                style={styles.unlinkButton}
-                onClick={() => handleUnlinkProduct(lp.id)}
-              >
-                Remove
-              </button>
+              <div style={styles.linkedProductRight}>
+                {lp.isDefault && <span style={styles.defaultBadge}>Default</span>}
+                <button
+                  style={styles.unlinkButton}
+                  onClick={() => handleUnlinkProduct(lp.id)}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -249,6 +251,18 @@ const styles = {
     color: 'var(--color-danger-strong)',
     fontSize: '12px',
     cursor: 'pointer',
+  },
+  linkedProductRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  defaultBadge: {
+    fontSize: '12px',
+    color: 'var(--color-accent-link)',
+    backgroundColor: 'var(--color-surface-alt)',
+    padding: '4px 8px',
+    borderRadius: '12px',
   },
   empty: {
     color: 'var(--color-text-secondary)',

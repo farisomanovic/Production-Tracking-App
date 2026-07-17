@@ -110,11 +110,19 @@ model MachineProduct {
 // widths of the same mix) — this join lets one Recipe link to many Products
 // instead of the old required 1:1 Recipe.productId. A Recipe must always keep
 // at least one linked Product; the route layer enforces that, not the schema.
+// isDefault marks which linked recipe the wizard preselects FOR THIS PRODUCT
+// (moved here from the old Recipe.isDefault, todo.md Group 5 #6 — a single
+// flag on Recipe couldn't express "default for product A but not product B"
+// once a recipe became reusable across products). At most one isDefault:true
+// row per productId is enforced by a partial unique index that Prisma's
+// schema language cannot express — see migration
+// 20260717170000_recipe_product_default_per_product.
 model RecipeProduct {
   id String @id @default(uuid())
 
   recipeId  String
   productId String
+  isDefault Boolean @default(false)
 
   recipe  Recipe  @relation(fields: [recipeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -139,15 +147,13 @@ model Material {
 }
 
 // A product can have several formulas (e.g. virgin vs. regranulate mix), and one
-// formula can now be reused across several products via RecipeProduct.
-// isDefault marks the one the wizard preselects. Soft-deleted via `active`,
-// same reasoning as Operator/Machine: ProductionRun history keeps a valid FK.
-// TODO: nothing enforces ONE default per product — several can be flagged and the
-// wizard picks arbitrarily. todo.md Group 5 #6.
+// formula can now be reused across several products via RecipeProduct — which
+// is also where the per-product "default" flag lives (RecipeProduct.isDefault),
+// not here. Soft-deleted via `active`, same reasoning as Operator/Machine:
+// ProductionRun history keeps a valid FK.
 model Recipe {
   id        String   @id @default(uuid())
   name      String
-  isDefault Boolean  @default(false)
   notes     String?
   active    Boolean  @default(true)
 

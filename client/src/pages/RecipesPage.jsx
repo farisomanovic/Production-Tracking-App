@@ -35,7 +35,6 @@ function RecipesPage() {
   // ─── FORM STATE ─────────────────────────────────────────────────────────────
 
   const [name, setName] = useState('')
-  const [isDefault, setIsDefault] = useState(false)
   const [notes, setNotes] = useState('')
   // Draft items carry materialName alongside materialId so the list can render
   // without a lookup into `materials` on every row.
@@ -142,7 +141,6 @@ function RecipesPage() {
     try {
       await createRecipe({
         name,
-        isDefault,
         ...(notes.trim() && { notes }),
         productIds: selectedProductIds,
         items: items.map((i) => ({
@@ -152,7 +150,6 @@ function RecipesPage() {
       })
       setName('')
       setNotes('')
-      setIsDefault(false)
       setItems([])
       setSelectedProductIds([])
       setShowForm(false)
@@ -257,15 +254,6 @@ function RecipesPage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
-
-          <label style={{ color: 'var(--color-text-secondary)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              checked={isDefault}
-              onChange={(e) => setIsDefault(e.target.checked)}
-            />
-            Set as default recipe
-          </label>
 
           <p style={styles.sectionLabel}>Ingredients</p>
 

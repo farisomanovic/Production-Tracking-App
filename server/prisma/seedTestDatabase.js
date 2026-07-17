@@ -45,7 +45,7 @@ export async function seedTestDatabase() {
         data: { name: 'Test Material', unit: 'kg', stockQty: 1000 }
     })
     const recipe = await prisma.recipe.create({
-        data: { name: 'Test Recipe', isDefault: true, products: { create: [{ productId: product.id }] } }
+        data: { name: 'Test Recipe', products: { create: [{ productId: product.id, isDefault: true }] } }
     })
     await prisma.recipeItem.create({
         data: { recipeId: recipe.id, materialId: material.id, percentage: 100 }

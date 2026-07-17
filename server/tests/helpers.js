@@ -14,6 +14,6 @@ export async function getBaseline() {
     const product = await prisma.product.findUnique({ where: { code: 'TEST-P1' } })
     const operator = await prisma.operator.findFirst({ where: { name: 'Test Operator' } })
     const material = await prisma.material.findFirst({ where: { name: 'Test Material' } })
-    const recipe = await prisma.recipe.findFirst({ where: { products: { some: { productId: product.id } }, isDefault: true } })
+    const recipe = await prisma.recipe.findFirst({ where: { products: { some: { productId: product.id, isDefault: true } } } })
     return { machine, product, operator, material, recipe }
 }
