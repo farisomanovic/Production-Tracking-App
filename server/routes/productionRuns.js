@@ -284,8 +284,9 @@ router.post('/', async (req, res, next) => {
  *
  * @param {import('express').Request} req - `params.id` UUID; any subset of `notes`, `potentialBuyer`,
  * `warmupStartTime`, `stableStartTime`, `energyStart`, `energyEnd`, `endTime`.
- * @param {import('express').Response} res - 200 → updated run with relations; 400 endTime at/before
- * startTime; 404 unknown id; 409 run is already completed (immutable once completed).
+ * @param {import('express').Response} res - 200 → updated run with relations; 400 an unparseable
+ * warmupStartTime/stableStartTime/endTime, or an endTime at/before startTime; 404 unknown id;
+ * 409 run is already completed (immutable once completed).
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -321,7 +322,7 @@ router.put('/:id', async (req, res) => {
 
     // A completed run is meant to be an immutable log of what happened on
     // the floor, and endTime must obey the same > startTime rule /complete
-    // enforces (productionRuns.js:414-416) — this route skipped both checks.
+    // enforces below — this route skipped both checks.
     const existing = await prisma.productionRun.findUnique({
         where: { id: req.params.id },
         select: { startTime: true, status: true }
