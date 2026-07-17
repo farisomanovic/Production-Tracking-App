@@ -16,6 +16,7 @@ import materialsRouter from './routes/materials.js'
 import machineParametersRouter from './routes/machineParameters.js'
 import machineProductsRouter from './routes/machineProducts.js'
 import recipesRouter from './routes/recipes.js'
+import recipeProductsRouter from './routes/recipeProducts.js'
 import productionRunsRouter from './routes/productionRuns.js'
 import errorHandler from './middleware/errorHandler.js'
 import { assertClientOriginConfigured } from './lib/assertClientOrigin.js'
@@ -43,6 +44,7 @@ app.use('/api/materials', materialsRouter)
 app.use('/api/machine-parameters', machineParametersRouter)
 app.use('/api/machine-products', machineProductsRouter)
 app.use('/api/recipes', recipesRouter)
+app.use('/api/recipe-products', recipeProductsRouter)
 app.use('/api/production-runs', productionRunsRouter)
 
 /**

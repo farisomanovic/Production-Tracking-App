@@ -12,23 +12,25 @@ const router = Router()
 // ─── READS ───────────────────────────────────────────────────────────────────
 
 /**
- * Lists every recipe with product and full material breakdown.
+ * Lists every recipe with its linked products and full material breakdown.
  *
  * @param {import('express').Request} req - No params or body used.
- * @param {import('express').Response} res - 200 → Recipe[] (with product + recipeItems.material) sorted by name; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → Recipe[] (with products.product + recipeItems.material) sorted by name; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
  * // GET /api/recipes
  * // → 200 [{ id: "d1e2…", name: "Standard mix", isDefault: true,
- * //          product: { name: "PP traka 12mm" },
+ * //          products: [{ id: "f0a1…", product: { name: "PP traka 12mm" } }],
  * //          recipeItems: [{ percentage: 70, material: { name: "PP granulat" } }] }]
  */
 router.get('/', async (req, res) => {
     const recipes = await prisma.recipe.findMany({
         orderBy: { name: 'asc' },
         include: {
-            product: true,
+            products: {
+                include: { product: true }
+            },
             recipeItems: {
                 include: {
                     material: true
@@ -40,8 +42,8 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * Lists the recipes belonging to one product — this is what the wizard's
- * Step 2 uses, so a recipe for a different product can never even be offered.
+ * Lists the recipes linked to one product — this is what the wizard's Step 2
+ * uses, so a recipe not linked to this product can never even be offered.
  *
  * @param {import('express').Request} req - `params.productId` is the product UUID.
  * @param {import('express').Response} res - 200 → Recipe[] (possibly empty) with relations; 500 on DB failure.
@@ -55,10 +57,12 @@ router.get('/by-product/:productId', async (req, res) => {
     const { productId } = req.params
 
     const recipes = await prisma.recipe.findMany({
-        where: { productId },
+        where: { products: { some: { productId } } },
         orderBy: { name: 'asc' },
         include: {
-            product: true,
+            products: {
+                include: { product: true }
+            },
             recipeItems: {
                 include: { material: true }
             }
@@ -76,13 +80,15 @@ router.get('/by-product/:productId', async (req, res) => {
  *
  * @example
  * // GET /api/recipes/d1e2…
- * // → 200 { id: "d1e2…", name: "Standard mix", recipeItems: [ … ] }
+ * // → 200 { id: "d1e2…", name: "Standard mix", products: [ … ], recipeItems: [ … ] }
  */
 router.get('/:id', async (req, res) => {
     const recipe = await prisma.recipe.findUnique({
         where: { id: req.params.id },
         include: {
-            product: true,
+            products: {
+                include: { product: true }
+            },
             recipeItems: {
                 include: {
                     material: true
@@ -102,25 +108,29 @@ router.get('/:id', async (req, res) => {
  * Creates a recipe and all of its items in one nested write, after validating
  * that the formula is complete (items exist and percentages total 100).
  *
- * @param {import('express').Request} req - `body.name`, `body.productId`, `body.items[]`
- * ({ materialId, percentage, plannedQtyKg? }) required; each item needs a unique, non-empty
- * `materialId`, a `percentage` in (0, 100], and — if present — a positive `plannedQtyKg`.
- * `body.isDefault`, `body.notes` optional.
+ * @param {import('express').Request} req - `body.name`, `body.productIds[]`, `body.items[]`
+ * ({ materialId, percentage, plannedQtyKg? }) required; `productIds` must be a non-empty array
+ * of product UUIDs (a recipe must always be linked to at least one product); each item needs
+ * a unique, non-empty `materialId`, a `percentage` in (0, 100], and — if present — a positive
+ * `plannedQtyKg`. `body.isDefault`, `body.notes` optional.
  * @param {import('express').Response} res - 201 → created Recipe aggregate; 400 invalid formula or bad reference; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
  * // POST /api/recipes
- * // { "name": "Regranulat mix", "productId": "c771…",
+ * // { "name": "Regranulat mix", "productIds": ["c771…"],
  * //   "items": [{ "materialId": "a9d2…", "percentage": 60 },
  * //             { "materialId": "77b0…", "percentage": 40 }] }
- * // → 201 { id: "4fe1…", name: "Regranulat mix", recipeItems: [ …2 items ] }
+ * // → 201 { id: "4fe1…", name: "Regranulat mix", products: [ …1 link ], recipeItems: [ …2 items ] }
  */
 router.post('/', async (req, res) => {
-    const { name, productId, isDefault, notes, items } = req.body
+    const { name, productIds, isDefault, notes, items } = req.body
 
-    if (!name || !productId) {
-        return res.status(400).json({ error: 'name and productId are required' })
+    if (!name || !productIds || !Array.isArray(productIds) || productIds.length === 0) {
+        return res.status(400).json({ error: 'name and at least one productId are required' })
+    }
+    if (new Set(productIds).size !== productIds.length) {
+        return res.status(400).json({ error: 'Each product can only be linked once' })
     }
 
     // A recipe with no items would let a run start with nothing to consume —
@@ -156,13 +166,15 @@ router.post('/', async (req, res) => {
     const recipe = await prisma.recipe.create({
         data: {
             name,
-            productId,
             ...(isDefault !== undefined && { isDefault }),
             ...(notes !== undefined && { notes }),
-            recipeItems: {
+            products: {
                 // Nested create instead of separate inserts: Prisma wraps the
-                // header + items in one implicit transaction, so a failed item
-                // can never leave behind a recipe with half a formula.
+                // header + links + items in one implicit transaction, so a
+                // failed item or link can never leave behind a half-formed recipe.
+                create: productIds.map(productId => ({ productId }))
+            },
+            recipeItems: {
                 create: items.map(item => ({
                     materialId: item.materialId,
                     percentage: item.percentage,
@@ -171,7 +183,9 @@ router.post('/', async (req, res) => {
             }
         },
         include: {
-            product: true,
+            products: {
+                include: { product: true }
+            },
             recipeItems: {
                 include: {
                     material: true
@@ -209,7 +223,9 @@ router.put('/:id', async (req, res) => {
             ...(notes !== undefined && { notes }),
         },
         include: {
-            product: true,
+            products: {
+                include: { product: true }
+            },
             recipeItems: {
                 include: {
                     material: true

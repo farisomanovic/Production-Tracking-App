@@ -27,9 +27,10 @@ let materialB
 let materialC
 
 async function cleanup() {
-    // Children before parents: items of VT-REC recipes, the recipes, then the
-    // extra materials (never referenced by anything else).
+    // Children before parents: items and product links of VT-REC recipes,
+    // the recipes, then the extra materials (never referenced by anything else).
     await prisma.recipeItem.deleteMany({ where: { recipe: { name: { startsWith: PREFIX } } } })
+    await prisma.recipeProduct.deleteMany({ where: { recipe: { name: { startsWith: PREFIX } } } })
     await prisma.recipe.deleteMany({ where: { name: { startsWith: PREFIX } } })
     await prisma.material.deleteMany({ where: { name: { startsWith: PREFIX } } })
 }
@@ -47,7 +48,7 @@ afterAll(cleanup)
 function validPayload() {
     return {
         name: `${PREFIX} ${crypto.randomUUID().slice(0, 8)}`,
-        productId: baseline.product.id,
+        productIds: [baseline.product.id],
         items: [
             { materialId: baseline.material.id, percentage: 60 },
             { materialId: materialB.id, percentage: 40 }
@@ -61,13 +62,25 @@ describe('POST /api/recipes — required fields', () => {
     it('rejects a missing name with 400', async () => {
         const res = await post({ ...validPayload(), name: undefined })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('name and productId are required')
+        expect(res.body.error).toBe('name and at least one productId are required')
     })
 
-    it('rejects a missing productId with 400', async () => {
-        const res = await post({ ...validPayload(), productId: undefined })
+    it('rejects a missing productIds with 400', async () => {
+        const res = await post({ ...validPayload(), productIds: undefined })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('name and productId are required')
+        expect(res.body.error).toBe('name and at least one productId are required')
+    })
+
+    it('rejects an empty productIds array with 400', async () => {
+        const res = await post({ ...validPayload(), productIds: [] })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name and at least one productId are required')
+    })
+
+    it('rejects a productIds array with a duplicate id with 400', async () => {
+        const res = await post({ ...validPayload(), productIds: [baseline.product.id, baseline.product.id] })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Each product can only be linked once')
     })
 })
 
@@ -215,7 +228,8 @@ describe('POST /api/recipes — happy path', () => {
         const res = await post(payload)
         expect(res.status).toBe(201)
         expect(res.body.name).toBe(payload.name)
-        expect(res.body.product.id).toBe(baseline.product.id)
+        expect(res.body.products).toHaveLength(1)
+        expect(res.body.products[0].product.id).toBe(baseline.product.id)
         expect(res.body.recipeItems).toHaveLength(2)
         const percentages = res.body.recipeItems.map((item) => item.percentage).sort((a, b) => a - b)
         expect(percentages).toEqual([40, 60])
