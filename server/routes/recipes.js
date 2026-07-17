@@ -208,7 +208,7 @@ router.post('/', async (req, res) => {
  * re-validating the 100% total, and no item-editing endpoint exists yet.
  *
  * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.isDefault`, `body.notes`, `body.active`.
- * @param {import('express').Response} res - 200 → updated Recipe aggregate; 404 unknown id; 500 on failure.
+ * @param {import('express').Response} res - 200 → updated Recipe aggregate; 404 unknown id; 409 blocked by in-progress run; 500 on failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -221,8 +221,15 @@ router.put('/:id', async (req, res) => {
     // product's other recipes, so several "defaults" can coexist and the
     // wizard auto-picks whichever it finds first. Wrap in a transaction that
     // unsets siblings first. todo.md Group 5 #6.
-    // TODO: active: false is accepted even while a run in_progress references
-    // this recipe, same unfixed gap as Operator/Machine. todo.md Group 3 #5.
+    if (active === false) {
+        const openRun = await prisma.productionRun.findFirst({
+            where: { recipeId: req.params.id, status: 'in_progress' },
+            select: { id: true }
+        })
+        if (openRun) {
+            return res.status(409).json({ error: 'Cannot deactivate this recipe while a run is in progress' })
+        }
+    }
     const recipe = await prisma.recipe.update({
         where: { id: req.params.id },
         data: {
