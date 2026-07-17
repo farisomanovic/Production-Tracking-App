@@ -17,10 +17,15 @@ import { hasDuplicates, allBelongTo } from '../lib/validation.js'
 
 const router = Router()
 
-// Shared by POST and PUT below: new Date() never throws on a garbage string,
-// it silently produces an Invalid Date that only surfaces once Prisma tries
-// to write it — this turns that into a 400 naming the offending field instead.
+// Shared by POST and PUT below: new Date() never throws on a garbage string, and
+// silently succeeds (as the Unix epoch) on null or a number — both cases only
+// surface once Prisma writes the result. This turns both into a 400 naming the
+// offending field instead.
 function parseDateOr400(res, value, fieldName) {
+    if (typeof value !== 'string') {
+        res.status(400).json({ error: `${fieldName} is not a valid timestamp` })
+        return null
+    }
     const parsed = new Date(value)
     if (Number.isNaN(parsed.getTime())) {
         res.status(400).json({ error: `${fieldName} is not a valid timestamp` })
