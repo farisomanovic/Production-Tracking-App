@@ -203,7 +203,7 @@ router.post('/', async (req, res, next) => {
         // the machine is configured to make it — the wizard's dropdowns already
         // enforce this, this is the backstop for direct API calls.
         prisma.machineProduct.findFirst({ where: { machineId, productId } }),
-        prisma.recipe.findUnique({ where: { id: recipeId } }),
+        prisma.recipe.findUnique({ where: { id: recipeId }, include: { products: true } }),
         prisma.productionRun.findFirst({ where: { machineId, status: 'in_progress' } })
     ])
 
@@ -235,7 +235,7 @@ router.post('/', async (req, res, next) => {
     if (!recipe) {
         return res.status(400).json({ error: 'Recipe does not exist' })
     }
-    if (recipe.productId !== productId) {
+    if (!recipe.products.some(link => link.productId === productId)) {
         return res.status(400).json({ error: 'Recipe does not belong to the selected product' })
     }
 

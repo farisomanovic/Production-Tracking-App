@@ -16,6 +16,7 @@ import ProductsPage from './pages/ProductsPage'
 import MaterialsPage from './pages/MaterialsPage'
 import ParametersPage from './pages/ParametersPage'
 import RecipesPage from './pages/RecipesPage'
+import RecipeDetailPage from './pages/RecipeDetailPage'
 import ProductionRunsPage from './pages/ProductionRunsPage'
 import AdminPage from './pages/AdminPage'
 import NewRunPage from './pages/NewRunPage'
@@ -45,6 +46,7 @@ function App() {
           <Route path="/materials" element={<MaterialsPage />} />
           <Route path="/parameters" element={<ParametersPage />} />
           <Route path="/recipes" element={<RecipesPage />} />
+          <Route path="/recipes/:recipeId" element={<RecipeDetailPage />} />
           <Route path="/runs" element={<ProductionRunsPage />} />
           {/* /runs/new must be declared before /runs/:id conceptually — React
               Router v7 ranks static segments above params automatically, but the

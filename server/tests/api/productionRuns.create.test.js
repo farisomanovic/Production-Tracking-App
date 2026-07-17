@@ -30,7 +30,8 @@ async function cleanup(machineId) {
     // crashed previous run of this file (the seed's template run is completed).
     // Their child rows are removed by ON DELETE CASCADE.
     await prisma.productionRun.deleteMany({ where: { machineId, status: 'in_progress' } })
-    // FK order: recipe references product.
+    // FK order: RecipeProduct references both recipe and product.
+    await prisma.recipeProduct.deleteMany({ where: { recipe: { name: { startsWith: PREFIX } } } })
     await prisma.recipe.deleteMany({ where: { name: { startsWith: PREFIX } } })
     await prisma.product.deleteMany({ where: { code: { startsWith: PREFIX } } })
     await prisma.machine.deleteMany({ where: { code: { startsWith: PREFIX } } })
@@ -50,7 +51,7 @@ beforeAll(async () => {
         data: { name: `${PREFIX} unlinked product`, code: `${PREFIX}-P2`, unit: 'kg' }
     })
     recipeOfUnlinkedProduct = await prisma.recipe.create({
-        data: { name: `${PREFIX} other recipe`, productId: unlinkedProduct.id }
+        data: { name: `${PREFIX} other recipe`, products: { create: [{ productId: unlinkedProduct.id }] } }
     })
 })
 

@@ -5,6 +5,7 @@
  * Editing existing recipes has no UI yet.
  */
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getAllRecipes, createRecipe } from '../api/recipes'
 import { getAllMaterials } from '../api/materials'
 import { getAllProducts } from '../api/products'
@@ -21,6 +22,7 @@ import { common } from '../styles/common'
  * <Route path="/recipes" element={<RecipesPage />} />
  */
 function RecipesPage() {
+  const navigate = useNavigate()
   // Three useApi instances instead of one combined fetch: each has its own
   // error message, and only the recipe list ever needs reloading (after create).
   const { data: recipes, loading: loadingRecipes, error: errorRecipes, reload: reloadRecipes } = useApi(getAllRecipes, 'Failed to load recipes')
@@ -38,10 +40,29 @@ function RecipesPage() {
   // without a lookup into `materials` on every row.
   const [items, setItems] = useState([])
   const [selectedMaterialId, setSelectedMaterialId] = useState('')
-  const [selectedProductId, setSelectedProductId] = useState('')
+  // A recipe can now be linked to several products at creation time, so this
+  // is a set of ids (checkbox list) rather than one dropdown value.
+  const [selectedProductIds, setSelectedProductIds] = useState([])
   const [percentage, setPercentage] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [actionError, setActionError] = useState(null)
+
+  /**
+   * Toggles one product in/out of the draft's linked-products set.
+   *
+   * @param {string} productId - Product UUID.
+   * @returns {void}
+   *
+   * @example
+   * handleToggleProduct('c771…')
+   */
+  function handleToggleProduct(productId) {
+    setSelectedProductIds((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId]
+    )
+  }
 
   // ─── DRAFT ITEM MANAGEMENT ──────────────────────────────────────────────────
 
@@ -114,7 +135,7 @@ function RecipesPage() {
    * <button onClick={handleSubmit}>Save Recipe</button>
    */
   async function handleSubmit() {
-    if (!name.trim() || !selectedProductId || items.length === 0) return
+    if (!name.trim() || selectedProductIds.length === 0 || items.length === 0) return
     if (!isTotalValid(getTotalPercentage())) return
 
     try {
@@ -122,7 +143,7 @@ function RecipesPage() {
         name,
         isDefault,
         ...(notes.trim() && { notes }),
-        productId: selectedProductId,
+        productIds: selectedProductIds,
         items: items.map((i) => ({
           materialId: i.materialId,
           percentage: i.percentage
@@ -132,7 +153,7 @@ function RecipesPage() {
       setNotes('')
       setIsDefault(false)
       setItems([])
-      setSelectedProductId('')
+      setSelectedProductIds([])
       setShowForm(false)
       reloadRecipes()
     } catch (err) {
@@ -176,18 +197,19 @@ function RecipesPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <select
-            style={styles.select}
-            value={selectedProductId}
-            onChange={(e) => setSelectedProductId(e.target.value)}
-          >
-            <option value="">Select product</option>
+          <p style={styles.sectionLabel}>Linked products</p>
+          <div style={styles.productChecklist}>
             {products.map((p) => (
-              <option key={p.id} value={p.id}>
+              <label key={p.id} style={styles.productCheckboxRow}>
+                <input
+                  type="checkbox"
+                  checked={selectedProductIds.includes(p.id)}
+                  onChange={() => handleToggleProduct(p.id)}
+                />
                 {p.name} {p.code ? `(${p.code})` : ''}
-              </option>
+              </label>
             ))}
-          </select>
+          </div>
           <input
             style={common.input}
             type="text"
@@ -261,8 +283,8 @@ function RecipesPage() {
           <button
             style={{
               ...common.button,
-              opacity: isTotalValid(totalPercentage) && name.trim() ? 1 : 0.4,
-              cursor: isTotalValid(totalPercentage) && name.trim() ? 'pointer' : 'not-allowed'
+              opacity: isTotalValid(totalPercentage) && name.trim() && selectedProductIds.length > 0 ? 1 : 0.4,
+              cursor: isTotalValid(totalPercentage) && name.trim() && selectedProductIds.length > 0 ? 'pointer' : 'not-allowed'
             }}
             onClick={handleSubmit}
           >
@@ -273,10 +295,16 @@ function RecipesPage() {
 
       <div style={common.list}>
         {recipes.map((recipe) => (
-          <div key={recipe.id} style={common.card}>
+          <div
+            key={recipe.id}
+            style={{ ...common.card, cursor: 'pointer' }}
+            onClick={() => navigate(`/recipes/${recipe.id}`)}
+          >
             <div style={common.cardLeft}>
               <span style={common.cardName}>{recipe.name}</span>
-              <span style={common.cardType}>{recipe.product.name}</span>
+              <span style={common.cardType}>
+                {recipe.products.map((link) => link.product.name).join(', ')}
+              </span>
               {recipe.notes && (
                 <span style={common.cardType}>{recipe.notes}</span>
               )}
@@ -286,6 +314,7 @@ function RecipesPage() {
                 </span>
               )}
             </div>
+            <span style={common.arrow}>›</span>
           </div>
         ))}
       </div>
@@ -318,6 +347,24 @@ const styles = {
     color: 'var(--color-text-secondary)',
     fontSize: '12px',
     margin: '8px 0 4px 0',
+  },
+  productChecklist: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    maxHeight: '160px',
+    overflowY: 'auto',
+    padding: '8px 12px',
+    backgroundColor: 'var(--color-surface)',
+    borderRadius: '8px',
+    border: '1px solid var(--color-border)',
+  },
+  productCheckboxRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px',
   },
   itemForm: {
     display: 'flex',

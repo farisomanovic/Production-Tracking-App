@@ -8,6 +8,12 @@
       "port": 3000
     },
     {
+      "name": "server-test",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "server", "run", "dev:test"],
+      "port": 3000
+    },
+    {
       "name": "client",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "client", "run", "dev"],

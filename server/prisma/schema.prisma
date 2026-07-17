@@ -87,7 +87,7 @@ model Product {
   unit        String
 
   machineProducts MachineProduct[]
-  recipes         Recipe[]
+  recipeProducts  RecipeProduct[]
   runOutputs      RunOutput[]
   productionRuns  ProductionRun[]
 }
@@ -106,6 +106,22 @@ model MachineProduct {
   @@unique([machineId, productId])
 }
 
+// The same formula is often reused across several products (e.g. different
+// widths of the same mix) — this join lets one Recipe link to many Products
+// instead of the old required 1:1 Recipe.productId. A Recipe must always keep
+// at least one linked Product; the route layer enforces that, not the schema.
+model RecipeProduct {
+  id String @id @default(uuid())
+
+  recipeId  String
+  productId String
+
+  recipe  Recipe  @relation(fields: [recipeId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([recipeId, productId])
+}
+
 // stockQty is live inventory: decremented by run completion, incremented by run
 // deletion and manual deliveries — all in kg-equivalent of `unit`. A DB-level
 // CHECK (stockQty >= 0) exists in the completion_race_and_stock_floor migration;
@@ -122,7 +138,8 @@ model Material {
   materialUsages MaterialUsage[]
 }
 
-// A product can have several formulas (e.g. virgin vs. regranulate mix);
+// A product can have several formulas (e.g. virgin vs. regranulate mix), and one
+// formula can now be reused across several products via RecipeProduct.
 // isDefault marks the one the wizard preselects.
 // TODO: nothing enforces ONE default per product — several can be flagged and the
 // wizard picks arbitrarily. todo.md Group 5 #6.
@@ -132,9 +149,7 @@ model Recipe {
   isDefault Boolean  @default(false)
   notes     String?
 
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
+  products       RecipeProduct[]
   recipeItems    RecipeItem[]
   productionRuns ProductionRun[]
 }

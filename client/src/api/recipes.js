@@ -51,17 +51,18 @@ export function getRecipeById(id) {
 }
 
 /**
- * Creates a recipe together with its items; the server rejects formulas that
- * do not total 100%.
+ * Creates a recipe together with its items and its linked products; the
+ * server rejects formulas that do not total 100% and requires at least one
+ * productId (a recipe must always be linked to at least one product).
  *
- * @param {Object} data - `{ name, productId, items: [{ materialId, percentage, plannedQtyKg? }] }`
+ * @param {Object} data - `{ name, productIds: string[], items: [{ materialId, percentage, plannedQtyKg? }] }`
  * required; `{ isDefault, notes }` optional. Percentages must sum to 100.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = created Recipe aggregate (201).
  * @throws {import('axios').AxiosError} 400 on incomplete formula; network/5xx otherwise.
  *
  * @example
  * await createRecipe({
- *   name: 'Regranulat mix', productId: 'c771…',
+ *   name: 'Regranulat mix', productIds: ['c771…'],
  *   items: [{ materialId: 'a9d2…', percentage: 60 }, { materialId: '77b0…', percentage: 40 }]
  * })
  */
