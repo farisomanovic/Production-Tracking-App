@@ -82,7 +82,7 @@ router.post('/', async (req, res) => {
  * Partially updates an operator; `active: false` is the soft-delete path.
  *
  * @param {import('express').Request} req - `params.id` UUID; `body.name` and/or `body.active`, both optional.
- * @param {import('express').Response} res - 200 → updated Operator; 404 unknown id; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → updated Operator; 404 unknown id; 409 blocked by in-progress run; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -91,9 +91,15 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   const { name, active } = req.body
-  // TODO: deactivation is allowed even while this operator has an in_progress
-  // run, which orphans the live run's context. Check for open runs before
-  // accepting active: false. todo.md Group 3 #5.
+  if (active === false) {
+    const openRun = await prisma.productionRun.findFirst({
+      where: { operatorId: req.params.id, status: 'in_progress' },
+      select: { id: true }
+    })
+    if (openRun) {
+      return res.status(409).json({ error: 'Cannot deactivate this operator while a run is in progress' })
+    }
+  }
   const operator = await prisma.operator.update({
     where: { id: req.params.id },
     data: {

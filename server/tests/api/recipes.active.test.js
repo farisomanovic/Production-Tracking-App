@@ -15,10 +15,13 @@ const PREFIX = 'VT-RECACTIVE'
 
 let baseline
 let recipe
+let isolatedMachine
 
 async function cleanup() {
+    await prisma.productionRun.deleteMany({ where: { recipe: { name: { startsWith: PREFIX } } } })
     await prisma.recipeProduct.deleteMany({ where: { recipe: { name: { startsWith: PREFIX } } } })
     await prisma.recipe.deleteMany({ where: { name: { startsWith: PREFIX } } })
+    await prisma.machine.deleteMany({ where: { code: { startsWith: PREFIX } } })
 }
 
 beforeAll(async () => {
@@ -27,6 +30,10 @@ beforeAll(async () => {
     recipe = await prisma.recipe.create({
         data: { name: `${PREFIX} recipe`, products: { create: [{ productId: baseline.product.id }] } }
     })
+    // A dedicated machine, not baseline.machine, so the in-progress run created
+    // below doesn't collide with ProductionRun_one_in_progress_per_machine
+    // against other test files that also occupy baseline.machine's slot.
+    isolatedMachine = await prisma.machine.create({ data: { name: `${PREFIX} machine`, code: `${PREFIX}-M1` } })
 })
 
 afterAll(cleanup)
@@ -42,6 +49,36 @@ describe('PUT /api/recipes/:id — active toggle', () => {
         const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ active: true })
         expect(res.status).toBe(200)
         expect(res.body.active).toBe(true)
+    })
+})
+
+describe('PUT /api/recipes/:id — blocked while a run is in progress', () => {
+    it('rejects active:false when an in-progress run references this recipe', async () => {
+        const run = await prisma.productionRun.create({
+            data: {
+                date: new Date(),
+                startTime: new Date(),
+                operatorId: baseline.operator.id,
+                machineId: isolatedMachine.id,
+                productId: baseline.product.id,
+                recipeId: recipe.id
+            }
+        })
+        try {
+            const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ active: false })
+            expect(res.status).toBe(409)
+            const stillActive = await prisma.recipe.findUnique({ where: { id: recipe.id } })
+            expect(stillActive.active).toBe(true)
+        } finally {
+            await prisma.productionRun.delete({ where: { id: run.id } })
+        }
+    })
+
+    it('allows active:false once no run is in progress', async () => {
+        const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ active: false })
+        expect(res.status).toBe(200)
+        expect(res.body.active).toBe(false)
+        await prisma.recipe.update({ where: { id: recipe.id }, data: { active: true } })
     })
 })
 

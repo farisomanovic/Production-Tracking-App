@@ -7,6 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { machineHasRunInProgress } from '../lib/machineGuards.js'
 
 const router = Router()
 
@@ -82,7 +83,7 @@ router.post('/', async (req, res) => {
  * Partially updates a machine; `active: false` is the soft-delete path.
  *
  * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.code`, `body.active`.
- * @param {import('express').Response} res - 200 → updated Machine; 404 unknown id; 409 duplicate code; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → updated Machine; 404 unknown id; 409 duplicate code or blocked by in-progress run; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -91,8 +92,9 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   const { name, code, active } = req.body
-  // TODO: deactivation is allowed while a run is in progress on this machine.
-  // todo.md Group 3 #5.
+  if (active === false && await machineHasRunInProgress(req.params.id)) {
+    return res.status(409).json({ error: 'Cannot deactivate this machine while a run is in progress' })
+  }
   const machine = await prisma.machine.update({
     where: { id: req.params.id },
     data: {
