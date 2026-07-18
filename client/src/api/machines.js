@@ -38,7 +38,7 @@ export function getMachineById(id) {
  *
  * @param {Object} data - `{ name: string, code?: string }` — code must be unique when present.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = created Machine (201).
- * @throws {import('axios').AxiosError} 400 when name is missing; 500 today on duplicate code.
+ * @throws {import('axios').AxiosError} 400 when name is missing; 409 on duplicate code.
  *
  * @example
  * await createMachine({ name: 'Foil line 2', code: 'FOL-02' })

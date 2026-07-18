@@ -43,7 +43,7 @@ export function linkParameterToMachine(data) {
  * @param {string} id - MachineParameter link UUID (not the parameter id).
  * @param {Object} data - `{ displayOrder: number }`.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = updated link.
- * @throws {import('axios').AxiosError} 400 when displayOrder missing; 500 today when the target position is taken.
+ * @throws {import('axios').AxiosError} 400 when displayOrder missing; 409 when the target position is taken.
  *
  * @example
  * await updateMachineParameter('31f0…', { displayOrder: 1 })
@@ -59,7 +59,7 @@ export function updateMachineParameter(id, data) {
  *
  * @param {string} id - MachineParameter link UUID.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = confirmation message.
- * @throws {import('axios').AxiosError} 500 today when the link has recorded run values (RESTRICT FK).
+ * @throws {import('axios').AxiosError} 409 when the link has recorded run values (RESTRICT FK).
  *
  * @example
  * await unlinkParameterFromMachine('31f0…')
