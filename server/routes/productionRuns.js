@@ -34,6 +34,12 @@ function parseDateOr400(res, value, fieldName) {
     return parsed
 }
 
+// dateFrom/dateTo are date-only (YYYY-MM-DD), unlike the full timestamps
+// parseDateOr400 above validates — a narrower shape check instead of reuse.
+function isValidDateOnlyString(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00.000Z`).getTime())
+}
+
 // ─── LIST & DETAIL ───────────────────────────────────────────────────────────
 
 /**
@@ -42,7 +48,8 @@ function parseDateOr400(res, value, fieldName) {
  *
  * @param {import('express').Request} req - Optional query: `machineId`, `operatorId`, `productId`,
  * `status` ("in_progress" | "completed"), `dateFrom`/`dateTo` (YYYY-MM-DD), `limit` (positive int).
- * @param {import('express').Response} res - 200 → ProductionRun[] newest-first; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → ProductionRun[] newest-first; 400 on a malformed/array-shaped
+ * query param, an invalid dateFrom/dateTo, or a non-positive-integer limit; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -52,6 +59,31 @@ function parseDateOr400(res, value, fieldName) {
  */
 router.get('/', async (req, res) => {
     const { machineId, operatorId, productId, dateFrom, dateTo, limit, status } = req.query
+
+    // Express turns a repeated query key (?machineId=a&machineId=b) into an
+    // array — reject that shape for every one of these before it reaches Prisma.
+    for (const [name, value] of Object.entries({ machineId, operatorId, productId, status, dateFrom, dateTo, limit })) {
+        if (value !== undefined && typeof value !== 'string') {
+            return res.status(400).json({ error: `${name} must be a single value` })
+        }
+    }
+
+    if (dateFrom && !isValidDateOnlyString(dateFrom)) {
+        return res.status(400).json({ error: 'dateFrom must be a valid YYYY-MM-DD date' })
+    }
+    if (dateTo && !isValidDateOnlyString(dateTo)) {
+        return res.status(400).json({ error: 'dateTo must be a valid YYYY-MM-DD date' })
+    }
+
+    let take
+    if (limit !== undefined) {
+        const parsedLimit = Number(limit)
+        if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
+            return res.status(400).json({ error: 'limit must be a positive integer' })
+        }
+        take = parsedLimit
+    }
+
     const where = {}
     // One shared where object so any combination of filters can be expressed
     // by the same endpoint instead of one route per filter.
@@ -77,10 +109,8 @@ router.get('/', async (req, res) => {
         // Add a startTime tiebreaker: orderBy: [{date:'desc'},{startTime:'desc'}].
         // todo.md Group 4 #4.
         orderBy: { date: 'desc' },
-        // TODO: Number("abc") is NaN and makes Prisma throw a 500 — parse and
-        // validate limit first. Also: no default cap, the list grows unbounded.
-        // todo.md Group 4 #2 and #4.
-        ...(limit && { take: Number(limit) }),
+        // TODO: no default/max cap, the list grows unbounded. todo.md Group 4 #4.
+        ...(take !== undefined && { take }),
         include: {
             operator: true,
             machine: true,

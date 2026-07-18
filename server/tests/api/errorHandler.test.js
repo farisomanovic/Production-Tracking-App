@@ -112,11 +112,18 @@ describe('central error middleware — logging', () => {
     })
 
     it('does console.error a genuinely unrecognized error (falls through to 500)', async () => {
-        // ?limit=abc is a known, pre-existing gap (todo.md Group 4 #2): Number('abc')
-        // is NaN and Prisma throws on it, unrecognized by any mapped branch —
-        // exactly the case that should still be logged.
+        // machineParameters.js's create route only checks machineId/parameterId
+        // are truthy, not that they're strings — a numeric machineId passes that
+        // guard, then fails Prisma's own client-side type validation before ever
+        // reaching the DB. PrismaClientValidationError has no .code (unlike
+        // PrismaClientKnownRequestError), so nothing above recognizes it —
+        // exactly the case that should still be logged. (?limit=abc used to be
+        // this fixture's trigger; todo.md Group 4 #2 closed that gap, so this
+        // test needed a different genuinely-unrecognized-error source.)
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-        const res = await request(app).get('/api/production-runs?limit=abc')
+        const res = await request(app)
+            .post('/api/machine-parameters')
+            .send({ machineId: 12345, parameterId: baselineMachineParameter.parameterId })
         expect(res.status).toBe(500)
         expect(errorSpy).toHaveBeenCalledTimes(1)
         errorSpy.mockRestore()
