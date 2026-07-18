@@ -7,7 +7,7 @@
  * handlers here, so routes no longer need their own try/catch for the generic
  * case — only for errors they want to translate into a specific AppError.
  */
-import { AppError } from '../lib/errors.js'
+import { AppError, isForeignKeyViolation } from '../lib/errors.js'
 
 // eslint-disable-next-line no-unused-vars
 export default function errorHandler(err, req, res, next) {
@@ -26,26 +26,12 @@ export default function errorHandler(err, req, res, next) {
     // Foreign key constraint violation. Prisma doesn't distinguish direction,
     // so infer from the HTTP method: a blocked DELETE means "still referenced
     // elsewhere" (409 Conflict); a failed create/update means the request
-    // pointed at a reference that doesn't exist (400 Bad Request).
-    //
-    // A DELETE blocked by an `onDelete: Restrict` relation (e.g. MachineParameter
-    // still referenced by RunParameterValue) isn't Prisma's own P2003 — Postgres
-    // enforces RESTRICT itself and the raw error surfaces as an unrecognized
-    // PrismaClientUnknownRequestError. Prefer the embedded Postgres SQLSTATE code
-    // (23001 restrict_violation / 23503 foreign_key_violation — part of the SQL
-    // standard, unaffected by message wording or locale) and fall back to matching
-    // the English phrase only if the code isn't present in the message. This is
-    // the best signal available today — Prisma doesn't expose a stable code for
-    // this error class — so it fails safe (falls through to a 500, not a wrong
-    // status) if a future Prisma version reformats the message. Re-verify this
-    // detection after any Prisma major-version upgrade (todo.md Group 8).
-    const sqlState = err.message?.match(/"code":\s*"(\d{5})"/)?.[1]
-    const isForeignKeyViolation = err.code === 'P2003' ||
-        (err.name === 'PrismaClientUnknownRequestError' &&
-            (sqlState === '23001' || sqlState === '23503' || /foreign key constraint/i.test(err.message)))
-    if (isForeignKeyViolation) {
+    // pointed at a reference that doesn't exist (400 Bad Request). A route can
+    // tag a friendlier, resource-specific message before forwarding a blocked
+    // DELETE here (see machineParameters.js), same as the P2002 branch above.
+    if (isForeignKeyViolation(err)) {
         if (req.method === 'DELETE') {
-            return res.status(409).json({ error: 'This record is still referenced elsewhere and cannot be removed' })
+            return res.status(409).json({ error: err.clientMessage || 'This record is still referenced elsewhere and cannot be removed' })
         }
         return res.status(400).json({ error: 'One or more referenced records do not exist' })
     }

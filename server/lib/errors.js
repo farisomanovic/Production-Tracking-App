@@ -39,3 +39,21 @@ export class InsufficientStockError extends AppError {
         super(409, message)
     }
 }
+
+// Detects a foreign key constraint violation. Prisma's own P2003 covers Prisma-
+// enforced relations; a DELETE blocked by an `onDelete: Restrict` relation (e.g.
+// MachineParameter still referenced by RunParameterValue) is enforced by Postgres
+// itself and surfaces as an unrecognized PrismaClientUnknownRequestError instead.
+// Prefer the embedded Postgres SQLSTATE code (23001 restrict_violation / 23503
+// foreign_key_violation — part of the SQL standard, unaffected by message wording
+// or locale) and fall back to matching the English phrase only if the code isn't
+// present in the message. This is the best signal available today — Prisma doesn't
+// expose a stable code for this error class — so it fails safe (falls through to a
+// 500, not a wrong status) if a future Prisma version reformats the message.
+// Re-verify this detection after any Prisma major-version upgrade (todo.md Group 8).
+export function isForeignKeyViolation(err) {
+    const sqlState = err.message?.match(/"code":\s*"(\d{5})"/)?.[1]
+    return err.code === 'P2003' ||
+        (err.name === 'PrismaClientUnknownRequestError' &&
+            (sqlState === '23001' || sqlState === '23503' || /foreign key constraint/i.test(err.message)))
+}
