@@ -100,7 +100,9 @@ router.put('/:id', async (req, res) => {
     data: {
       // Spread-if-defined keeps omitted fields untouched (partial update).
       ...(name !== undefined && { name }),
-      ...(code !== undefined && { code }),
+      // Blank/whitespace normalizes to null so it never occupies the unique
+      // constraint's single "" slot (see todo.md Group 3 #11).
+      ...(code !== undefined && { code: code.trim() === '' ? null : code.trim() }),
       ...(active !== undefined && { active }),
     }
   })
