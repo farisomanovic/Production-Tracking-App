@@ -228,6 +228,9 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, notes, active } = req.body
+    if (active !== undefined && typeof active !== 'boolean') {
+        return res.status(400).json({ error: 'active must be a boolean' })
+    }
     if (active === false) {
         const openRun = await prisma.productionRun.findFirst({
             where: { recipeId: req.params.id, status: 'in_progress' },

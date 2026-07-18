@@ -161,6 +161,28 @@ describe('POST /api/production-runs/:id/complete — relational validation (Grou
     })
 })
 
+describe('POST /api/production-runs/:id/complete — energyEnd type validation (Group 3 #12)', () => {
+    it('rejects a non-numeric energyEnd with 400 instead of aborting the transaction', async () => {
+        const res = await complete({ ...validPayload(), energyEnd: 'broken' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyEnd must be a number greater than 0 when provided')
+        const run = await prisma.productionRun.findUnique({ where: { id: runId } })
+        expect(run.status).toBe('in_progress')
+    })
+
+    it('rejects an energyEnd of exactly 0 with 400', async () => {
+        const res = await complete({ ...validPayload(), energyEnd: 0 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyEnd must be a number greater than 0 when provided')
+    })
+
+    it('accepts a valid energyEnd', async () => {
+        const res = await complete({ ...validPayload(), energyEnd: 50 })
+        expect(res.status).toBe(200)
+        expect(res.body.energyEnd).toBe(50)
+    })
+})
+
 describe('POST /api/production-runs/:id/complete — recipe deactivated after the run started', () => {
     it('rejects completion once the run\'s recipe has been deactivated', async () => {
         // The run was created (via beforeEach, above) while the recipe was

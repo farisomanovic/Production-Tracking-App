@@ -121,6 +121,34 @@ describe('POST /api/production-runs — required fields and dates', () => {
     })
 })
 
+describe('POST /api/production-runs — energyStart type validation (Group 3 #12)', () => {
+    it('rejects a non-numeric energyStart with 400', async () => {
+        const res = await post({ ...validPayload(), energyStart: 'broken' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyStart must be a number greater than 0 when provided')
+    })
+
+    it('rejects a negative energyStart with 400', async () => {
+        const res = await post({ ...validPayload(), energyStart: -5 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyStart must be a number greater than 0 when provided')
+    })
+
+    it('rejects an energyStart of exactly 0 with 400', async () => {
+        const res = await post({ ...validPayload(), energyStart: 0 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyStart must be a number greater than 0 when provided')
+    })
+
+    it('accepts a valid energyStart', async () => {
+        const res = await post({ ...validPayload(), energyStart: 100 })
+        expect(res.status).toBe(201)
+        expect(res.body.energyStart).toBe(100)
+        const del = await request(app).delete(`/api/production-runs/${res.body.id}`)
+        expect(del.status).toBe(200)
+    })
+})
+
 describe('POST /api/production-runs — relational validation (PR #24)', () => {
     it('rejects an unknown operatorId with 400', async () => {
         const res = await post({ ...validPayload(), operatorId: crypto.randomUUID() })

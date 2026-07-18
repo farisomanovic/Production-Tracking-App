@@ -92,6 +92,9 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   const { name, code, active } = req.body
+  if (active !== undefined && typeof active !== 'boolean') {
+    return res.status(400).json({ error: 'active must be a boolean' })
+  }
   if (active === false && await machineHasRunInProgress(req.params.id)) {
     return res.status(409).json({ error: 'Cannot deactivate this machine while a run is in progress' })
   }

@@ -12,3 +12,7 @@ export function hasDuplicates(ids) {
 export function allBelongTo(ids, validSet) {
     return ids.every(id => validSet.has(id))
 }
+
+export function isFiniteNumber(v) {
+    return typeof v === 'number' && Number.isFinite(v)
+}

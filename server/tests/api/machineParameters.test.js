@@ -49,6 +49,66 @@ async function createLink(name) {
     })
 }
 
+describe('POST /api/machine-parameters — displayOrder type validation (Group 3 #12)', () => {
+    it('rejects a non-integer displayOrder with 400', async () => {
+        counter += 1
+        const parameter = await prisma.parameter.create({ data: { name: `${PREFIX} post noninteger`, unit: 'C' } })
+        const res = await request(app).post('/api/machine-parameters').send({
+            machineId: baseline.machine.id, parameterId: parameter.id, displayOrder: 1.5
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('displayOrder must be a non-negative integer when provided')
+    })
+
+    it('rejects a negative displayOrder with 400', async () => {
+        counter += 1
+        const parameter = await prisma.parameter.create({ data: { name: `${PREFIX} post negative`, unit: 'C' } })
+        const res = await request(app).post('/api/machine-parameters').send({
+            machineId: baseline.machine.id, parameterId: parameter.id, displayOrder: -1
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('displayOrder must be a non-negative integer when provided')
+    })
+
+    it('accepts a valid explicit displayOrder', async () => {
+        counter += 1
+        const parameter = await prisma.parameter.create({ data: { name: `${PREFIX} post valid`, unit: 'C' } })
+        const res = await request(app).post('/api/machine-parameters').send({
+            machineId: baseline.machine.id, parameterId: parameter.id, displayOrder: 100 + counter
+        })
+        expect(res.status).toBe(201)
+        expect(res.body.displayOrder).toBe(100 + counter)
+        await prisma.machineParameter.delete({ where: { id: res.body.id } })
+    })
+})
+
+describe('PUT /api/machine-parameters/:id — displayOrder type validation (Group 3 #12)', () => {
+    it('rejects a non-integer displayOrder with 400', async () => {
+        const link = await createLink('put noninteger')
+        const res = await request(app).put(`/api/machine-parameters/${link.id}`).send({ displayOrder: 1.5 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('displayOrder must be a non-negative integer')
+        await prisma.machineParameter.delete({ where: { id: link.id } })
+    })
+
+    it('rejects a negative displayOrder with 400', async () => {
+        const link = await createLink('put negative')
+        const res = await request(app).put(`/api/machine-parameters/${link.id}`).send({ displayOrder: -1 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('displayOrder must be a non-negative integer')
+        await prisma.machineParameter.delete({ where: { id: link.id } })
+    })
+
+    it('accepts a valid displayOrder', async () => {
+        const link = await createLink('put valid')
+        counter += 1
+        const res = await request(app).put(`/api/machine-parameters/${link.id}`).send({ displayOrder: 200 + counter })
+        expect(res.status).toBe(200)
+        expect(res.body.displayOrder).toBe(200 + counter)
+        await prisma.machineParameter.delete({ where: { id: link.id } })
+    })
+})
+
 describe('DELETE /api/machine-parameters/:id', () => {
     it('rejects the unlink with 409 while the machine has a run in progress', async () => {
         const link = await createLink('blocked')

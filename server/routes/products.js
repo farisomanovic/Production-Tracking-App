@@ -7,8 +7,20 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { isFiniteNumber } from '../lib/validation.js'
 
 const router = Router()
+
+// Shared by POST and PUT below: a product dimension of exactly 0 is
+// physically impossible, so — unlike some optional numeric fields elsewhere
+// in the app — 0 is rejected here alongside negatives/strings.
+function dimensionError(res, name, value) {
+    if (value !== undefined && (!isFiniteNumber(value) || value <= 0)) {
+        res.status(400).json({ error: `${name} must be a number greater than 0 when provided` })
+        return true
+    }
+    return false
+}
 
 /**
  * Lists every product.
@@ -66,6 +78,9 @@ router.post('/', async (req, res) => {
     if (!name || !unit || !code) {
         return res.status(400).json({ error: 'name, unit and code are required' })
     }
+    if (dimensionError(res, 'widthMm', widthMm) || dimensionError(res, 'thicknessMm', thicknessMm) || dimensionError(res, 'lengthM', lengthM)) {
+        return
+    }
     const product = await prisma.product.create({
         data: { name, code,
             ...(widthMm !== undefined && { widthMm }),
@@ -90,6 +105,9 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body
+    if (dimensionError(res, 'widthMm', widthMm) || dimensionError(res, 'thicknessMm', thicknessMm) || dimensionError(res, 'lengthM', lengthM)) {
+        return
+    }
     const product = await prisma.product.update({
         where: { id: req.params.id },
         data: {

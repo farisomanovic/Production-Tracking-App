@@ -56,6 +56,14 @@ describe('PUT /api/recipes/:id — active toggle', () => {
         expect(res.status).toBe(200)
         expect(res.body.isDefault).toBeUndefined()
     })
+
+    it('rejects a non-boolean active with 400 and leaves the row unchanged (Group 3 #12)', async () => {
+        const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ active: 'no' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('active must be a boolean')
+        const unchanged = await prisma.recipe.findUnique({ where: { id: recipe.id } })
+        expect(unchanged.active).toBe(true)
+    })
 })
 
 describe('PUT /api/recipes/:id — blocked while a run is in progress', () => {

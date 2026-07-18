@@ -55,6 +55,9 @@ router.post('/', async (req, res, next) => {
         if (!machineId || !parameterId) {
             return res.status(400).json({ error: 'machineId and parameterId are required' })
         }
+        if (displayOrder !== undefined && (!Number.isInteger(displayOrder) || displayOrder < 0)) {
+            return res.status(400).json({ error: 'displayOrder must be a non-negative integer when provided' })
+        }
 
         let finalDisplayOrder = displayOrder
 
@@ -109,6 +112,9 @@ router.put('/:id', async (req, res) => {
     const { displayOrder } = req.body
     if (displayOrder === undefined) {
         return res.status(400).json({ error: 'displayOrder is required' })
+    }
+    if (!Number.isInteger(displayOrder) || displayOrder < 0) {
+        return res.status(400).json({ error: 'displayOrder must be a non-negative integer' })
     }
     // TODO: swapping two rows is impossible with @@unique([machineId,
     // displayOrder]) — the first update collides with the other row's value

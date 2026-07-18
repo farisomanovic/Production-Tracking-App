@@ -32,6 +32,16 @@ beforeAll(async () => {
 
 afterAll(cleanup)
 
+describe('PUT /api/machines/:id — active type validation (Group 3 #12)', () => {
+    it('rejects a non-boolean active with 400 and leaves the row unchanged', async () => {
+        const res = await request(app).put(`/api/machines/${machine.id}`).send({ active: 'no' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('active must be a boolean')
+        const unchanged = await prisma.machine.findUnique({ where: { id: machine.id } })
+        expect(unchanged.active).toBe(true)
+    })
+})
+
 describe('PUT /api/machines/:id — blocked while a run is in progress', () => {
     it('rejects active:false when an in-progress run references this machine', async () => {
         const run = await prisma.productionRun.create({

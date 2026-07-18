@@ -76,6 +76,24 @@ describe('PUT /api/production-runs/:id', () => {
         expect(res.body.notes).toBe(`${PREFIX} note`)
     })
 
+    it('rejects a non-numeric energyStart with 400 (Group 3 #12)', async () => {
+        const res = await put({ energyStart: 'broken' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyStart must be a number greater than 0 when provided')
+    })
+
+    it('rejects an energyEnd of exactly 0 with 400 (Group 3 #12)', async () => {
+        const res = await put({ energyEnd: 0 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyEnd must be a number greater than 0 when provided')
+    })
+
+    it('rejects a negative energyEnd with 400 (Group 3 #12)', async () => {
+        const res = await put({ energyEnd: -1 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyEnd must be a number greater than 0 when provided')
+    })
+
     it('rejects an endTime at or before the run startTime', async () => {
         const res = await put({ endTime: new Date(0).toISOString() })
         expect(res.status).toBe(400)
