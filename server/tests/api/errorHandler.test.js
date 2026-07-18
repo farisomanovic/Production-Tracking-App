@@ -4,9 +4,9 @@
  * happy path + main failure case tier per CLAUDE.md, since this is cross-cutting
  * infra, not stock math. Exercises the Prisma error codes it maps (P2002 on two
  * different routes — proving the mapping isn't route-specific — P2003×2
- * directions, P2025) plus the malformed-JSON pass-through, through real routes
- * rather than unit-testing the middleware in isolation, since that's how it's
- * actually reached.
+ * directions, one locally overridden, P2025) plus the malformed-JSON pass-through,
+ * through real routes rather than unit-testing the middleware in isolation, since
+ * that's how it's actually reached.
  *
  * Rows created here use the VT-ERR prefix; beforeAll/afterAll clean up leftovers.
  */
@@ -75,13 +75,13 @@ describe('central error middleware — Prisma error mapping', () => {
         expect(res.body.error).toBe('One or more referenced records do not exist')
     })
 
-    it('maps P2003 (referenced elsewhere) on a delete to 409', async () => {
+    it('maps a locally-handled P2003 (machine-parameter unlink) to 409 with the friendlier message', async () => {
         // The seed's templateRun recorded a value against this MachineParameter link,
         // so RunParameterValue's RESTRICT foreign key blocks this delete — the link
         // is never actually removed, so this is safe to run against the shared fixture.
         const res = await request(app).delete(`/api/machine-parameters/${baselineMachineParameter.id}`)
         expect(res.status).toBe(409)
-        expect(res.body.error).toBe('This record is still referenced elsewhere and cannot be removed')
+        expect(res.body.error).toBe('This parameter has recorded run values and cannot be removed')
     })
 
     it('maps a locally-handled P2002 (machine-products link) to 409 with the friendlier message', async () => {

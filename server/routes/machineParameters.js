@@ -7,6 +7,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { machineHasRunInProgress } from '../lib/machineGuards.js'
+import { isForeignKeyViolation } from '../lib/errors.js'
 
 const router = Router()
 
@@ -136,7 +137,7 @@ router.put('/:id', async (req, res) => {
  * // DELETE /api/machine-parameters/31f0…
  * // → 200 { message: "Parameter unlinked from machine successfully" }
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req, res, next) => {
     const link = await prisma.machineParameter.findUnique({
         where: { id: req.params.id },
         select: { machineId: true }
@@ -149,12 +150,20 @@ router.delete('/:id', async (req, res) => {
     if (link && await machineHasRunInProgress(link.machineId)) {
         return res.status(409).json({ error: 'Cannot unlink this parameter while the machine has a run in progress' })
     }
-    // Once any completed run recorded a value for this link, RunParameterValue's
-    // RESTRICT foreign key makes this delete throw P2003, which the central
-    // error middleware maps to 409 (DELETE → "still referenced" reading).
-    await prisma.machineParameter.delete({
-        where: { id: req.params.id }
-    })
-    res.json({ message: 'Parameter unlinked from machine successfully' })
+    try {
+        // Once any completed run recorded a value for this link,
+        // RunParameterValue's RESTRICT foreign key makes this delete throw —
+        // tag a friendlier message before the central error middleware maps it
+        // to 409 (DELETE → "still referenced" reading).
+        await prisma.machineParameter.delete({
+            where: { id: req.params.id }
+        })
+        res.json({ message: 'Parameter unlinked from machine successfully' })
+    } catch (error) {
+        if (isForeignKeyViolation(error)) {
+            error.clientMessage = 'This parameter has recorded run values and cannot be removed'
+        }
+        next(error)
+    }
 })
 export default router
