@@ -38,7 +38,7 @@ export function getProductById(id) {
  * @param {Object} data - `{ name, code, unit }` effectively required (schema requires code);
  * `{ widthMm, thicknessMm, lengthM, description }` optional.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = created Product (201).
- * @throws {import('axios').AxiosError} 400 when name/unit missing; 500 today when code is missing or duplicated.
+ * @throws {import('axios').AxiosError} 400 when name/unit/code missing; 409 when code is duplicated.
  *
  * @example
  * await createProduct({ name: 'LDPE folija 50µ', code: 'LD-50', unit: 'kg' })
