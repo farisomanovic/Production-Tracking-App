@@ -13,7 +13,7 @@ import {
     UnknownMaterialError,
     InsufficientStockError
 } from '../lib/errors.js'
-import { hasDuplicates, allBelongTo } from '../lib/validation.js'
+import { hasDuplicates, allBelongTo, isFiniteNumber } from '../lib/validation.js'
 
 const router = Router()
 
@@ -180,6 +180,12 @@ router.post('/', async (req, res, next) => {
     if (!date || !startTime || !operatorId || !machineId || !productId || !recipeId) {
         return res.status(400).json({ error: 'date, startTime, operatorId, machineId, productId and recipeId are required' })
     }
+    // An energy meter reading never legitimately sits at exactly 0 (the
+    // counter only ever climbs), so unlike the completion route's weight
+    // fields, 0 is rejected here alongside negatives/strings.
+    if (energyStart !== undefined && (!isFiniteNumber(energyStart) || energyStart <= 0)) {
+        return res.status(400).json({ error: 'energyStart must be a number greater than 0 when provided' })
+    }
 
     const parsedDate = parseDateOr400(res, date, 'date')
     if (!parsedDate) return
@@ -313,6 +319,14 @@ router.put('/:id', async (req, res) => {
         energyEnd,
         endTime
     } = req.body
+
+    // Same "0 is never legitimate" reasoning as POST / — see the comment there.
+    if (energyStart !== undefined && (!isFiniteNumber(energyStart) || energyStart <= 0)) {
+        return res.status(400).json({ error: 'energyStart must be a number greater than 0 when provided' })
+    }
+    if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd <= 0)) {
+        return res.status(400).json({ error: 'energyEnd must be a number greater than 0 when provided' })
+    }
 
     let parsedWarmupStartTime
     if (warmupStartTime !== undefined) {
@@ -464,7 +478,11 @@ router.post('/:id/complete', async (req, res) => {
     // would silently INCREMENT stock (decrement of a negative), and Prisma
     // stores NaN/strings as garbage or throws a raw 500. Parameter values
     // only need to be real numbers — a measured reading of 0 is legitimate.
-    const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v)
+    // energyEnd is checked separately below (unlike the weight fields further
+    // down, a meter reading of exactly 0 is never legitimate).
+    if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd <= 0)) {
+        return res.status(400).json({ error: 'energyEnd must be a number greater than 0 when provided' })
+    }
     for (const p of parameterValues) {
         if (!p.machineParameterId || !isFiniteNumber(p.value)) {
             return res.status(400).json({ error: 'Each parameter value needs a machineParameterId and a numeric value' })
