@@ -22,11 +22,15 @@ production-tracker/
 |   `-- package.json
 |-- server/                    # Node.js + Express + Prisma backend
 |   |-- app.js                  # Express app: middleware + router mounts (exported for tests)
-|   |-- index.js                # Entry point: loads .env, starts listening
-|   |-- lib/prisma.js           # Shared PrismaClient instance
+|   |-- index.js                # Entry point: loads .env, starts listening, wires shutdown
+|   |-- lib/                    # Shared helpers: Prisma client, validation, error types,
+|   |   |                       #   CORS/test-DB guards, graceful shutdown
+|   |   `-- prisma.js           # Shared PrismaClient instance
+|   |-- middleware/
+|   |   `-- errorHandler.js     # Central error middleware (Prisma codes -> HTTP statuses)
 |   |-- prisma/
 |   |   |-- schema.prisma       # Data model
-|   |   `-- migrations/         # Migration history
+|   |   `-- migrations/         # Migration history (incl. hand-written partial indexes)
 |   |-- routes/                 # One Express router per resource
 |   `-- tests/                  # Vitest + Supertest API tests (see Testing)
 |-- todo.md                    # Known bugs / tech debt, ranked by severity
@@ -41,9 +45,11 @@ React page -> Axios helper (client/src/api) -> Express router (server/routes) ->
 ```
 
 - **Pages** (`client/src/pages`) own screen state and call functions from `client/src/api`. Several list pages (Operators, Machines, Products, Materials, Parameters) share the `useApi` hook (`client/src/hooks/useApi.js`), which handles fetch/loading/error state and exposes a `reload()` callback — this was extracted to remove duplicated fetch boilerplate across those pages.
-- **New Run wizard** (`client/src/components/wizard`) is a 5-step flow: `Step1_BasicInfo` -> `Step2_Recipe` -> `Step3_Parameters` -> `Step4_Materials` -> `Step5_Output`. Step 4 includes a calculator that derives material quantities from the recipe's percentages and the produced quantity, instead of requiring manual math.
+- **New Run wizard** (`client/src/components/wizard`) is a 5-step flow: `Step1_BasicInfo` -> `Step2_Recipe` -> `Step3_Parameters` -> `Step4_Materials` -> `Step5_Output`. Step 4 includes a calculator that derives material quantities from the recipe's percentages and the produced quantity — applied via an explicit **Recalculate** button, so hand-corrected values are never silently overwritten.
 - **Run detail / completion** (`client/src/pages/RunDetailPage.jsx`) shows a completed run's full record, or — if the run is still `in_progress` — renders a completion form (parameters, materials, outputs) so a run can be finished outside the original wizard session.
-- **Express routers** (`server/routes`) validate input and talk to PostgreSQL exclusively through the shared Prisma client in `server/lib/prisma.js`.
+- **Express routers** (`server/routes`) validate input strictly (required fields, primitive types, real timestamps, guarded query params) and talk to PostgreSQL exclusively through the shared Prisma client in `server/lib/prisma.js`.
+- **Central error middleware** (`server/middleware/errorHandler.js`) is the single place that turns thrown/rejected errors into HTTP responses: unique-constraint violations become 409, broken foreign-key references become 400 (or 409 on a blocked DELETE), missing records become 404, and everything unrecognized falls back to a logged 500. Routes only catch errors they want to translate into a friendlier message.
+- **Startup and shutdown are strict:** the server refuses to start if `CLIENT_ORIGIN` is missing or malformed (a falsy CORS origin would silently allow every site), and SIGTERM/SIGINT trigger a graceful shutdown that stops the listener and disconnects Prisma.
 - **Excel export** (`client/src/pages/ProductionRunsPage.jsx`) builds an `.xlsx` report of completed runs for a selected machine/date range using `xlsx` + `jszip`, entirely client-side.
 
 ## Backend API
@@ -60,13 +66,16 @@ GET  /ping                       health check
 /api/parameters
 /api/machine-parameters          links a machine + parameter, sets form displayOrder
 /api/machine-products            links a machine + product it's allowed to run
-/api/recipes                     recipe + recipe items (material % composition)
+/api/recipes                     recipe + recipe items (material % composition);
+                                 soft-deleted via an active flag, GET /by-product/:productId
+/api/recipe-products             links a recipe to a product, carries the per-product
+                                 default-recipe flag
 /api/production-runs             GET (list, filterable), GET /:id, POST, PUT /:id
 /api/production-runs/:id/complete   POST — completes a run in one transaction
 /api/production-runs/:id            DELETE — removes a run and reverses stock usage
 ```
 
-`GET /api/production-runs` accepts `machineId`, `operatorId`, `productId`, `status`, `dateFrom`, `dateTo`, and `limit` query params.
+`GET /api/production-runs` accepts `machineId`, `operatorId`, `productId`, `status`, `dateFrom`, `dateTo`, and `limit` query params. Results come back newest first (`date`, then `startTime`); `limit` defaults to 200 and is capped at 1000.
 
 ## Data Model
 
@@ -76,23 +85,29 @@ Defined in `server/prisma/schema.prisma`.
 |---|---|
 | `Operator`, `Machine` | Master data for staff and equipment. Soft-deleted via `active: false` so history stays intact. |
 | `Product` | Manufactured item (unique `code`, dimensions, unit). |
-| `Material` | Raw input with `stockQty`, decremented on run completion. |
-| `Parameter` | A reusable measurement type (speed, temp, pressure, ...). |
+| `Material` | Raw input with `stockQty`, decremented on run completion. Unique `name` — the XLSX export matches columns by name. |
+| `Parameter` | A reusable measurement type (speed, temp, pressure, ...). Unique `name`, same reason as `Material`. |
 | `MachineParameter` | Which parameters a machine collects, and in what order (`displayOrder`). |
 | `MachineProduct` | Which products a machine is allowed to produce. |
-| `Recipe` / `RecipeItem` | A product's material formula (percentages should total 100). |
+| `Recipe` / `RecipeItem` | A reusable material formula (percentages should total 100). Soft-deleted via `active: false` so run history stays intact. |
+| `RecipeProduct` | Links one recipe to the many products it can produce. Its `isDefault` flag marks the wizard's preselected recipe *per product* — at most one default per product, enforced by a partial unique index. |
 | `ProductionRun` | The transactional record: operator, machine, product, recipe, timing, energy, status (`in_progress` -> `completed`), notes, buyer, and run-level weights recorded at completion (`netWeightPerUnit`, `grossWeightPerUnit`, `scrapKg`). |
 | `RunParameterValue`, `MaterialUsage`, `RunOutput` | Per-run measurements, material consumption, and produced quantities (weights live on the run, not on outputs). |
 
 ## Key Behaviors
 
 - **Two-step run lifecycle:** a run is created (`in_progress`) with header info, then completed later with measurements, material usage, and outputs. Completion runs inside a single Prisma transaction that updates status, records usage, decrements material stock, and creates output rows together. Stock can never go negative — completing a run that would overdraw a material is rejected.
-- **Run creation is validated relationally:** the machine must exist and be active, be linked to the chosen product, and the recipe must belong to that product.
+- **One live run per machine:** a partial unique index guarantees at most one `in_progress` run per machine at the database level. If two requests race to start a run on the same machine, exactly one succeeds — the loser gets a clean 409 instead of creating an orphaned duplicate.
+- **Run creation is validated relationally:** the machine must exist and be active, be linked to the chosen product, and the recipe must be linked to that product and active. The same checks run again at completion, so unlinking master data mid-run can't slip through.
+- **Master data is protected while a run is live:** deactivating an operator, machine, or recipe that has a run in progress is rejected, and completing a run whose recipe was deactivated mid-run is rejected too (delete the run or reactivate the recipe instead).
+- **Per-product default recipe:** each product can mark one of its linked recipes as the default, which the wizard preselects. Managed from the product/recipe detail pages.
+- **Completed runs are immutable:** `PUT /api/production-runs/:id` rejects edits once a run is completed, and rejects an `endTime` at or before the run's start.
 - **Cancelling an abandoned run:** a run created by the wizard but never completed can be cancelled (deleted) from its detail page, so half-started runs don't linger as `in_progress`.
-- **Overnight runs:** an `endTime` earlier than `startTime` is rolled over to the next day instead of being rejected as invalid.
+- **Overnight runs:** the client rolls an end time earlier than the start time over to the next day; the API itself rejects any `endTime` at or before `startTime` as a backstop against direct calls and client bugs.
 - **Deleting a completed run** restores the material stock it had consumed and removes its dependent records, transactionally.
-- **Soft deletion:** operators and machines are never hard-deleted, only flagged `active: false`, so old runs keep valid references.
-- **Recipe validation:** recipe items must sum to 100% (within a small floating-point tolerance) before a recipe can be saved, and each item's percentage must be greater than 0 and at most 100.
+- **Soft deletion:** operators, machines, and recipes are never hard-deleted, only flagged `active: false`, so old runs keep valid references.
+- **Recipe validation:** recipe items must sum to 100% (within a small floating-point tolerance) before a recipe can be saved, each item's percentage must be greater than 0 and at most 100, and every item needs a real material reference.
+- **"Today" is local:** timestamps are stored in UTC, but the dashboard and wizard compute "today" from the user's local clock, so an evening run doesn't show up under the wrong date.
 - **Theme:** light/dark mode is toggled from the bottom nav and persisted to `localStorage`.
 
 ## Known Limitations
@@ -122,7 +137,7 @@ PORT=3000
 CLIENT_ORIGIN=http://localhost:5173
 ```
 
-`PORT` is where Express listens; `CLIENT_ORIGIN` is the only origin CORS accepts.
+`PORT` is where Express listens; `CLIENT_ORIGIN` is the only origin CORS accepts. `CLIENT_ORIGIN` is **required** — the server exits on startup if it is missing or not a valid origin, because a missing value would silently allow requests from every site.
 
 Generate the Prisma client and apply migrations:
 
@@ -190,4 +205,4 @@ npm run test:e2e      # older completion/stock e2e suite — needs `npm run dev:
 - Every `useEffect` that fetches data defines an async `load()` function inside the effect.
 - `Promise.all` for independent simultaneous fetches.
 - Every `catch` block logs with `console.error`.
-- Commits follow Conventional Commits (`type: short description`, present tense); branches use `fix/...` or `feature/...`.
+- Commits follow Conventional Commits (`type: short description`, present tense); branches use `fix/...`, `feature/...`, or `chore/...`.
