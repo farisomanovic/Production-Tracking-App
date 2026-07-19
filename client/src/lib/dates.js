@@ -6,6 +6,26 @@
  */
 
 /**
+ * Formats a Date as a local "YYYY-MM-DD" string using its local calendar
+ * parts — never `toISOString()`, which converts to UTC first and can shift
+ * the date by one day for any local time between midnight and the local UTC
+ * offset (e.g. Sarajevo, UTC+1/+2, between 00:00 and ~02:00). Used anywhere
+ * the app needs "today" (or another Date) as a date-only string: the
+ * dashboard's date filter, the run wizard's date-picker max, and
+ * `buildEndTimestamp` below.
+ *
+ * @param {Date} [date=new Date()] - Defaults to the current moment.
+ * @returns {string} "YYYY-MM-DD" in local time, e.g. "2026-07-19".
+ *
+ * @example
+ * getLocalDateString(new Date('2026-07-19T23:30:00')) // → "2026-07-19"
+ */
+export function getLocalDateString(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/**
  * Builds the run's end timestamp from the run date and the start/end
  * wall-clock times, rolling the date forward one day for overnight runs.
  *
@@ -37,8 +57,7 @@ export function buildEndTimestamp(dateStr, startHHmm, endHHmm) {
   if (endHHmm <= startHHmm) {
     const d = new Date(`${dateStr}T00:00:00`)
     d.setDate(d.getDate() + 1)
-    const pad = (n) => String(n).padStart(2, '0')
-    endDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    endDate = getLocalDateString(d)
   }
   return `${endDate}T${endHHmm}:00.000`
 }

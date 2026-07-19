@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { getAllOperators } from '../../api/operators'
 import { getAllMachines } from '../../api/machines'
 import { getMachineProducts } from '../../api/machineProducts'
+import { getLocalDateString } from '../../lib/dates'
 import { common } from '../../styles/common'
 
 /**
@@ -209,9 +210,7 @@ return (
             type='date'
             value={date}
             onChange={e => setDate(e.target.value)}
-            // TODO: max is computed in UTC — right after local midnight this
-            // still says "yesterday" and blocks today's date. todo.md Group 6.
-            max={new Date().toISOString().split('T')[0]}
+            max={getLocalDateString()}
         />
     </div>
 

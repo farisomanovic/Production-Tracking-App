@@ -1,12 +1,15 @@
 /**
  * @file DashboardPage.jsx
  * @description Landing page: today's runs at a glance — live runs, completed
- * count, and which machines worked. Fetches once; all groupings are derived on
- * the client because a single day is a handful of rows at most.
+ * count, and which machines worked. Fetches today's date-scoped runs and
+ * system-wide in-progress runs in parallel (see Group 6 #6: an in-progress run
+ * isn't necessarily dated "today"); all groupings are derived on the client
+ * because a single day is a handful of rows at most.
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllRuns } from '../api/productionRuns'
+import { getLocalDateString } from '../lib/dates'
 import { common } from '../styles/common'
 
 /**
@@ -22,20 +25,25 @@ export default function DashboardPage() {
 
   const navigate = useNavigate()
   const [runs, setRuns] = useState([])
+  const [liveRuns, setLiveRuns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    async function loadTodayRuns() {
+    async function loadDashboardData() {
       try {
-        // TODO: toISOString() is UTC — in Sarajevo (UTC+1/+2) this is still
-        // YESTERDAY between midnight and ~02:00, so a night shift sees "No runs
-        // recorded today". Build the string from local date parts instead.
-        // todo.md Group 6 #1.
-        const today = new Date().toISOString().split('T')[0]
-        // Same value for both bounds = exactly one day's runs.
-        const response = await getAllRuns({ dateFrom: today, dateTo: today })
-        setRuns(response.data)
+        const today = getLocalDateString()
+        // Two independent queries — Promise.all runs them concurrently. The
+        // date-scoped query drives "Runs Today"/"Completed"/"Machines Active
+        // Today"; the unscoped status query drives "Live Now"/"In Progress" so
+        // an overnight run (date = yesterday, still in_progress) isn't invisible
+        // just because it falls outside today's date window. Group 6 #1, #6.
+        const [todayRes, liveRes] = await Promise.all([
+          getAllRuns({ dateFrom: today, dateTo: today }),
+          getAllRuns({ status: 'in_progress' })
+        ])
+        setRuns(todayRes.data)
+        setLiveRuns(liveRes.data)
       } catch (err) {
         setError('Failed to load dashboard data')
         console.error(err)
@@ -43,12 +51,11 @@ export default function DashboardPage() {
         setLoading(false)
       }
     }
-    loadTodayRuns()
+    loadDashboardData()
   }, [])
 
   // Derived on every render instead of stored in state: state would need manual
   // resyncing with `runs`, and filtering a day's worth of rows is trivially cheap.
-  const inProgressRuns = runs.filter(r => r.status === 'in_progress')
   const completedRuns = runs.filter(r => r.status === 'completed')
 
   // Map keyed by machineId deduplicates machines that ran several times today —
@@ -102,9 +109,9 @@ export default function DashboardPage() {
         </div>
         <div style={{
           ...styles.statCard,
-          ...(inProgressRuns.length > 0 ? styles.statCardLive : {})
+          ...(liveRuns.length > 0 ? styles.statCardLive : {})
         }}>
-          <span style={styles.statNumber}>{inProgressRuns.length}</span>
+          <span style={styles.statNumber}>{liveRuns.length}</span>
           <span style={styles.statLabel}>In Progress</span>
         </div>
         <div style={styles.statCard}>
@@ -113,12 +120,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Live runs come first — the operator's most likely destination */}
-      {inProgressRuns.length > 0 && (
+      {/* Live runs come first — the operator's most likely destination. Driven
+          by the unscoped status query, not `runs`, so an overnight run that
+          started yesterday still shows up here even though it falls outside
+          today's date window (Group 6 #6). */}
+      {liveRuns.length > 0 && (
         <div style={styles.section}>
           <p style={common.sectionLabel}>Live Now</p>
           <div style={styles.list}>
-            {inProgressRuns.map(run => (
+            {liveRuns.map(run => (
               <div
                 key={run.id}
                 style={styles.liveCard}
@@ -161,7 +171,11 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Empty state doubles as the call to action for a fresh day */}
+      {/* Empty state doubles as the call to action for a fresh day. This checks
+          `runs` (today-scoped) only, not `liveRuns`: an overnight run still
+          in_progress right now can render a Live Now card ABOVE this block
+          even while `runs` is empty, so the CTA can appear directly under a
+          live card. Deliberate — see todo.md Group 6 #6. */}
       {runs.length === 0 && (
         <div style={styles.emptyBox}>
           <p style={styles.emptyText}>No runs recorded today.</p>

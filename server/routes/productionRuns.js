@@ -101,8 +101,6 @@ router.get('/', async (req, res) => {
     if (dateFrom || dateTo) {
         // Explicit UTC boundaries because `date` is a DATE column: without the
         // T00:00/T23:59 suffixes, timezone conversion could shift the filter a day.
-        // TODO: the client builds "today" in UTC too — between midnight and
-        // ~02:00 local (Sarajevo is UTC+1/+2) that's still yesterday. Group 6.
         where.date = {
             ...(dateFrom && { gte: new Date(`${dateFrom}T00:00:00.000Z`) }),
             ...(dateTo && { lte: new Date(`${dateTo}T23:59:59.999Z`) })
