@@ -8,9 +8,15 @@
 // is being evaluated, and ESM executes static imports in declaration order.
 import 'dotenv/config'
 import app from './app.js'
+import prisma from './lib/prisma.js'
+import { createShutdownHandler } from './lib/shutdown.js'
 
 const PORT = process.env.PORT || 3000
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })
+
+const shutdown = createShutdownHandler({ server, prisma })
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

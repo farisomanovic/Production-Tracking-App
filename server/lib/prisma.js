@@ -13,7 +13,4 @@ import { PrismaClient } from '@prisma/client'
 // exhaust Postgres' max_connections.
 const prisma = new PrismaClient()
 
-// TODO: no graceful shutdown — on Ctrl+C / kill, open connections linger as zombie
-// sessions until Postgres times them out. Add process.on('SIGINT'/'SIGTERM')
-// handlers that await prisma.$disconnect() then exit. See todo.md Group 4 #1.
 export default prisma
