@@ -40,16 +40,23 @@ function isValidDateOnlyString(value) {
     return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00.000Z`).getTime())
 }
 
+// GET /production-runs's list page and export both depend on this endpoint
+// staying bounded as production history accumulates — see todo.md Group 4 #4.
+const DEFAULT_TAKE = 200
+const MAX_TAKE = 1000
+
 // ─── LIST & DETAIL ───────────────────────────────────────────────────────────
 
 /**
- * Lists runs with optional filters, relations included so the list page can
- * render names without follow-up requests.
+ * Lists runs with optional filters, relations narrowed to the names the list
+ * page actually renders.
  *
  * @param {import('express').Request} req - Optional query: `machineId`, `operatorId`, `productId`,
- * `status` ("in_progress" | "completed"), `dateFrom`/`dateTo` (YYYY-MM-DD), `limit` (positive int).
- * @param {import('express').Response} res - 200 → ProductionRun[] newest-first; 400 on a malformed/array-shaped
- * query param, an invalid dateFrom/dateTo, or a non-positive-integer limit; 500 on DB failure.
+ * `status` ("in_progress" | "completed"), `dateFrom`/`dateTo` (YYYY-MM-DD), `limit` (positive int,
+ * defaults to 200, clamped to a max of 1000).
+ * @param {import('express').Response} res - 200 → ProductionRun[] newest-first (date, then startTime as a
+ * tiebreaker); 400 on a malformed/array-shaped query param, an invalid dateFrom/dateTo, or a
+ * non-positive-integer limit; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -75,13 +82,13 @@ router.get('/', async (req, res) => {
         return res.status(400).json({ error: 'dateTo must be a valid YYYY-MM-DD date' })
     }
 
-    let take
+    let take = DEFAULT_TAKE
     if (limit !== undefined) {
         const parsedLimit = Number(limit)
         if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
             return res.status(400).json({ error: 'limit must be a positive integer' })
         }
-        take = parsedLimit
+        take = Math.min(parsedLimit, MAX_TAKE)
     }
 
     const where = {}
@@ -103,19 +110,20 @@ router.get('/', async (req, res) => {
     }
     const runs = await prisma.productionRun.findMany({
         where,
-        // TODO: `date` is date-only, so all same-day runs TIE and Postgres may
-        // return them in any order — the "prefill from last run" feature
-        // (limit: 1) can get any run from the latest day, not the latest run.
-        // Add a startTime tiebreaker: orderBy: [{date:'desc'},{startTime:'desc'}].
-        // todo.md Group 4 #4.
-        orderBy: { date: 'desc' },
-        // TODO: no default/max cap, the list grows unbounded. todo.md Group 4 #4.
-        ...(take !== undefined && { take }),
-        include: {
-            operator: true,
-            machine: true,
-            product: true,
-            recipe: true
+        // `date` alone is date-only and ties same-day runs; startTime breaks
+        // the tie so "prefill from last run" (limit: 1) always gets the
+        // actual most recent run, not an arbitrary one from the latest day.
+        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+        take,
+        select: {
+            id: true,
+            date: true,
+            startTime: true,
+            status: true,
+            machineId: true,
+            machine: { select: { name: true } },
+            operator: { select: { name: true } },
+            product: { select: { name: true } }
         }
     })
     res.json(runs)

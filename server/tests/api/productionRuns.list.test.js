@@ -69,4 +69,70 @@ describe('GET /api/production-runs', () => {
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('limit must be a positive integer')
     })
+
+    it('clamps an oversized limit instead of erroring (Group 4 #4)', async () => {
+        const res = await get({ limit: 5000 })
+        expect(res.status).toBe(200)
+    })
+})
+
+describe('GET /api/production-runs — stable order & select shape (Group 4 #4)', () => {
+    let earlyRunId, lateRunId
+
+    beforeAll(async () => {
+        // status: 'completed' — a partial unique index allows only one
+        // in_progress run per machine at a time (todo.md Group 8 #16), and
+        // this file's own top-level beforeAll already holds that slot.
+        const early = await prisma.productionRun.create({
+            data: {
+                date: new Date('2026-06-16T00:00:00.000Z'),
+                startTime: new Date('2026-06-16T08:00:00.000Z'),
+                status: 'completed',
+                operatorId: baseline.operator.id,
+                machineId: baseline.machine.id,
+                productId: baseline.product.id,
+                recipeId: baseline.recipe.id,
+                notes: `${PREFIX} tiebreak early`
+            }
+        })
+        earlyRunId = early.id
+
+        const late = await prisma.productionRun.create({
+            data: {
+                date: new Date('2026-06-16T00:00:00.000Z'),
+                startTime: new Date('2026-06-16T14:00:00.000Z'),
+                status: 'completed',
+                operatorId: baseline.operator.id,
+                machineId: baseline.machine.id,
+                productId: baseline.product.id,
+                recipeId: baseline.recipe.id,
+                notes: `${PREFIX} tiebreak late`
+            }
+        })
+        lateRunId = late.id
+    })
+
+    afterAll(async () => {
+        await prisma.productionRun.deleteMany({ where: { id: { in: [earlyRunId, lateRunId] } } })
+    })
+
+    it('orders same-day runs by startTime descending as a tiebreaker', async () => {
+        const res = await get({ dateFrom: '2026-06-16', dateTo: '2026-06-16' })
+        expect(res.status).toBe(200)
+        const ids = res.body.map((run) => run.id)
+        expect(ids.indexOf(lateRunId)).toBeLessThan(ids.indexOf(earlyRunId))
+    })
+
+    it('selects only name off machine/operator/product and omits recipe entirely', async () => {
+        const res = await get({ dateFrom: '2026-06-16', dateTo: '2026-06-16' })
+        expect(res.status).toBe(200)
+        const run = res.body.find((r) => r.id === lateRunId)
+        expect(run).toMatchObject({
+            machine: { name: baseline.machine.name },
+            operator: { name: baseline.operator.name },
+            product: { name: baseline.product.name }
+        })
+        expect(run.recipe).toBeUndefined()
+        expect(run.machine.code).toBeUndefined()
+    })
 })
