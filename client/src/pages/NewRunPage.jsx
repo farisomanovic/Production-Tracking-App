@@ -189,8 +189,7 @@ function NewRunPage() {
         ...(data.stableStartTime && {
           stableStartTime: toLocalISO(data.date, data.stableStartTime)
         }),
-        // TODO: truthiness drops a legitimate 0 meter reading. Group 7 #2.
-        ...(data.energyStart && { energyStart: Number(data.energyStart) }),
+        ...(data.energyStart !== undefined && { energyStart: Number(data.energyStart) }),
         ...(data.potentialBuyer && { potentialBuyer: data.potentialBuyer }),
         ...(data.notes && { notes: data.notes }),
       }

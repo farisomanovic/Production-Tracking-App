@@ -195,9 +195,7 @@ async function handleComplete() {
         ...(data.netWeightPerUnit != null && { netWeightPerUnit: data.netWeightPerUnit }),
         ...(data.grossWeightPerUnit != null && { grossWeightPerUnit: data.grossWeightPerUnit }),
         ...(data.scrapKg != null && { scrapKg: data.scrapKg }),
-        // TODO: truthiness drops a legitimate meter reading of 0 — use
-        // energyEnd !== '' instead. todo.md Group 7 #2.
-        ...(energyEnd && { energyEnd: Number(energyEnd) }),
+        ...(energyEnd !== '' && { energyEnd: Number(energyEnd) }),
         ...(notes && { notes }),
     }
 

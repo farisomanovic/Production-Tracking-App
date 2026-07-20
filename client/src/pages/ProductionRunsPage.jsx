@@ -494,9 +494,7 @@ export default function ProductionRunsPage() {
           }
 
           const rows = fullRuns.map(run => {
-              // TODO: truthiness treats a legitimate 0 kWh reading as "missing"
-              // and skips the consumption calc. todo.md Group 7 #2.
-              const energyConsumed = run.energyStart && run.energyEnd
+              const energyConsumed = run.energyStart != null && run.energyEnd != null
                   ? Number((run.energyEnd - run.energyStart).toFixed(1))
                   : ''
 
@@ -528,8 +526,8 @@ export default function ProductionRunsPage() {
                   formatExportTime(run.startTime),
                   formatExportTime(run.stableStartTime),
                   formatExportTime(run.endTime),
-                  run.energyStart || '',
-                  run.energyEnd || '',
+                  run.energyStart != null ? run.energyStart : '',
+                  run.energyEnd != null ? run.energyEnd : '',
                   energyConsumed,
                   ...paramValues,
                   ...materialValues,
