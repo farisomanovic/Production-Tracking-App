@@ -121,6 +121,53 @@ describe('POST /api/production-runs — required fields and dates', () => {
     })
 })
 
+describe('POST /api/production-runs — warmup/stable ordering (Group 6 #7)', () => {
+    it('rejects a warmupStartTime after startTime with 400', async () => {
+        const payload = validPayload()
+        const after = new Date(new Date(payload.startTime).getTime() + 60_000).toISOString()
+        const res = await post({ ...payload, warmupStartTime: after })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('warmupStartTime must be at or before startTime')
+    })
+
+    it('rejects a stableStartTime before startTime with 400', async () => {
+        const payload = validPayload()
+        const before = new Date(new Date(payload.startTime).getTime() - 60_000).toISOString()
+        const res = await post({ ...payload, stableStartTime: before })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('stableStartTime must be at or after startTime')
+    })
+
+    it('accepts a warmupStartTime exactly equal to startTime', async () => {
+        const payload = validPayload()
+        const res = await post({ ...payload, warmupStartTime: payload.startTime })
+        expect(res.status).toBe(201)
+        const del = await request(app).delete(`/api/production-runs/${res.body.id}`)
+        expect(del.status).toBe(200)
+    })
+
+    it('accepts a stableStartTime exactly equal to startTime', async () => {
+        const payload = validPayload()
+        const res = await post({ ...payload, stableStartTime: payload.startTime })
+        expect(res.status).toBe(201)
+        const del = await request(app).delete(`/api/production-runs/${res.body.id}`)
+        expect(del.status).toBe(200)
+    })
+
+    it('accepts a normal valid ordering: warmup before start, stable after start', async () => {
+        const payload = validPayload()
+        const startMs = new Date(payload.startTime).getTime()
+        const res = await post({
+            ...payload,
+            warmupStartTime: new Date(startMs - 5 * 60_000).toISOString(),
+            stableStartTime: new Date(startMs + 5 * 60_000).toISOString()
+        })
+        expect(res.status).toBe(201)
+        const del = await request(app).delete(`/api/production-runs/${res.body.id}`)
+        expect(del.status).toBe(200)
+    })
+})
+
 describe('POST /api/production-runs — energyStart type validation (Group 3 #12)', () => {
     it('rejects a non-numeric energyStart with 400', async () => {
         const res = await post({ ...validPayload(), energyStart: 'broken' })

@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { completeRun } from '../../api/productionRuns'
 import { getMachineProducts } from '../../api/machineProducts'
-import { buildEndTimestamp } from '../../lib/dates'
+import { rollToNextDayIfAtOrBefore } from '../../lib/dates'
 import { common } from '../../styles/common'
 
 /**
@@ -183,7 +183,7 @@ async function handleComplete() {
         // "what the wall clock said" is stored as-is (see todo.md Group 6 #3).
         // The helper rolls the date to the next day for overnight runs
         // (end wall-clock at or before start wall-clock).
-        endTime: buildEndTimestamp(data.date, data.startTime, endTime),
+        endTime: rollToNextDayIfAtOrBefore(data.date, data.startTime, endTime),
         parameterValues: data.parameterValues,
         materialUsages: data.materialUsages,
         outputs: outputs.map(o => ({

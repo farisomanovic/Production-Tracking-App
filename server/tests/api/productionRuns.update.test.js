@@ -64,8 +64,10 @@ describe('PUT /api/production-runs/:id', () => {
 
     it('updates warmupStartTime, stableStartTime, energyStart, energyEnd, and notes', async () => {
         const res = await put({
-            warmupStartTime: new Date().toISOString(),
-            stableStartTime: new Date().toISOString(),
+            // Offset well clear of the run's startTime (set to "now" in beforeEach)
+            // so this doesn't collide with the warmup/stable ordering check below.
+            warmupStartTime: new Date(Date.now() - 10 * 60_000).toISOString(),
+            stableStartTime: new Date(Date.now() + 10 * 60_000).toISOString(),
             energyStart: 10,
             energyEnd: 20,
             notes: `${PREFIX} note`
@@ -123,6 +125,32 @@ describe('PUT /api/production-runs/:id', () => {
         const res = await put({ endTime: future })
         expect(res.status).toBe(200)
         expect(new Date(res.body.endTime).toISOString()).toBe(future)
+    })
+
+    it('rejects a warmupStartTime after the run startTime (Group 6 #7)', async () => {
+        const after = new Date(Date.now() + 60_000).toISOString()
+        const res = await put({ warmupStartTime: after })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('warmupStartTime must be at or before the run start time')
+    })
+
+    it('rejects a stableStartTime before the run startTime (Group 6 #7)', async () => {
+        const before = new Date(0).toISOString()
+        const res = await put({ stableStartTime: before })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('stableStartTime must be at or after the run start time')
+    })
+
+    it('accepts a warmupStartTime exactly equal to the run startTime (Group 6 #7)', async () => {
+        const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
+        const res = await put({ warmupStartTime: run.startTime.toISOString() })
+        expect(res.status).toBe(200)
+    })
+
+    it('accepts a stableStartTime exactly equal to the run startTime (Group 6 #7)', async () => {
+        const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
+        const res = await put({ stableStartTime: run.startTime.toISOString() })
+        expect(res.status).toBe(200)
     })
 
     it('returns 404 for an unknown run id', async () => {

@@ -12,7 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
-import { buildEndTimestamp } from '../lib/dates'
+import { rollToNextDayIfAtOrBefore } from '../lib/dates'
 import { common } from '../styles/common'
 
 /**
@@ -180,28 +180,30 @@ function formatTime(dateStr) {
 }
 
 /**
- * Formats the run's end time, marking ends that land on a later calendar day
- * than the start — otherwise an overnight run's "02:00 AM" under the card's
- * single Date row reads as if it happened on the start date.
+ * Formats a timestamp, marking it when it lands on a later calendar day than
+ * an anchor timestamp — otherwise an overnight value like "02:00 AM" under
+ * the card's single Date row reads as if it happened on the anchor's date.
+ * Used for both endTime (anchored to startTime) and stableStartTime (also
+ * anchored to startTime, since it can legitimately roll past midnight too).
  *
- * @param {string} startStr - The run's startTime ISO timestamp.
- * @param {string} endStr - The run's endTime ISO timestamp; null while in progress.
+ * @param {string} anchorStr - The reference ISO timestamp (the run's startTime).
+ * @param {string} targetStr - The ISO timestamp to format; null for missing values.
  * @returns {string} e.g. "02:00 AM (+1 day)", or "—" for missing values.
  *
  * @example
- * formatEndTime('2026-07-07T22:00:00.000', '2026-07-08T02:00:00.000') // → "02:00 AM (+1 day)"
+ * formatTimeWithDayMarker('2026-07-07T22:00:00.000', '2026-07-08T02:00:00.000') // → "02:00 AM (+1 day)"
  */
-function formatEndTime(startStr, endStr) {
-    if (!endStr) return '—'
-    const start = new Date(startStr)
-    const end = new Date(endStr)
+function formatTimeWithDayMarker(anchorStr, targetStr) {
+    if (!targetStr) return '—'
+    const anchor = new Date(anchorStr)
+    const target = new Date(targetStr)
     // Compare local calendar days, not raw timestamps: 23:00 → 01:00 is only
     // 2h apart but one day apart on the calendar, which is what the marker means.
-    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate())
-    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate())
-    const days = Math.round((endDay - startDay) / 86400000)
-    if (days <= 0) return formatTime(endStr)
-    return `${formatTime(endStr)} (+${days} day${days > 1 ? 's' : ''})`
+    const anchorDay = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())
+    const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate())
+    const days = Math.round((targetDay - anchorDay) / 86400000)
+    if (days <= 0) return formatTime(targetStr)
+    return `${formatTime(targetStr)} (+${days} day${days > 1 ? 's' : ''})`
 }
 
 /**
@@ -261,7 +263,7 @@ return (
         run={run}
         formatDate={formatDate}
         formatTime={formatTime}
-        formatEndTime={formatEndTime}
+        formatTimeWithDayMarker={formatTimeWithDayMarker}
         formatDuration={formatDuration}
         onDelete={handleDelete}
     />
@@ -601,7 +603,7 @@ async function handleComplete() {
     const payload = {
         // The helper rolls the date to the next day for overnight runs
         // (end wall-clock at or before start wall-clock).
-        endTime: buildEndTimestamp(datePart, startHHmm, endTime),
+        endTime: rollToNextDayIfAtOrBefore(datePart, startHHmm, endTime),
         parameterValues: machineParameters.map(mp => ({
         machineParameterId: mp.id,
         value: Number(paramValues[mp.id])
@@ -916,16 +918,17 @@ return (
  * @param {Object} props.run - Completed run aggregate with all relations.
  * @param {Function} props.formatDate - Parent's date formatter (shared so both views format identically).
  * @param {Function} props.formatTime - Parent's time formatter.
- * @param {Function} props.formatEndTime - Parent's end-time formatter (adds the "+1 day" marker).
+ * @param {Function} props.formatTimeWithDayMarker - Parent's day-aware formatter
+ * (adds the "+1 day" marker); used for endTime and stableStartTime, both anchored to startTime.
  * @param {Function} props.formatDuration - Parent's start→end duration formatter.
  * @param {Function} props.onDelete - Called after the user confirms deletion.
  * @returns {JSX.Element}
  *
  * @example
  * <RunDetailView run={run} formatDate={formatDate} formatTime={formatTime}
- *   formatEndTime={formatEndTime} formatDuration={formatDuration} onDelete={handleDelete} />
+ *   formatTimeWithDayMarker={formatTimeWithDayMarker} formatDuration={formatDuration} onDelete={handleDelete} />
  */
-function RunDetailView({ run, formatDate, formatTime, formatEndTime, formatDuration, onDelete }) {
+function RunDetailView({ run, formatDate, formatTime, formatTimeWithDayMarker, formatDuration, onDelete }) {
 return (
     <div>
     <button
@@ -952,8 +955,8 @@ return (
         <div style={styles.infoCard}>
         <InfoRow label='Warmup Start' value={formatTime(run.warmupStartTime)} />
         <InfoRow label='Production Start' value={formatTime(run.startTime)} />
-        <InfoRow label='Stable Start' value={formatTime(run.stableStartTime)} />
-        <InfoRow label='End Time' value={formatEndTime(run.startTime, run.endTime)} />
+        <InfoRow label='Stable Start' value={formatTimeWithDayMarker(run.startTime, run.stableStartTime)} />
+        <InfoRow label='End Time' value={formatTimeWithDayMarker(run.startTime, run.endTime)} />
         <InfoRow label='Duration' value={formatDuration(run.startTime, run.endTime)} />
         </div>
     </div>
