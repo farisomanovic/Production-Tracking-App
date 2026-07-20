@@ -237,6 +237,16 @@ router.post('/', async (req, res, next) => {
         parsedStableStartTime = parseDateOr400(res, stableStartTime, 'stableStartTime')
         if (!parsedStableStartTime) return
     }
+    // Physical invariant: warmup ≤ start ≤ stable. Non-strict — warmup finishing
+    // exactly as production starts, or stable beginning exactly at start, are
+    // both plausible; unlike endTime this isn't a duration, so equality isn't
+    // rejected the way a zero-length run is.
+    if (parsedWarmupStartTime !== undefined && parsedWarmupStartTime > parsedStartTime) {
+        return res.status(400).json({ error: 'warmupStartTime must be at or before startTime' })
+    }
+    if (parsedStableStartTime !== undefined && parsedStableStartTime < parsedStartTime) {
+        return res.status(400).json({ error: 'stableStartTime must be at or after startTime' })
+    }
 
     const [operator, machine, machineProductLink, recipe, activeRunOnMachine] = await Promise.all([
         prisma.operator.findUnique({ where: { id: operatorId } }),
@@ -337,7 +347,8 @@ router.post('/', async (req, res, next) => {
  * @param {import('express').Request} req - `params.id` UUID; any subset of `notes`, `potentialBuyer`,
  * `warmupStartTime`, `stableStartTime`, `energyStart`, `energyEnd`, `endTime`.
  * @param {import('express').Response} res - 200 → updated run with relations; 400 an unparseable
- * warmupStartTime/stableStartTime/endTime, or an endTime at/before startTime; 404 unknown id;
+ * warmupStartTime/stableStartTime/endTime, an endTime at/before startTime, a warmupStartTime
+ * after startTime, or a stableStartTime before startTime; 404 unknown id;
  * 409 run is already completed (immutable once completed).
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -395,6 +406,14 @@ router.put('/:id', async (req, res) => {
     }
     if (parsedEndTime !== undefined && parsedEndTime <= existing.startTime) {
         return res.status(400).json({ error: 'endTime must be after the run start time' })
+    }
+    // Same warmup ≤ start ≤ stable invariant as POST, anchored to the existing
+    // (immutable) startTime since either field can be updated in isolation here.
+    if (parsedWarmupStartTime !== undefined && parsedWarmupStartTime > existing.startTime) {
+        return res.status(400).json({ error: 'warmupStartTime must be at or before the run start time' })
+    }
+    if (parsedStableStartTime !== undefined && parsedStableStartTime < existing.startTime) {
+        return res.status(400).json({ error: 'stableStartTime must be at or after the run start time' })
     }
 
     // TODO: no UI calls this endpoint yet (the client's updateRun helper is

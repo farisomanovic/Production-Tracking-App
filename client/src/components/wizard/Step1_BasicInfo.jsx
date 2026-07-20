@@ -106,6 +106,14 @@ function handleNext() {
     return
     }
 
+    // warmupStartTime never rolls to the next day (it legitimately precedes
+    // startTime on the same day) — a later clock value here is always a
+    // mistake, unlike stableStartTime which NewRunPage rolls forward instead.
+    if (warmupStartTime && warmupStartTime > startTime) {
+    setError('Warmup Start Time must be at or before Start Time.')
+    return
+    }
+
     setError(null)
 
     const stepData = {

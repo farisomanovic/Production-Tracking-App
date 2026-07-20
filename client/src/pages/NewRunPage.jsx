@@ -13,6 +13,7 @@ import Step3_Parameters from '../components/wizard/Step3_Parameters'
 import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
 import { createRun, getAllRuns, getRunById, deleteRun } from '../api/productionRuns'
+import { rollToNextDayIfAtOrBefore } from '../lib/dates'
 import { common } from '../styles/common'
 
 /**
@@ -184,10 +185,14 @@ function NewRunPage() {
         productId: data.productId,
         recipeId: data.recipeId,
         ...(data.warmupStartTime && {
+          // No rollover: warmup legitimately precedes startTime on the same
+          // calendar day (todo.md Group 6 #7), unlike stableStartTime below.
           warmupStartTime: toLocalISO(data.date, data.warmupStartTime)
         }),
         ...(data.stableStartTime && {
-          stableStartTime: toLocalISO(data.date, data.stableStartTime)
+          // Rolls forward a day when stable's wall-clock is at/before start's —
+          // same rule already applied to endTime (see rollToNextDayIfAtOrBefore).
+          stableStartTime: rollToNextDayIfAtOrBefore(data.date, data.startTime, data.stableStartTime)
         }),
         ...(data.energyStart !== undefined && { energyStart: Number(data.energyStart) }),
         ...(data.potentialBuyer && { potentialBuyer: data.potentialBuyer }),
