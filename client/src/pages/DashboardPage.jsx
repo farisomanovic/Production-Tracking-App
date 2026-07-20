@@ -61,8 +61,8 @@ export default function DashboardPage() {
   // Map keyed by machineId deduplicates machines that ran several times today —
   // insertion order is preserved, so the display order follows first appearance.
   const activeMachines = [...new Map(
-    runs.map(r => [r.machineId, r.machine])
-  ).values()]
+    runs.map(r => [r.machineId, r.machine.name])
+  ).entries()].map(([id, name]) => ({ id, name }))
 
   /**
    * Formats a timestamp as a short clock time for the run cards.
