@@ -15,6 +15,12 @@ import { getAllOperators } from '../api/operators'
 import { getAllProducts } from '../api/products'
 import { common } from '../styles/common'
 
+// Mirrors the server's MAX_TAKE clamp (server/routes/productionRuns.js) — this
+// is the "near-term" fix for todo.md Group 7 #18: the list/export used to
+// silently cap at the server's 200-row DEFAULT_TAKE with no signal to the
+// user. The real fix (an unbounded/paginated export endpoint) is Group 7 #4.
+const RUNS_FETCH_LIMIT = 1000
+
 /**
  * Renders the filterable run list and the Export XLSX action.
  *
@@ -47,6 +53,9 @@ export default function ProductionRunsPage() {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // True when the fetch hit RUNS_FETCH_LIMIT — the list/export may be missing
+  // older runs. See todo.md Group 7 #18.
+  const [runsTruncated, setRunsTruncated] = useState(false)
 
   // ─── DATA LOADING ───────────────────────────────────────────────────────────
 
@@ -81,18 +90,22 @@ export default function ProductionRunsPage() {
       setLoading(true)
       setError(null)
       try {
-        const params = {}
+        const params = { limit: RUNS_FETCH_LIMIT }
         if (filterMachineId) params.machineId = filterMachineId
         if (filterOperatorId) params.operatorId = filterOperatorId
         if (filterProductId) params.productId = filterProductId
         if (filterDateFrom) params.dateFrom = filterDateFrom
-        if (filterDateTo) params.dateTo = filterDateTo      
+        if (filterDateTo) params.dateTo = filterDateTo
 
         const response = await getAllRuns(params)
         const allRuns = response.data
 
         setInProgressRuns(allRuns.filter(r => r.status === 'in_progress'))
         setCompletedRuns(allRuns.filter(r => r.status === 'completed'))
+        // Heuristic, not a certainty: a true result count of exactly
+        // RUNS_FETCH_LIMIT reads as truncated too. The server doesn't return a
+        // total count to disambiguate — see todo.md Group 7 #18.
+        setRunsTruncated(allRuns.length === RUNS_FETCH_LIMIT)
       } catch (err) {
         setError('Failed to load production runs')
         console.error(err)
@@ -688,12 +701,23 @@ export default function ProductionRunsPage() {
 
           <div style={styles.dateRangeField}>
               <span style={styles.dateLabel}>Export</span>
-              <button style={styles.exportButton} onClick={handleExport}>
+              <button
+                  style={runsTruncated ? { ...styles.exportButton, ...styles.exportButtonDisabled } : styles.exportButton}
+                  onClick={handleExport}
+                  disabled={runsTruncated}
+                  title={runsTruncated ? `Narrow your date range to export — showing the newest ${RUNS_FETCH_LIMIT} runs only` : undefined}
+              >
                   Export XLSX
               </button>
           </div>
 
       </div>
+
+      {runsTruncated && (
+        <div style={common.errorBox}>
+          Showing the newest {RUNS_FETCH_LIMIT} runs for the current filters — narrow your date range to see everything.
+        </div>
+      )}
 
         {/* Only rendered while a filter is active — a Clear button next to
             already-empty filters would be dead weight */}
@@ -882,6 +906,11 @@ exportButton: {
     color: 'var(--color-on-accent)',
     fontSize: '0.85rem',
     cursor: 'pointer',
+},
+
+exportButtonDisabled: {
+    backgroundColor: 'var(--color-text-muted)',
+    cursor: 'not-allowed',
 },
 
 // minWidth: 0 on the grid and its children: grid items default to
