@@ -238,7 +238,7 @@ function handleNext() {
 
     onNext({
     materialUsages,
-    quantityProduced: Number(quantityProduced),
+    quantityProduced: quantityProduced !== '' ? Number(quantityProduced) : null,
     netWeightPerUnit: netWeightPerUnit !== '' ? Number(netWeightPerUnit) : null,
     grossWeightPerUnit: grossWeightPerUnit !== '' ? Number(grossWeightPerUnit) : null,
     scrapKg: scrapKg !== '' ? Number(scrapKg) : null
