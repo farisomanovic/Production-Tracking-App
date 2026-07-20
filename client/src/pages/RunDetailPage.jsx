@@ -619,9 +619,7 @@ async function handleComplete() {
         ...(netWeightPerUnit !== '' && { netWeightPerUnit: Number(netWeightPerUnit) }),
         ...(grossWeightPerUnit !== '' && { grossWeightPerUnit: Number(grossWeightPerUnit) }),
         ...(scrapKg !== '' && { scrapKg: Number(scrapKg) }),
-        // TODO: truthiness drops a legitimate 0 meter reading — use
-        // energyEnd !== ''. todo.md Group 7 #2.
-        ...(energyEnd && { energyEnd: Number(energyEnd) }),
+        ...(energyEnd !== '' && { energyEnd: Number(energyEnd) }),
         ...(notes && { notes }),
     }
 
@@ -960,21 +958,19 @@ return (
         </div>
     </div>
 
-    {/* TODO: truthiness hides this whole section (and the readings inside)
-        when a meter legitimately reads 0 — use != null checks. todo.md Group 7 #2. */}
-    {(run.energyStart || run.energyEnd) && (
+    {(run.energyStart != null || run.energyEnd != null) && (
         <div style={styles.section}>
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Energy</p>
         <div style={styles.infoCard}>
             <InfoRow
             label='Start Reading'
-            value={run.energyStart ? `${run.energyStart} kWh` : '—'}
+            value={run.energyStart != null ? `${run.energyStart} kWh` : '—'}
             />
             <InfoRow
             label='End Reading'
-            value={run.energyEnd ? `${run.energyEnd} kWh` : '—'}
+            value={run.energyEnd != null ? `${run.energyEnd} kWh` : '—'}
             />
-            {run.energyStart && run.energyEnd && (
+            {run.energyStart != null && run.energyEnd != null && (
             <InfoRow
                 label='Consumed'
                 value={`${(run.energyEnd - run.energyStart).toFixed(1)} kWh`}

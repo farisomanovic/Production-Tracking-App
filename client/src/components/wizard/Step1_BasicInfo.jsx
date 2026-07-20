@@ -118,7 +118,7 @@ function handleNext() {
     // to distinguish "" (untouched input) from a real value.
     ...(warmupStartTime && { warmupStartTime }),
     ...(stableStartTime && { stableStartTime }),
-    ...(energyStart && { energyStart }),
+    ...(energyStart !== '' && { energyStart }),
     ...(potentialBuyer && { potentialBuyer }),
     }
 
