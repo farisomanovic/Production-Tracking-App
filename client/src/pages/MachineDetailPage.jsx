@@ -107,10 +107,6 @@ function MachineDetailPage() {
       const res = await getMachineParameters(machineId)
       setLinkedParameters(res.data)
     } catch (err) {
-      // TODO: when the parameter has recorded run values the server maps the
-      // RESTRICT error to a generic 409 and the user just sees this generic message —
-      // they deserve "this parameter has history and can't be removed".
-      // todo.md Group 4 #3.
       setError('Failed to unlink parameter')
       console.error(err)
     }

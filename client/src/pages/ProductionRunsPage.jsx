@@ -427,9 +427,6 @@ export default function ProductionRunsPage() {
           // Columns are discovered from the data (not the machine config) so
           // runs recorded before a parameter was added still line up — but this
           // is also why duplicate names merge columns.
-          // TODO: matching by display NAME breaks silently when two parameters
-          // or materials share a name — needs @unique in the schema.
-          // todo.md Group 5 #5.
           const paramNames = []
           fullRuns.forEach(run => {
               run.runParameterValues.forEach(pv => {

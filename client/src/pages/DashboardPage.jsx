@@ -2,8 +2,8 @@
  * @file DashboardPage.jsx
  * @description Landing page: today's runs at a glance — live runs, completed
  * count, and which machines worked. Fetches today's date-scoped runs and
- * system-wide in-progress runs in parallel (see Group 6 #6: an in-progress run
- * isn't necessarily dated "today"); all groupings are derived on the client
+ * system-wide in-progress runs in parallel (an in-progress run isn't
+ * necessarily dated "today"); all groupings are derived on the client
  * because a single day is a handful of rows at most.
  */
 import { useState, useEffect } from 'react'
@@ -37,7 +37,7 @@ export default function DashboardPage() {
         // date-scoped query drives "Runs Today"/"Completed"/"Machines Active
         // Today"; the unscoped status query drives "Live Now"/"In Progress" so
         // an overnight run (date = yesterday, still in_progress) isn't invisible
-        // just because it falls outside today's date window. Group 6 #1, #6.
+        // just because it falls outside today's date window.
         const [todayRes, liveRes] = await Promise.all([
           getAllRuns({ dateFrom: today, dateTo: today }),
           getAllRuns({ status: 'in_progress' })
@@ -123,7 +123,7 @@ export default function DashboardPage() {
       {/* Live runs come first — the operator's most likely destination. Driven
           by the unscoped status query, not `runs`, so an overnight run that
           started yesterday still shows up here even though it falls outside
-          today's date window (Group 6 #6). */}
+          today's date window. */}
       {liveRuns.length > 0 && (
         <div style={styles.section}>
           <p style={common.sectionLabel}>Live Now</p>
@@ -175,7 +175,7 @@ export default function DashboardPage() {
           `runs` (today-scoped) only, not `liveRuns`: an overnight run still
           in_progress right now can render a Live Now card ABOVE this block
           even while `runs` is empty, so the CTA can appear directly under a
-          live card. Deliberate — see todo.md Group 6 #6. */}
+          live card. Deliberate. */}
       {runs.length === 0 && (
         <div style={styles.emptyBox}>
           <p style={styles.emptyText}>No runs recorded today.</p>

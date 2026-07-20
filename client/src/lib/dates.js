@@ -39,8 +39,7 @@ export function getLocalDateString(date = new Date()) {
  * Both inputs are zero-padded "HH:mm" strings, so plain string comparison
  * orders them correctly ("02:00" < "22:00") — no Date parsing needed for
  * the overnight test. The rolled date is re-formatted from LOCAL date parts;
- * toISOString() would convert to UTC and could shift the day (the same trap
- * as todo.md Group 6 #1).
+ * toISOString() would convert to UTC and could shift the day.
  *
  * @param {string} dateStr - Run date, "YYYY-MM-DD".
  * @param {string} startHHmm - Start wall-clock time, "HH:mm".

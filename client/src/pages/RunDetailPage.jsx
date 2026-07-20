@@ -71,8 +71,6 @@ useEffect(() => {
                 status: 'completed',
                 limit: 1
             })
-            // TODO: same-day runs tie on the API's date-only sort, so this may
-            // not truly be the LATEST run. todo.md Group 4 #4.
             const lastRunSummary = lastRunRes.data[0]
             if (lastRunSummary) {
                 const lastRunDetail = await getRunById(lastRunSummary.id)

@@ -41,7 +41,7 @@ function isValidDateOnlyString(value) {
 }
 
 // GET /production-runs's list page and export both depend on this endpoint
-// staying bounded as production history accumulates — see todo.md Group 4 #4.
+// staying bounded as production history accumulates.
 const DEFAULT_TAKE = 200
 const MAX_TAKE = 1000
 
