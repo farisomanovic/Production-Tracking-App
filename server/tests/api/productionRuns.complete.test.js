@@ -11,10 +11,12 @@
  *
  * Fixtures created directly via prisma with the VT-COMPLETE prefix: a second
  * machine + parameter (for a machineParameterId foreign to the baseline
- * machine), a material outside the baseline recipe, and a product not linked
- * to the baseline machine. A fresh in_progress run is created before each
- * test and cleaned up through the DELETE route after, so a rejected
- * /complete (which leaves the run in_progress) never leaks into the next test.
+ * machine), a material outside the baseline recipe, a product not linked
+ * to the baseline machine, and a third machine with zero linked parameters
+ * (its own product/recipe) for Group 3 #19. A fresh in_progress run on the
+ * baseline machine is created before each test and cleaned up through the
+ * DELETE route after, so a rejected /complete (which leaves the run
+ * in_progress) never leaks into the next test.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
@@ -29,10 +31,17 @@ let machineParameter
 let foreignMachineParameter
 let rogueMaterial
 let unlinkedProduct
+let zeroParamMachine
+let zeroParamProduct
+let zeroParamRecipe
 let runId
 
 async function cleanupFixtures(machineId) {
     await prisma.productionRun.deleteMany({ where: { machineId, status: 'in_progress' } })
+    await prisma.productionRun.deleteMany({ where: { machine: { code: { startsWith: PREFIX } }, status: 'in_progress' } })
+    await prisma.recipeProduct.deleteMany({ where: { recipe: { name: { startsWith: PREFIX } } } })
+    await prisma.recipe.deleteMany({ where: { name: { startsWith: PREFIX } } })
+    await prisma.machineProduct.deleteMany({ where: { product: { code: { startsWith: PREFIX } } } })
     await prisma.machineParameter.deleteMany({ where: { parameter: { name: { startsWith: PREFIX } } } })
     await prisma.machine.deleteMany({ where: { code: { startsWith: PREFIX } } })
     await prisma.parameter.deleteMany({ where: { name: { startsWith: PREFIX } } })
@@ -53,6 +62,15 @@ beforeAll(async () => {
     })
     rogueMaterial = await prisma.material.create({ data: { name: `${PREFIX} rogue material`, unit: 'kg', stockQty: 1000 } })
     unlinkedProduct = await prisma.product.create({ data: { name: `${PREFIX} unlinked product`, code: `${PREFIX}-P2`, unit: 'kg' } })
+
+    // Group 3 #19: a machine with zero MachineParameter links — no parameter
+    // row is created for it, unlike every other machine in this file.
+    zeroParamMachine = await prisma.machine.create({ data: { name: `${PREFIX} zero-param machine`, code: `${PREFIX}-M3` } })
+    zeroParamProduct = await prisma.product.create({ data: { name: `${PREFIX} zero-param product`, code: `${PREFIX}-P3`, unit: 'kg' } })
+    await prisma.machineProduct.create({ data: { machineId: zeroParamMachine.id, productId: zeroParamProduct.id } })
+    zeroParamRecipe = await prisma.recipe.create({
+        data: { name: `${PREFIX} zero-param recipe`, products: { create: [{ productId: zeroParamProduct.id }] } }
+    })
 })
 
 afterAll(async () => {
@@ -158,6 +176,35 @@ describe('POST /api/production-runs/:id/complete — relational validation (Grou
         const res = await complete(validPayload())
         expect(res.status).toBe(200)
         expect(res.body.status).toBe('completed')
+    })
+})
+
+describe('POST /api/production-runs/:id/complete — zero-parameter machine (Group 3 #19)', () => {
+    it('completes with an empty parameterValues array when the machine has no linked parameters', async () => {
+        const run = await prisma.productionRun.create({
+            data: {
+                date: new Date(),
+                startTime: new Date(),
+                operatorId: baseline.operator.id,
+                machineId: zeroParamMachine.id,
+                productId: zeroParamProduct.id,
+                recipeId: zeroParamRecipe.id
+            }
+        })
+        const res = await request(app).post(`/api/production-runs/${run.id}/complete`).send({
+            endTime: new Date().toISOString(),
+            parameterValues: [],
+            outputs: [{ productId: zeroParamProduct.id, quantityProduced: 1 }]
+        })
+        expect(res.status).toBe(200)
+        expect(res.body.status).toBe('completed')
+        await request(app).delete(`/api/production-runs/${run.id}`)
+    })
+
+    it('still rejects an empty parameterValues array for a machine that has linked parameters', async () => {
+        const res = await complete({ ...validPayload(), parameterValues: [] })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('At least one parameter value is required')
     })
 })
 
