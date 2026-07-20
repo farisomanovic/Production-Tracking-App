@@ -429,7 +429,8 @@ router.put('/:id', async (req, res) => {
  * run can never be "completed" with only half its production data saved.
  *
  * @param {import('express').Request} req - `params.id` UUID. Body: `endTime` (required),
- * `parameterValues[]` ({ machineParameterId, value }, min 1), `outputs[]`
+ * `parameterValues[]` ({ machineParameterId, value }; min 1 unless the run's machine has
+ * zero linked parameters, in which case an empty array is required), `outputs[]`
  * ({ productId, quantityProduced }, min 1), `materialUsages[]` optional,
  * `energyEnd`/`notes` optional, run-level weights `netWeightPerUnit`/
  * `grossWeightPerUnit`/`scrapKg` optional (numbers ≥ 0).
@@ -503,7 +504,15 @@ router.post('/:id/complete', async (req, res) => {
     if (end <= existing.startTime) {
         return res.status(400).json({ error: 'endTime must be after the run start time' })
     }
-    if (!parameterValues || !Array.isArray(parameterValues) || parameterValues.length === 0) {
+    if (!parameterValues || !Array.isArray(parameterValues)) {
+        return res.status(400).json({ error: 'parameterValues must be an array' })
+    }
+    // A machine with zero linked parameters has nothing to report — the
+    // wizard/detail-page completion forms already know this (Step3_Parameters.jsx's
+    // "No parameters linked" empty-state lets the operator continue) and submit
+    // an empty array. Only demand a non-empty array when the machine actually
+    // has parameters to fill in.
+    if (parameterValues.length === 0 && existing.machine.machineParameters.length > 0) {
         return res.status(400).json({ error: 'At least one parameter value is required' })
     }
     if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
