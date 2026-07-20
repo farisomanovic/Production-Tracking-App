@@ -122,7 +122,7 @@ Production tracking web app for PakOm d.o.o., a family manufacturing business in
 
 - Partial updates use `...(field !== undefined && { field })` spread pattern in every PUT
 - Input guards with `if (!field)` early returns before every Prisma call for required fields
-- `console.error` in every catch block
+- Routes forward errors to the central error middleware (`next(err)`) — no per-route `console.error`; only the middleware logs genuinely unrecognized errors
 - Soft delete via `active: false` for operators and machines
 - Hard DELETE only for junction table links (MachineParameter, MachineProduct) and production runs
 - No separate routes for nested models (RunOutput, MaterialUsage) — they are part of the ProductionRun lifecycle
