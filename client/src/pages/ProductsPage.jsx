@@ -33,8 +33,7 @@ function ProductsPage() {
 
   /**
    * Creates a product from the form, then refetches the list. Requires code
-   * client-side because the schema requires it and the server doesn't check —
-   * this guard is what stands between the user and a raw 500.
+   * client-side to fail fast; the server independently validates it too.
    *
    * @returns {Promise<void>} Resolves after reload or after the error state is set.
    *

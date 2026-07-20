@@ -208,9 +208,6 @@ function NewRunPage() {
         limit: 1
         })
 
-        // TODO: the API orders by date only (a DATE column), so several runs on
-        // the same day tie and "the last run" may be any of them. Needs a
-        // startTime tiebreaker server-side. todo.md Group 4 #4.
         const lastRunSummary = lastRunRes.data[0]
 
         if (lastRunSummary) {

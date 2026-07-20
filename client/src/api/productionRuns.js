@@ -12,7 +12,7 @@ import api from './axiosInstance'
  * @param {Object} [params] - Any of `{ machineId, operatorId, productId, status,
  * dateFrom, dateTo, limit }` — dates as "YYYY-MM-DD", status "in_progress" | "completed".
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = ProductionRun[]
- * (with operator/machine/product/recipe), newest date first.
+ * (operator/machine/product narrowed to `{ name }`; no recipe), newest date first.
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example

@@ -25,7 +25,7 @@ const app = express()
 
 // cors() treats a falsy origin option the same as origin: '*' (allow any
 // origin) — a missing env var must crash loudly here, not silently open
-// CORS to every site. See todo.md Group 1 #5.
+// CORS to every site.
 const clientOrigin = assertClientOriginConfigured(process.env.CLIENT_ORIGIN)
 app.use(cors({ origin: clientOrigin }))
 // Registered before the routers on purpose: express.json() is what fills req.body,
