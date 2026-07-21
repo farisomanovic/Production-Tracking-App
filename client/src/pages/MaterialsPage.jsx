@@ -147,6 +147,7 @@ function MaterialsPage() {
                               type='number'
                               value={editingStock}
                               onChange={e => setEditingStock(e.target.value)}
+                              onWheel={e => e.target.blur()}
                               placeholder={`Amount to add (${material.unit})`}
                           />
                           <button
