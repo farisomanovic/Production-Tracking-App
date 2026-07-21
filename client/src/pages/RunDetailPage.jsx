@@ -12,7 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
-import { rollToNextDayIfAtOrBefore } from '../lib/dates'
+import { rollToNextDayIfAtOrBefore, formatDisplayDate, formatDisplayTime } from '../lib/dates'
 import { common } from '../styles/common'
 
 /**
@@ -136,11 +136,7 @@ useEffect(() => {
  */
 function formatDate(dateStr) {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-    })
+    return formatDisplayDate(dateStr)
 }
 
 /**
@@ -165,18 +161,14 @@ async function handleDelete() {
  * Formats a timestamp as a short clock time for the Times card.
  *
  * @param {string} dateStr - ISO timestamp from the API; null for never-set optional times.
- * @returns {string} e.g. "08:30 AM", or "—" for missing values.
+ * @returns {string} e.g. "14:00", or "—" for missing values.
  *
  * @example
- * formatTime('2026-07-04T08:30:00.000') // → "08:30 AM"
+ * formatTime('2026-07-04T14:00:00.000') // → "14:00"
  */
 function formatTime(dateStr) {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-    })
+    return formatDisplayTime(dateStr)
 }
 
 /**
@@ -188,10 +180,10 @@ function formatTime(dateStr) {
  *
  * @param {string} anchorStr - The reference ISO timestamp (the run's startTime).
  * @param {string} targetStr - The ISO timestamp to format; null for missing values.
- * @returns {string} e.g. "02:00 AM (+1 day)", or "—" for missing values.
+ * @returns {string} e.g. "02:00 (+1 day)", or "—" for missing values.
  *
  * @example
- * formatTimeWithDayMarker('2026-07-07T22:00:00.000', '2026-07-08T02:00:00.000') // → "02:00 AM (+1 day)"
+ * formatTimeWithDayMarker('2026-07-07T22:00:00.000', '2026-07-08T02:00:00.000') // → "02:00 (+1 day)"
  */
 function formatTimeWithDayMarker(anchorStr, targetStr) {
     if (!targetStr) return '—'
@@ -646,12 +638,7 @@ return (
         <SummaryRow label='Operator' value={run.operator.name} />
         <SummaryRow label='Product' value={run.product.name} />
         <SummaryRow label='Recipe' value={run.recipe.name} />
-        <SummaryRow label='Started' value={
-        new Date(run.startTime).toLocaleTimeString('en-GB', {
-            hour: '2-digit',
-            minute: '2-digit'
-        })
-        } />
+        <SummaryRow label='Started' value={formatDisplayTime(run.startTime)} />
     </div>
 
     {error && <div style={common.errorBox}>{error}</div>}
