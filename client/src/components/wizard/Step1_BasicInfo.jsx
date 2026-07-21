@@ -10,6 +10,7 @@ import { getAllMachines } from '../../api/machines'
 import { getMachineProducts } from '../../api/machineProducts'
 import { getLocalDateString } from '../../lib/dates'
 import { common } from '../../styles/common'
+import TimeInput24 from '../TimeInput24'
 
 /**
  * Renders the run header form and reports its values upward on Next.
@@ -225,33 +226,27 @@ return (
     {/* Warmup Start Time */}
     <div style={common.field}>
         <label style={common.label}>Warmup Start Time</label>
-        <input
-        style={common.wizardInput}
-        type='time'
+        <TimeInput24
         value={warmupStartTime}
-        onChange={e => setWarmupStartTime(e.target.value)}
+        onChange={setWarmupStartTime}
         />
     </div>
 
     {/* Start Time */}
     <div style={common.field}>
         <label style={common.label}>Start Time *</label>
-        <input
-        style={common.wizardInput}
-        type='time'
+        <TimeInput24
         value={startTime}
-        onChange={e => setStartTime(e.target.value)}
+        onChange={setStartTime}
         />
     </div>
 
     {/* Stable Start Time */}
     <div style={common.field}>
         <label style={common.label}>Stable Start Time</label>
-        <input
-        style={common.wizardInput}
-        type='time'
+        <TimeInput24
         value={stableStartTime}
-        onChange={e => setStableStartTime(e.target.value)}
+        onChange={setStableStartTime}
         />
     </div>
 

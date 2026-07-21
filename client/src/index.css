@@ -62,3 +62,28 @@ body {
        full-width cards actually reach the viewport edges. */
     margin: 0;
 }
+
+/* react-time-picker (TimeInput24.jsx) reskinned to match this app's inputs.
+   Its DOM can't be reached with a React `style` prop like a native <input>
+   can, so — unlike everything else in this app — its look lives here instead
+   of in a component's inline style object. */
+.time-input-24 {
+    width: 100%;
+}
+
+.time-input-24 .react-time-picker__wrapper {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    background-color: var(--color-input-background);
+    color: var(--color-text-primary);
+    font-size: 0.95rem;
+}
+
+.time-input-24 .react-time-picker__button {
+    color: var(--color-text-secondary);
+}
+
+.time-input-24 .react-time-picker__button svg {
+    stroke: var(--color-text-secondary);
+}

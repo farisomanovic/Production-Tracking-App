@@ -63,3 +63,84 @@ export function rollToNextDayIfAtOrBefore(dateStr, anchorHHmm, targetHHmm) {
   }
   return `${targetDate}T${targetHHmm}:00.000`
 }
+
+/**
+ * Formats a timestamp as a short en-GB date for cards/lists.
+ *
+ * @param {string} dateStr - ISO date string; caller handles null/empty.
+ * @returns {string} e.g. "04 Jul 2026".
+ *
+ * @example
+ * formatDisplayDate('2026-07-04T00:00:00.000Z') // → "04 Jul 2026"
+ */
+export function formatDisplayDate(dateStr) {
+  return new Date(dateStr).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  })
+}
+
+/**
+ * Formats a date as a full en-GB heading, e.g. for the Dashboard's date line.
+ *
+ * @param {Date} [date=new Date()] - Defaults to the current moment.
+ * @returns {string} e.g. "Tuesday, 21 July 2026".
+ *
+ * @example
+ * formatLongDate(new Date('2026-07-21')) // → "Tuesday, 21 July 2026"
+ */
+export function formatLongDate(date = new Date()) {
+  return date.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  })
+}
+
+/**
+ * Formats a timestamp as a numeric en-GB date for XLSX export cells.
+ *
+ * @param {string} dateStr - ISO date string; caller handles null/empty.
+ * @returns {string} e.g. "04/07/2026".
+ *
+ * @example
+ * formatExportDate('2026-07-04T00:00:00.000Z') // → "04/07/2026"
+ */
+export function formatExportDate(dateStr) {
+  return new Date(dateStr).toLocaleDateString('en-GB')
+}
+
+/**
+ * Formats a date for use inside an export file name. Dots instead of slashes
+ * because "/" is a path separator and invalid in file names.
+ *
+ * @param {string|Date} dateStr - Date to format.
+ * @returns {string} e.g. "04.07.2026".
+ *
+ * @example
+ * formatFileDate('2026-07-04') // → "04.07.2026"
+ */
+export function formatFileDate(dateStr) {
+  return formatExportDate(dateStr).replace(/\//g, '.')
+}
+
+/**
+ * Formats a timestamp as a 24-hour en-GB clock time — the single time
+ * convention used everywhere in the app (screen and XLSX export alike), so a
+ * run's start time reads the same on the Dashboard, the run detail page, and
+ * in an exported report. todo.md Group 6 #5.
+ *
+ * @param {string} dateStr - ISO timestamp; caller handles null/empty.
+ * @returns {string} e.g. "14:00".
+ *
+ * @example
+ * formatDisplayTime('2026-07-04T14:00:00.000') // → "14:00"
+ */
+export function formatDisplayTime(dateStr) {
+  return new Date(dateStr).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}

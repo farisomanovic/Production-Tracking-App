@@ -10,6 +10,7 @@ import { completeRun } from '../../api/productionRuns'
 import { getMachineProducts } from '../../api/machineProducts'
 import { rollToNextDayIfAtOrBefore } from '../../lib/dates'
 import { common } from '../../styles/common'
+import TimeInput24 from '../TimeInput24'
 
 /**
  * Renders output rows + completion fields and submits the run completion.
@@ -228,11 +229,9 @@ return (
     {/* End Time */}
     <div style={common.field}>
         <label style={common.label}>End Time *</label>
-        <input
-        style={styles.input}
-        type='time'
+        <TimeInput24
         value={endTime}
-        onChange={e => setEndTime(e.target.value)}
+        onChange={setEndTime}
         />
     </div>
 

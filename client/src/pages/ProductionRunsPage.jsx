@@ -13,6 +13,7 @@ import { getAllRuns, getRunById } from '../api/productionRuns'
 import { getAllMachines } from '../api/machines'
 import { getAllOperators } from '../api/operators'
 import { getAllProducts } from '../api/products'
+import { formatDisplayDate, formatExportDate, formatFileDate, formatDisplayTime } from '../lib/dates'
 import { common } from '../styles/common'
 
 // Mirrors the server's MAX_TAKE clamp (server/routes/productionRuns.js) — this
@@ -129,25 +130,7 @@ export default function ProductionRunsPage() {
    */
   function formatDate(dateStr) {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    })
-  }
-
-  /**
-   * Formats a date for use inside the export file name. Dots instead of
-   * slashes because "/" is a path separator and invalid in file names.
-   *
-   * @param {string|Date} dateStr - Date to format.
-   * @returns {string} e.g. "04.07.2026".
-   *
-   * @example
-   * formatFileDate('2026-07-04') // → "04.07.2026"
-   */
-  function formatFileDate(dateStr) {
-      return new Date(dateStr).toLocaleDateString('en-GB').replace(/\//g, '.')
+    return formatDisplayDate(dateStr)
   }
 
   /**
@@ -479,18 +462,9 @@ export default function ProductionRunsPage() {
               'Notes'
           ]
 
-          const formatExportDate = (dateStr) => {
-              if (!dateStr) return ''
-              return new Date(dateStr).toLocaleDateString('en-GB')
-          }
-
           const formatExportTime = (dateStr) => {
               if (!dateStr) return ''
-              return new Date(dateStr).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true
-              })
+              return formatDisplayTime(dateStr)
           }
 
           const rows = fullRuns.map(run => {

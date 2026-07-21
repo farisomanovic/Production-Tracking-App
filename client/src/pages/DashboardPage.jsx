@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllRuns } from '../api/productionRuns'
-import { getLocalDateString } from '../lib/dates'
+import { getLocalDateString, formatLongDate, formatDisplayTime } from '../lib/dates'
 import { common } from '../styles/common'
 
 /**
@@ -68,18 +68,14 @@ export default function DashboardPage() {
    * Formats a timestamp as a short clock time for the run cards.
    *
    * @param {string} dateStr - ISO timestamp from the API; may be null for open runs.
-   * @returns {string} e.g. "08:30 AM", or "—" so the layout never collapses on missing data.
+   * @returns {string} e.g. "14:00", or "—" so the layout never collapses on missing data.
    *
    * @example
-   * formatTime('2026-07-04T08:30:00.000Z') // → "08:30 AM" (locale-dependent)
+   * formatTime('2026-07-04T14:00:00.000Z') // → "14:00"
    */
   function formatTime(dateStr) {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    })
+    return formatDisplayTime(dateStr)
   }
 
   if (loading) return <p style={styles.loadingText}>Loading...</p>
@@ -89,12 +85,7 @@ export default function DashboardPage() {
     <div style={common.container}>
       <h1 style={styles.heading}>Dashboard</h1>
       <p style={common.subheading}>
-        {new Date().toLocaleDateString('en-GB', {
-          weekday: 'long',
-          day: '2-digit',
-          month: 'long',
-          year: 'numeric'
-        })}
+        {formatLongDate()}
       </p>
 
       {/* Summary cards */}
