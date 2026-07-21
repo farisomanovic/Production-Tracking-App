@@ -14,6 +14,7 @@ import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
 import { rollToNextDayIfAtOrBefore, formatDisplayDate, formatDisplayTime } from '../lib/dates'
 import { common } from '../styles/common'
+import TimeInput24 from '../components/TimeInput24'
 
 /**
  * Loads the run and dispatches to the completion form or the read-only view
@@ -838,11 +839,9 @@ return (
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Completion</p>
         <div style={common.field}>
         <label style={common.label}>End Time *</label>
-        <input
-            style={styles.input}
-            type='time'
+        <TimeInput24
             value={endTime}
-            onChange={e => setEndTime(e.target.value)}
+            onChange={setEndTime}
         />
         </div>
         <div style={common.field}>
