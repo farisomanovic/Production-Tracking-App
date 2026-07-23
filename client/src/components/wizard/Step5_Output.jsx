@@ -70,7 +70,7 @@ useEffect(() => {
     notes,
     outputs: outputs.map(o => ({ productId: o.productId, quantityProduced: o.quantityProduced }))
     })
-}, [endTime, energyEnd, notes, outputs])
+}, [endTime, energyEnd, notes, outputs, onDraftChange])
 
 useEffect(() => {
     async function loadProducts() {

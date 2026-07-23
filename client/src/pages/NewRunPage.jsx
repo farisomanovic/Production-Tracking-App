@@ -5,7 +5,7 @@
  * fetches last-run values to prefill step 3. Step UIs do NOT belong here —
  * each lives in components/wizard/.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Step1_BasicInfo from '../components/wizard/Step1_BasicInfo'
 import Step2_Recipe from '../components/wizard/Step2_Recipe'
@@ -127,9 +127,9 @@ function NewRunPage() {
    * @example
    * <Step5_Output data={formData} onDraftChange={handleStep5DraftChange} />
    */
-  function handleStep5DraftChange(stepData) {
+  const handleStep5DraftChange = useCallback((stepData) => {
     setFormData(prev => ({ ...prev, ...stepData }))
-  }
+  }, [])
 
   // Warns before an accidental tab-close/navigation once a run row exists
   // server-side (steps 3-5) — the wizard has no way to resume a run, so an
