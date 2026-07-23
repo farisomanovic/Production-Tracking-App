@@ -115,6 +115,22 @@ function NewRunPage() {
     setCurrentStep(prev => prev + 1)
   }
 
+  /**
+   * Merges step 5's in-progress draft into formData without advancing the
+   * wizard — step 5 has no "Next" click to hook a flush into (it's the last
+   * step; its only action is "Complete Run"), so it reports every change as
+   * it happens instead, keeping formData current for if the operator hits Back.
+   *
+   * @param {Object} stepData - Step 5's current endTime/energyEnd/notes/outputs.
+   * @returns {void}
+   *
+   * @example
+   * <Step5_Output data={formData} onDraftChange={handleStep5DraftChange} />
+   */
+  function handleStep5DraftChange(stepData) {
+    setFormData(prev => ({ ...prev, ...stepData }))
+  }
+
   // Warns before an accidental tab-close/navigation once a run row exists
   // server-side (steps 3-5) — the wizard has no way to resume a run, so an
   // unconfirmed exit here otherwise leaves it stuck in_progress forever.
@@ -332,6 +348,7 @@ function NewRunPage() {
             data={formData}
             runId={runId}
             onNext={handleStepNext}
+            onDraftChange={handleStep5DraftChange}
           />
         )
       default:

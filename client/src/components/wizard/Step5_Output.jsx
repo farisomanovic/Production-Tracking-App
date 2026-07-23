@@ -21,12 +21,14 @@ import TimeInput24 from '../TimeInput24'
  * and the run-level weights (netWeightPerUnit/grossWeightPerUnit/scrapKg) from steps 3–4
  * ride along in the final payload; `productId`/`quantityProduced` prefill row 1.
  * @param {string} props.runId - UUID of the run created after step 2 — the completion target.
+ * @param {Function} props.onDraftChange - Reports endTime/energyEnd/notes/outputs up to
+ * formData on every change, since this step has no "Next" click to flush on Back like steps 1-4.
  * @returns {JSX.Element}
  *
  * @example
- * <Step5_Output data={formData} runId={runId} onNext={handleStepNext} />
+ * <Step5_Output data={formData} runId={runId} onDraftChange={handleStep5DraftChange} />
  */
-export default function Step5_Output({ data, runId }) {
+export default function Step5_Output({ data, runId, onDraftChange }) {
 
 const navigate = useNavigate()
 
@@ -56,6 +58,19 @@ const [isSubmitting, setIsSubmitting] = useState(false)
 const [error, setError] = useState(null)
 
 const machineId = data.machineId
+
+// Reports the draft up to formData on every change — unlike steps 1-4, this
+// step has no "Next" click to hook a flush into, so Back would otherwise
+// discard it. quantityProduced stays a string (not Number-cast) so it
+// round-trips through the restore logic above unchanged.
+useEffect(() => {
+    onDraftChange({
+    endTime,
+    energyEnd,
+    notes,
+    outputs: outputs.map(o => ({ productId: o.productId, quantityProduced: o.quantityProduced }))
+    })
+}, [endTime, energyEnd, notes, outputs])
 
 useEffect(() => {
     async function loadProducts() {
