@@ -6,8 +6,7 @@
  * each lives in components/wizard/.
  */
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useNavigationGuard } from '../hooks/useNavigationGuard'
+import { useNavigate, useBlocker } from 'react-router-dom'
 import Step1_BasicInfo from '../components/wizard/Step1_BasicInfo'
 import Step2_Recipe from '../components/wizard/Step2_Recipe'
 import Step3_Parameters from '../components/wizard/Step3_Parameters'
@@ -48,7 +47,6 @@ function toLocalISO(dateStr, timeStr) {
 function NewRunPage() {
 
   const navigate = useNavigate()
-  const { setGuardMessage } = useNavigationGuard()
 
   const [currentStep, setCurrentStep] = useState(1)
   const [runId, setRunId] = useState(null)
@@ -150,15 +148,23 @@ function NewRunPage() {
   }, [currentStep])
 
   // Same steps-3-5 condition as the beforeunload effect above, but for in-app
-  // navigation (BottomNav), which never triggers beforeunload.
+  // navigation (NavLink clicks, browser Back/Forward, popstate) — none of
+  // which trigger beforeunload. useBlocker intercepts all of those uniformly
+  // at the router level, which is why this needs the data router in App.jsx.
+  const blocker = useBlocker(currentStep > 2 && runId != null)
+
   useEffect(() => {
-    setGuardMessage(
-      currentStep > 2 && runId
-        ? "You have an in-progress production run. Leaving now will leave it in progress — you can complete or delete it later from the run's detail page."
-        : null
+    if (blocker.state !== 'blocked') return
+
+    const confirmed = window.confirm(
+      "You have an in-progress production run. Leaving now will leave it in progress — you can complete or delete it later from the run's detail page."
     )
-    return () => setGuardMessage(null)
-  }, [currentStep, runId, setGuardMessage])
+    if (confirmed) {
+      blocker.proceed()
+    } else {
+      blocker.reset()
+    }
+  }, [blocker])
 
   /**
    * Deletes the in-progress run and returns to the run list — the

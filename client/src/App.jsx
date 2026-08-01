@@ -4,9 +4,8 @@
  * the persistent bottom navigation. Page logic does NOT belong here — only
  * routing structure.
  */
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom'
 
-import { NavigationGuardProvider } from './context/NavigationGuardProvider'
 import BottomNav from './components/BottomNav'
 
 import DashboardPage from './pages/DashboardPage'
@@ -26,6 +25,53 @@ import NotFoundPage from './pages/NotFoundPage'
 import RunDetailPage from './pages/RunDetailPage'
 
 /**
+ * Shared chrome rendered on every route: the active page via Outlet, plus the
+ * fixed bottom nav.
+ *
+ * @component
+ * @returns {JSX.Element}
+ */
+function RootLayout() {
+  return (
+    // paddingBottom matches BottomNav's fixed 60px height so page content
+    // can never be hidden underneath it. Change one → change both.
+    <div style={{ paddingBottom: '60px' }}>
+      <Outlet />
+      <BottomNav />
+    </div>
+  )
+}
+
+// Module-level so it's built once, not recreated every render. A data router
+// (rather than <BrowserRouter>) is required for useBlocker (NewRunPage.jsx)
+// to intercept browser Back/Forward navigation, not just in-app link clicks.
+const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
+      { index: true, element: <DashboardPage /> },
+      { path: 'operators', element: <OperatorsPage /> },
+      { path: 'machines', element: <MachinesPage /> },
+      { path: 'products', element: <ProductsPage /> },
+      { path: 'products/:productId', element: <ProductDetailPage /> },
+      { path: 'materials', element: <MaterialsPage /> },
+      { path: 'parameters', element: <ParametersPage /> },
+      { path: 'recipes', element: <RecipesPage /> },
+      { path: 'recipes/:recipeId', element: <RecipeDetailPage /> },
+      { path: 'runs', element: <ProductionRunsPage /> },
+      // runs/new must be declared before runs/:id conceptually — React
+      // Router v7 ranks static segments above params automatically, but the
+      // order here keeps that intent readable.
+      { path: 'runs/new', element: <NewRunPage /> },
+      { path: 'admin', element: <AdminPage /> },
+      { path: 'admin/machines/:machineId', element: <MachineDetailPage /> },
+      { path: 'runs/:id', element: <RunDetailPage /> },
+      { path: '*', element: <NotFoundPage /> },
+    ],
+  },
+])
+
+/**
  * Renders the router tree with a fixed bottom nav on every page.
  *
  * @component
@@ -35,37 +81,7 @@ import RunDetailPage from './pages/RunDetailPage'
  * <App />
  */
 function App() {
-  return (
-    <NavigationGuardProvider>
-      <BrowserRouter>
-        {/* paddingBottom matches BottomNav's fixed 60px height so page content
-            can never be hidden underneath it. Change one → change both. */}
-        <div style={{ paddingBottom: '60px' }}>
-          <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/operators" element={<OperatorsPage />} />
-            <Route path="/machines" element={<MachinesPage />} />
-            <Route path="/products" element={<ProductsPage />} />
-            <Route path="/products/:productId" element={<ProductDetailPage />} />
-            <Route path="/materials" element={<MaterialsPage />} />
-            <Route path="/parameters" element={<ParametersPage />} />
-            <Route path="/recipes" element={<RecipesPage />} />
-            <Route path="/recipes/:recipeId" element={<RecipeDetailPage />} />
-            <Route path="/runs" element={<ProductionRunsPage />} />
-            {/* /runs/new must be declared before /runs/:id conceptually — React
-                Router v7 ranks static segments above params automatically, but the
-                order here keeps that intent readable. */}
-            <Route path="/runs/new" element={<NewRunPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/admin/machines/:machineId" element={<MachineDetailPage />} />
-            <Route path='/runs/:id' element={<RunDetailPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-          <BottomNav />
-        </div>
-      </BrowserRouter>
-    </NavigationGuardProvider>
-  )
+  return <RouterProvider router={router} />
 }
 
 export default App

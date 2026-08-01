@@ -7,7 +7,6 @@
  */
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { useNavigationGuard } from "../hooks/useNavigationGuard";
 
 /**
  * Renders the four navigation tabs and the theme toggle button.
@@ -20,7 +19,6 @@ import { useNavigationGuard } from "../hooks/useNavigationGuard";
  */
 function BottomNav() {
 const { pathname } = useLocation();
-const { guardMessage } = useNavigationGuard();
 // Lazy initializer so localStorage is read once, not on every render.
 // Anything except the stored value "light" (including first visit) means dark —
 // dark is the shop-floor default.
@@ -31,14 +29,6 @@ const [isLightMode, setIsLightMode] = useState(() => {
 // /runs AND /runs/:id (detail), but NOT for /runs/new — that's the New Run
 // tab's territory. The negative lookahead (?!new$) carves out exactly that.
 const isRunsActive = pathname === "/runs" || /^\/runs\/(?!new$)[^/]+$/.test(pathname);
-
-// Lets NewRunPage veto a tab switch mid-wizard (steps 3-5) instead of
-// silently abandoning an in-progress run — see NavigationGuardContext.
-function handleNavClick(e) {
-    if (guardMessage && !window.confirm(guardMessage)) {
-        e.preventDefault();
-    }
-}
 
 useEffect(() => {
     // The data-theme attribute is what index.css keys its light-palette
@@ -56,7 +46,6 @@ return (
         isActive ? { ...styles.link, ...styles.activeLink } : styles.link
         }
         end
-        onClick={handleNavClick}
     >
         <span style={styles.icon}>🏠</span>
         <span style={styles.label}>Dashboard</span>
@@ -67,7 +56,6 @@ return (
         style={() =>
         isRunsActive ? { ...styles.link, ...styles.activeLink } : styles.link
         }
-        onClick={handleNavClick}
     >
         <span style={styles.icon}>📋</span>
         <span style={styles.label}>Runs</span>
@@ -78,7 +66,6 @@ return (
         style={({ isActive }) =>
         isActive ? { ...styles.link, ...styles.activeLink } : styles.link
         }
-        onClick={handleNavClick}
     >
         <span style={styles.icon}>➕</span>
         <span style={styles.label}>New Run</span>
@@ -89,7 +76,6 @@ return (
         style={({ isActive }) =>
         isActive ? { ...styles.link, ...styles.activeLink } : styles.link
         }
-        onClick={handleNavClick}
     >
         <span style={styles.icon}>⚙️</span>
         <span style={styles.label}>Admin</span>
