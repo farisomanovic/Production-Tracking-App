@@ -14,6 +14,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import app from '../../app.js'
 import prisma from '../../lib/prisma.js'
+import { VALID_UNITS } from '../../lib/validation.js'
 
 const PREFIX = 'VT-MAT'
 
@@ -294,5 +295,41 @@ describe('PUT /api/materials/:id — non-stock paths', () => {
         expect(res.body.error).toBe('name cannot be blank')
         const after = await prisma.material.findUnique({ where: { id: material.id } })
         expect(after.name).toBe(material.name)
+    })
+})
+
+describe('unit allow-list validation (Group 3 #14)', () => {
+    it.each(VALID_UNITS)('POST accepts unit %s with 201', async (unit) => {
+        const res = await request(app)
+            .post('/api/materials')
+            .send({ name: `${PREFIX} ${crypto.randomUUID().slice(0, 8)}`, unit })
+        expect(res.status).toBe(201)
+        expect(res.body.unit).toBe(unit)
+    })
+
+    it('POST rejects a unit outside the allow-list with 400', async () => {
+        const res = await request(app)
+            .post('/api/materials')
+            .send({ name: `${PREFIX} bad unit`, unit: 'banana' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe(`unit must be one of: ${VALID_UNITS.join(', ')}`)
+    })
+
+    it('PUT rejects a unit outside the allow-list with 400', async () => {
+        const material = await createMaterial()
+        const res = await request(app)
+            .put(`/api/materials/${material.id}`)
+            .send({ unit: 'banana' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe(`unit must be one of: ${VALID_UNITS.join(', ')}`)
+    })
+
+    it('PUT leaves unit unchanged when omitted from the body', async () => {
+        const material = await createMaterial()
+        const res = await request(app)
+            .put(`/api/materials/${material.id}`)
+            .send({ stockDelta: 1 })
+        expect(res.status).toBe(200)
+        expect(res.body.unit).toBe('kg')
     })
 })

@@ -40,3 +40,12 @@ export function normalizeName(name) {
     if (typeof name !== 'string') return name
     return name.trim().replace(/\s+/g, ' ')
 }
+
+// Product.unit and Material.unit are meant to be a closed vocabulary, not
+// free text — callers already type-check unit before this runs, so exact
+// case-sensitive membership is the only thing left to enforce (Group 3 #14).
+export const VALID_UNITS = ['kg', 'm', 'roll', 'pcs']
+
+export function isValidUnit(v) {
+    return VALID_UNITS.includes(v)
+}

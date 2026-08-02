@@ -7,7 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { isFiniteNumber, isNonEmptyString } from '../lib/validation.js'
+import { isFiniteNumber, isNonEmptyString, isValidUnit, VALID_UNITS } from '../lib/validation.js'
 
 const router = Router()
 
@@ -78,6 +78,9 @@ router.post('/', async (req, res) => {
     if (!isNonEmptyString(name) || !isNonEmptyString(unit) || !isNonEmptyString(code)) {
         return res.status(400).json({ error: 'name, unit and code are required' })
     }
+    if (!isValidUnit(unit)) {
+        return res.status(400).json({ error: `unit must be one of: ${VALID_UNITS.join(', ')}` })
+    }
     if (description !== undefined && typeof description !== 'string') {
         return res.status(400).json({ error: 'description must be a string' })
     }
@@ -112,6 +115,9 @@ router.put('/:id', async (req, res) => {
         if (value !== undefined && typeof value !== 'string') {
             return res.status(400).json({ error: `${field} must be a string` })
         }
+    }
+    if (unit !== undefined && !isValidUnit(unit)) {
+        return res.status(400).json({ error: `unit must be one of: ${VALID_UNITS.join(', ')}` })
     }
     if (dimensionError(res, 'widthMm', widthMm) || dimensionError(res, 'thicknessMm', thicknessMm) || dimensionError(res, 'lengthM', lengthM)) {
         return
