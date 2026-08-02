@@ -7,6 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -67,9 +68,9 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   const { name } = req.body
-  // TODO: "   " passes this check — trim and enforce a minimum length before
-  // the database fills up with blank names. todo.md Group 3 #8.
-  if (!name) {
+  // TODO: a non-blank name with leading/trailing whitespace is still stored
+  // as-is (e.g. "  Emina  ") — trim before saving. todo.md Group 3 #8.
+  if (!isNonEmptyString(name)) {
     return res.status(400).json({ error: 'name is required' })
   }
   const operator = await prisma.operator.create({
@@ -91,6 +92,9 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   const { name, active } = req.body
+  if (name !== undefined && typeof name !== 'string') {
+    return res.status(400).json({ error: 'name must be a string' })
+  }
   if (active !== undefined && typeof active !== 'boolean') {
     return res.status(400).json({ error: 'active must be a boolean' })
   }

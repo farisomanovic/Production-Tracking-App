@@ -17,6 +17,13 @@ export function isFiniteNumber(v) {
     return typeof v === 'number' && Number.isFinite(v)
 }
 
+// Required-string check: rejects non-strings and blank/whitespace-only values
+// alike, so a numeric field crashing Prisma and an empty field both land on
+// the same "X is required" message a caller already expects (Group 3 #18).
+export function isNonEmptyString(v) {
+    return typeof v === 'string' && v.trim().length > 0
+}
+
 // Blank/whitespace normalizes to null so it never occupies a unique
 // constraint's single "" slot; explicit null passes through instead of
 // hitting .trim() on null.

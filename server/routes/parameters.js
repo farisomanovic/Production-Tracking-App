@@ -7,7 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { normalizeName } from '../lib/validation.js'
+import { normalizeName, isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -63,10 +63,16 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     const { name, unit, description } = req.body
-    const normalizedName = normalizeName(name)
-    if (!normalizedName) {
+    if (!isNonEmptyString(name)) {
         return res.status(400).json({ error: 'name is required' })
     }
+    if (unit !== undefined && typeof unit !== 'string') {
+        return res.status(400).json({ error: 'unit must be a string' })
+    }
+    if (description !== undefined && typeof description !== 'string') {
+        return res.status(400).json({ error: 'description must be a string' })
+    }
+    const normalizedName = normalizeName(name)
     let parameter
     try {
         parameter = await prisma.parameter.create({
@@ -97,6 +103,15 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, unit, description } = req.body
+    if (name !== undefined && typeof name !== 'string') {
+        return res.status(400).json({ error: 'name must be a string' })
+    }
+    if (unit !== undefined && typeof unit !== 'string') {
+        return res.status(400).json({ error: 'unit must be a string' })
+    }
+    if (description !== undefined && typeof description !== 'string') {
+        return res.status(400).json({ error: 'description must be a string' })
+    }
     const normalizedName = name !== undefined ? normalizeName(name) : undefined
     if (normalizedName === '') {
         return res.status(400).json({ error: 'name cannot be blank' })

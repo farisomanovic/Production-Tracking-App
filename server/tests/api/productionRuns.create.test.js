@@ -121,6 +121,20 @@ describe('POST /api/production-runs — required fields and dates', () => {
     })
 })
 
+describe('POST /api/production-runs — notes/potentialBuyer validation (Group 3 #18)', () => {
+    it('rejects a numeric notes with 400', async () => {
+        const res = await post({ ...validPayload(), notes: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('notes must be a string')
+    })
+
+    it('rejects a numeric potentialBuyer with 400', async () => {
+        const res = await post({ ...validPayload(), potentialBuyer: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('potentialBuyer must be a string')
+    })
+})
+
 describe('POST /api/production-runs — warmup/stable ordering (Group 6 #7)', () => {
     it('rejects a warmupStartTime after startTime with 400', async () => {
         const payload = validPayload()

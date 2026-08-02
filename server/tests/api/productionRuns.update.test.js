@@ -78,6 +78,18 @@ describe('PUT /api/production-runs/:id', () => {
         expect(res.body.notes).toBe(`${PREFIX} note`)
     })
 
+    it('rejects a numeric notes with 400 (Group 3 #18)', async () => {
+        const res = await put({ notes: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('notes must be a string')
+    })
+
+    it('rejects a numeric potentialBuyer with 400 (Group 3 #18)', async () => {
+        const res = await put({ potentialBuyer: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('potentialBuyer must be a string')
+    })
+
     it('rejects a non-numeric energyStart with 400 (Group 3 #12)', async () => {
         const res = await put({ energyStart: 'broken' })
         expect(res.status).toBe(400)

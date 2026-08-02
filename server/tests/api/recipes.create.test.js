@@ -65,6 +65,24 @@ describe('POST /api/recipes — required fields', () => {
         expect(res.body.error).toBe('name and at least one productId are required')
     })
 
+    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+        const res = await post({ ...validPayload(), name: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name and at least one productId are required')
+    })
+
+    it('rejects a non-string productId element with 400 (Group 3 #18)', async () => {
+        const res = await post({ ...validPayload(), productIds: [123] })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Each productId must be a non-empty string')
+    })
+
+    it('rejects a numeric notes with 400 (Group 3 #18)', async () => {
+        const res = await post({ ...validPayload(), notes: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('notes must be a string')
+    })
+
     it('rejects a missing productIds with 400', async () => {
         const res = await post({ ...validPayload(), productIds: undefined })
         expect(res.status).toBe(400)
@@ -107,6 +125,21 @@ describe('POST /api/recipes — item list shape', () => {
         const res = await post({
             ...validPayload(),
             items: [{ percentage: 100 }]
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Each recipe item needs a materialId')
+    })
+
+    it('rejects a null item with 400 instead of throwing a TypeError (Group 3 #18)', async () => {
+        const res = await post({ ...validPayload(), items: [null] })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Each recipe item must be an object')
+    })
+
+    it('rejects a numeric materialId with 400 (Group 3 #18)', async () => {
+        const res = await post({
+            ...validPayload(),
+            items: [{ materialId: 123, percentage: 100 }]
         })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('Each recipe item needs a materialId')
@@ -240,5 +273,21 @@ describe('POST /api/recipes — happy path', () => {
         expect(res.status).toBe(201)
         expect(res.body.isDefault).toBeUndefined()
         expect(res.body.products[0].isDefault).toBe(false)
+    })
+})
+
+describe('PUT /api/recipes/:id — string field type validation (Group 3 #18)', () => {
+    it('rejects a numeric name with 400', async () => {
+        const recipe = await post(validPayload()).then((res) => res.body)
+        const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ name: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name must be a string')
+    })
+
+    it('rejects a numeric notes with 400', async () => {
+        const recipe = await post(validPayload()).then((res) => res.body)
+        const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ notes: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('notes must be a string')
     })
 })

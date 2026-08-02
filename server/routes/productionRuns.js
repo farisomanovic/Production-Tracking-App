@@ -222,6 +222,12 @@ router.post('/', async (req, res, next) => {
     if (energyStart !== undefined && (!isFiniteNumber(energyStart) || energyStart <= 0)) {
         return res.status(400).json({ error: 'energyStart must be a number greater than 0 when provided' })
     }
+    if (notes !== undefined && typeof notes !== 'string') {
+        return res.status(400).json({ error: 'notes must be a string' })
+    }
+    if (potentialBuyer !== undefined && typeof potentialBuyer !== 'string') {
+        return res.status(400).json({ error: 'potentialBuyer must be a string' })
+    }
 
     const parsedDate = parseDateOr400(res, date, 'date')
     if (!parsedDate) return
@@ -373,6 +379,12 @@ router.put('/:id', async (req, res) => {
     }
     if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd <= 0)) {
         return res.status(400).json({ error: 'energyEnd must be a number greater than 0 when provided' })
+    }
+    if (notes !== undefined && typeof notes !== 'string') {
+        return res.status(400).json({ error: 'notes must be a string' })
+    }
+    if (potentialBuyer !== undefined && typeof potentialBuyer !== 'string') {
+        return res.status(400).json({ error: 'potentialBuyer must be a string' })
     }
 
     let parsedWarmupStartTime
@@ -546,6 +558,9 @@ router.post('/:id/complete', async (req, res) => {
     // down, a meter reading of exactly 0 is never legitimate).
     if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd <= 0)) {
         return res.status(400).json({ error: 'energyEnd must be a number greater than 0 when provided' })
+    }
+    if (notes !== undefined && typeof notes !== 'string') {
+        return res.status(400).json({ error: 'notes must be a string' })
     }
     for (const p of parameterValues) {
         if (!p.machineParameterId || !isFiniteNumber(p.value)) {
