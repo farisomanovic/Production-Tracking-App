@@ -47,6 +47,9 @@ model Machine {
 // column. Machine/Operator/Recipe deliberately do NOT get the same treatment:
 // they have `active` soft-delete and legitimately reuse a name after
 // deactivating the old row (see Recipe), which a plain @unique would break.
+// A second raw-SQL-only unique index on lower(name) also exists (migration
+// material_parameter_name_ci_unique) — Prisma's schema language can't
+// express it either; see that migration's comment for the full reasoning.
 model Parameter {
   id          String  @id @default(uuid())
   name        String  @unique
@@ -138,7 +141,10 @@ model RecipeProduct {
 // CHECK (stockQty >= 0) exists in the completion_race_and_stock_floor migration;
 // Prisma's schema language cannot express it, so it lives in raw SQL only.
 // name is @unique — same reasoning as Parameter.name above: the XLSX export
-// matches material columns by name, not id.
+// matches material columns by name, not id. A second raw-SQL-only unique
+// index on lower(name) also exists (migration
+// material_parameter_name_ci_unique) — same reasoning as the stockQty CHECK
+// above; see that migration's comment for the full reasoning.
 model Material {
   id       String @id @default(uuid())
   name     String @unique

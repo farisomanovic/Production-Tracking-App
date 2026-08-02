@@ -67,6 +67,31 @@ describe('POST /api/parameters', () => {
         expect(res.status).toBe(409)
         expect(res.body.error).toBe('A parameter with this name already exists')
     })
+
+    it('trims and collapses inner whitespace in name', async () => {
+        const res = await request(app)
+            .post('/api/parameters')
+            .send({ name: `  ${PREFIX}   spaced   name  ` })
+        expect(res.status).toBe(201)
+        expect(res.body.name).toBe(`${PREFIX} spaced name`)
+    })
+
+    it('rejects a whitespace-only name with 400', async () => {
+        const res = await request(app)
+            .post('/api/parameters')
+            .send({ name: '   ' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name is required')
+    })
+
+    it('rejects a case-only variant of an existing name with 409', async () => {
+        const existing = await createParameter()
+        const res = await request(app)
+            .post('/api/parameters')
+            .send({ name: existing.name.toUpperCase() })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A parameter with this name already exists')
+    })
 })
 
 describe('PUT /api/parameters/:id', () => {
@@ -104,5 +129,36 @@ describe('PUT /api/parameters/:id', () => {
             .send({ name: existing.name })
         expect(res.status).toBe(409)
         expect(res.body.error).toBe('A parameter with this name already exists')
+    })
+
+    it('rejects renaming into a whitespace-variant of an existing name with 409', async () => {
+        const existing = await createParameter()
+        const parameter = await createParameter()
+        const res = await request(app)
+            .put(`/api/parameters/${parameter.id}`)
+            .send({ name: `  ${existing.name}  ` })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A parameter with this name already exists')
+    })
+
+    it('rejects renaming into a case-only variant of an existing name with 409', async () => {
+        const existing = await createParameter()
+        const parameter = await createParameter()
+        const res = await request(app)
+            .put(`/api/parameters/${parameter.id}`)
+            .send({ name: existing.name.toUpperCase() })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A parameter with this name already exists')
+    })
+
+    it('rejects a whitespace-only name with 400 and leaves the row unchanged', async () => {
+        const parameter = await createParameter()
+        const res = await request(app)
+            .put(`/api/parameters/${parameter.id}`)
+            .send({ name: '   ' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.parameter.findUnique({ where: { id: parameter.id } })
+        expect(after.name).toBe(parameter.name)
     })
 })

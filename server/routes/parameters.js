@@ -7,6 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { normalizeName } from '../lib/validation.js'
 
 const router = Router()
 
@@ -62,13 +63,14 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     const { name, unit, description } = req.body
-    if (!name) {
+    const normalizedName = normalizeName(name)
+    if (!normalizedName) {
         return res.status(400).json({ error: 'name is required' })
     }
     let parameter
     try {
         parameter = await prisma.parameter.create({
-            data: { name,
+            data: { name: normalizedName,
                 ...(unit !== undefined && { unit }),
                 ...(description !== undefined && { description })
             }
@@ -95,13 +97,17 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, unit, description } = req.body
+    const normalizedName = name !== undefined ? normalizeName(name) : undefined
+    if (normalizedName === '') {
+        return res.status(400).json({ error: 'name cannot be blank' })
+    }
     let parameter
     try {
         parameter = await prisma.parameter.update({
             where: { id: req.params.id },
             data: {
                 // Spread-if-defined keeps omitted fields untouched (partial update).
-                ...(name !== undefined && { name }),
+                ...(normalizedName !== undefined && { name: normalizedName }),
                 ...(unit !== undefined && { unit }),
                 ...(description !== undefined && { description })
             }
