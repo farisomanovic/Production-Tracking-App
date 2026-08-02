@@ -16,3 +16,11 @@ export function allBelongTo(ids, validSet) {
 export function isFiniteNumber(v) {
     return typeof v === 'number' && Number.isFinite(v)
 }
+
+// Blank/whitespace normalizes to null so it never occupies a unique
+// constraint's single "" slot; explicit null passes through instead of
+// hitting .trim() on null.
+export function normalizeCode(code) {
+    if (code === null) return null
+    return code.trim() === '' ? null : code.trim()
+}

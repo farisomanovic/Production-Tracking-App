@@ -8,6 +8,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { machineHasRunInProgress } from '../lib/machineGuards.js'
+import { normalizeCode } from '../lib/validation.js'
 
 const router = Router()
 
@@ -73,7 +74,7 @@ router.post('/', async (req, res) => {
     // omitting it allows many code-less machines, while an explicit duplicate
     // string would violate the constraint.
     data: { name,
-      ...(code !== undefined && { code }),
+      ...(code !== undefined && { code: normalizeCode(code) }),
     }
   })
   res.status(201).json(machine)
@@ -105,7 +106,7 @@ router.put('/:id', async (req, res) => {
       ...(name !== undefined && { name }),
       // Blank/whitespace normalizes to null so it never occupies the unique
       // constraint's single "" slot.
-      ...(code !== undefined && { code: code.trim() === '' ? null : code.trim() }),
+      ...(code !== undefined && { code: normalizeCode(code) }),
       ...(active !== undefined && { active }),
     }
   })

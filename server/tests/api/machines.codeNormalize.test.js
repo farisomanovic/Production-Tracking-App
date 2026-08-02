@@ -1,9 +1,10 @@
 /**
  * @file machines.codeNormalize.test.js
- * @description Tests for PUT /api/machines/:id normalizing blank/whitespace
- * `code` to null instead of writing literal "" (todo.md Group 3 #11) — an
- * unguarded "" would occupy the Machine.code unique constraint's single
- * empty-string slot and P2002 the next machine saved the same way.
+ * @description Tests for POST and PUT /api/machines normalizing blank/whitespace
+ * `code` to null instead of writing literal "" (todo.md Group 3 #11, extended to
+ * POST and to explicit null by #16/#17) — an unguarded "" would occupy the
+ * Machine.code unique constraint's single empty-string slot and P2002 the next
+ * machine saved the same way, and an unguarded null would throw on `.trim()`.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
@@ -60,5 +61,40 @@ describe('PUT /api/machines/:id — code normalization', () => {
         const res = await request(app).put(`/api/machines/${machineA.id}`).send({ name: `${PREFIX} A renamed` })
         expect(res.status).toBe(200)
         expect(res.body.code).toBe(before.code)
+    })
+
+    it('accepts an explicit null without crashing', async () => {
+        const res = await request(app).put(`/api/machines/${machineA.id}`).send({ code: null })
+        expect(res.status).toBe(200)
+        expect(res.body.code).toBeNull()
+    })
+})
+
+describe('POST /api/machines — code normalization', () => {
+    it('normalizes an empty string to null', async () => {
+        const res = await request(app).post('/api/machines').send({ name: `${PREFIX} C`, code: '' })
+        expect(res.status).toBe(201)
+        expect(res.body.code).toBeNull()
+    })
+
+    it('normalizes a whitespace-only string to null', async () => {
+        const res = await request(app).post('/api/machines').send({ name: `${PREFIX} D`, code: '   ' })
+        expect(res.status).toBe(201)
+        expect(res.body.code).toBeNull()
+    })
+
+    it('trims a non-blank code', async () => {
+        const res = await request(app).post('/api/machines').send({ name: `${PREFIX} E`, code: `  ${PREFIX}-E  ` })
+        expect(res.status).toBe(201)
+        expect(res.body.code).toBe(`${PREFIX}-E`)
+    })
+
+    it('allows two different machines to both be created with code: "" without colliding', async () => {
+        const resA = await request(app).post('/api/machines').send({ name: `${PREFIX} F`, code: '' })
+        const resB = await request(app).post('/api/machines').send({ name: `${PREFIX} G`, code: '' })
+        expect(resA.status).toBe(201)
+        expect(resB.status).toBe(201)
+        expect(resA.body.code).toBeNull()
+        expect(resB.body.code).toBeNull()
     })
 })

@@ -44,7 +44,7 @@ function MachinesPage() {
         name,
         // Only send code when non-blank — an empty string would occupy the
         // unique constraint's single "" slot and block every later blank code.
-        ...(code.trim() && { code })
+        ...(code.trim() && { code: code.trim() })
       })
       setName('')
       setCode('')
