@@ -7,7 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { isFiniteNumber } from '../lib/validation.js'
+import { isFiniteNumber, isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -75,8 +75,11 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body
-    if (!name || !unit || !code) {
+    if (!isNonEmptyString(name) || !isNonEmptyString(unit) || !isNonEmptyString(code)) {
         return res.status(400).json({ error: 'name, unit and code are required' })
+    }
+    if (description !== undefined && typeof description !== 'string') {
+        return res.status(400).json({ error: 'description must be a string' })
     }
     if (dimensionError(res, 'widthMm', widthMm) || dimensionError(res, 'thicknessMm', thicknessMm) || dimensionError(res, 'lengthM', lengthM)) {
         return
@@ -105,6 +108,11 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body
+    for (const [field, value] of Object.entries({ name, code, unit, description })) {
+        if (value !== undefined && typeof value !== 'string') {
+            return res.status(400).json({ error: `${field} must be a string` })
+        }
+    }
     if (dimensionError(res, 'widthMm', widthMm) || dimensionError(res, 'thicknessMm', thicknessMm) || dimensionError(res, 'lengthM', lengthM)) {
         return
     }

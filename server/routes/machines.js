@@ -8,7 +8,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { machineHasRunInProgress } from '../lib/machineGuards.js'
-import { normalizeCode } from '../lib/validation.js'
+import { normalizeCode, isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -65,7 +65,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   const { name, code } = req.body
-  if (!name) {
+  if (!isNonEmptyString(name)) {
     return res.status(400).json({ error: 'name is required' })
   }
   const machine = await prisma.machine.create({
@@ -93,6 +93,9 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   const { name, code, active } = req.body
+  if (name !== undefined && typeof name !== 'string') {
+    return res.status(400).json({ error: 'name must be a string' })
+  }
   if (active !== undefined && typeof active !== 'boolean') {
     return res.status(400).json({ error: 'active must be a boolean' })
   }

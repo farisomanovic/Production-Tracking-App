@@ -6,7 +6,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { normalizeName } from '../lib/validation.js'
+import { normalizeName, isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -63,14 +63,17 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     const { name, unit, supplier, stockQty } = req.body
-    const normalizedName = normalizeName(name)
-    if (!normalizedName || !unit) {
+    if (!isNonEmptyString(name) || !isNonEmptyString(unit)) {
         return res.status(400).json({ error: 'name and unit are required' })
+    }
+    if (supplier !== undefined && typeof supplier !== 'string') {
+        return res.status(400).json({ error: 'supplier must be a string' })
     }
     // The DB CHECK (stockQty >= 0) would reject this anyway, but as a raw 500.
     if (stockQty !== undefined && (typeof stockQty !== 'number' || !Number.isFinite(stockQty) || stockQty < 0)) {
         return res.status(400).json({ error: 'stockQty must be a number of at least 0' })
     }
+    const normalizedName = normalizeName(name)
     let material
     try {
         material = await prisma.material.create({
@@ -104,6 +107,15 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, unit, supplier, stockQty, stockDelta } = req.body
+    if (name !== undefined && typeof name !== 'string') {
+        return res.status(400).json({ error: 'name must be a string' })
+    }
+    if (unit !== undefined && typeof unit !== 'string') {
+        return res.status(400).json({ error: 'unit must be a string' })
+    }
+    if (supplier !== undefined && typeof supplier !== 'string') {
+        return res.status(400).json({ error: 'supplier must be a string' })
+    }
     const normalizedName = name !== undefined ? normalizeName(name) : undefined
 
     if (normalizedName === '') {

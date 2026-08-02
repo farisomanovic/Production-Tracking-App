@@ -6,6 +6,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -140,11 +141,17 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     const { name, productIds, notes, items } = req.body
 
-    if (!name || !productIds || !Array.isArray(productIds) || productIds.length === 0) {
+    if (!isNonEmptyString(name) || !productIds || !Array.isArray(productIds) || productIds.length === 0) {
         return res.status(400).json({ error: 'name and at least one productId are required' })
     }
     if (new Set(productIds).size !== productIds.length) {
         return res.status(400).json({ error: 'Each product can only be linked once' })
+    }
+    if (!productIds.every(isNonEmptyString)) {
+        return res.status(400).json({ error: 'Each productId must be a non-empty string' })
+    }
+    if (notes !== undefined && typeof notes !== 'string') {
+        return res.status(400).json({ error: 'notes must be a string' })
     }
 
     // A recipe with no items would let a run start with nothing to consume —
@@ -155,7 +162,12 @@ router.post('/', async (req, res) => {
 
     const seenMaterialIds = new Set()
     for (const item of items) {
-        if (!item.materialId) {
+        // Guards item.materialId below from throwing on `items: [null]` —
+        // a non-object item has no meaningful field to report on.
+        if (typeof item !== 'object' || item === null) {
+            return res.status(400).json({ error: 'Each recipe item must be an object' })
+        }
+        if (!isNonEmptyString(item.materialId)) {
             return res.status(400).json({ error: 'Each recipe item needs a materialId' })
         }
         if (seenMaterialIds.has(item.materialId)) {
@@ -228,6 +240,12 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, notes, active } = req.body
+    if (name !== undefined && typeof name !== 'string') {
+        return res.status(400).json({ error: 'name must be a string' })
+    }
+    if (notes !== undefined && typeof notes !== 'string') {
+        return res.status(400).json({ error: 'notes must be a string' })
+    }
     if (active !== undefined && typeof active !== 'boolean') {
         return res.status(400).json({ error: 'active must be a boolean' })
     }

@@ -108,6 +108,14 @@ function validPayload() {
 
 const complete = (payload) => request(app).post(`/api/production-runs/${runId}/complete`).send(payload)
 
+describe('POST /api/production-runs/:id/complete — notes validation (Group 3 #18)', () => {
+    it('rejects a numeric notes with 400', async () => {
+        const res = await complete({ ...validPayload(), notes: 123 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('notes must be a string')
+    })
+})
+
 describe('POST /api/production-runs/:id/complete — relational validation (Group 3 #6)', () => {
     it('rejects a machineParameterId belonging to another machine', async () => {
         const res = await complete({
