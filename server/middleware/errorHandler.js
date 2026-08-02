@@ -42,12 +42,17 @@ export default function errorHandler(err, req, res, next) {
     }
 
     // Errors thrown by Express's own middleware (e.g. express.json() on
-    // malformed JSON, or an unsupported content type) already carry the right
-    // status via http-errors' err.status/err.statusCode — a central handler
-    // must not regress the status-awareness Express's own default handler had.
+    // malformed JSON, an oversized payload, or an unsupported content type)
+    // already carry the right status via http-errors' err.status/err.statusCode
+    // — a central handler must not regress the status-awareness Express's own
+    // default handler had. http-errors also marks these with expose: true,
+    // its own signal that err.message is safe to send to the client (as
+    // opposed to an internal error message that might leak implementation
+    // details) — trust that flag instead of hiding the real reason behind one
+    // generic string.
     const expressStatus = err.status || err.statusCode
     if (typeof expressStatus === 'number' && expressStatus >= 400 && expressStatus < 500) {
-        return res.status(expressStatus).json({ error: 'Malformed request' })
+        return res.status(expressStatus).json({ error: err.expose ? err.message : 'Malformed request' })
     }
 
     // Only reached for errors nothing above recognized — matching the
