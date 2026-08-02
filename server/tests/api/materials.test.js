@@ -88,6 +88,31 @@ describe('POST /api/materials', () => {
         expect(res.status).toBe(409)
         expect(res.body.error).toBe('A material with this name already exists')
     })
+
+    it('trims and collapses inner whitespace in name', async () => {
+        const res = await request(app)
+            .post('/api/materials')
+            .send({ name: `  ${PREFIX}   spaced   name  `, unit: 'kg' })
+        expect(res.status).toBe(201)
+        expect(res.body.name).toBe(`${PREFIX} spaced name`)
+    })
+
+    it('rejects a whitespace-only name with 400', async () => {
+        const res = await request(app)
+            .post('/api/materials')
+            .send({ name: '   ', unit: 'kg' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name and unit are required')
+    })
+
+    it('rejects a case-only variant of an existing name with 409', async () => {
+        const existing = await createMaterial()
+        const res = await request(app)
+            .post('/api/materials')
+            .send({ name: existing.name.toUpperCase(), unit: 'kg' })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A material with this name already exists')
+    })
 })
 
 describe('PUT /api/materials/:id — stockDelta (relative adjust)', () => {
@@ -189,5 +214,36 @@ describe('PUT /api/materials/:id — non-stock paths', () => {
             .send({ name: existing.name })
         expect(res.status).toBe(409)
         expect(res.body.error).toBe('A material with this name already exists')
+    })
+
+    it('rejects renaming into a whitespace-variant of an existing name with 409', async () => {
+        const existing = await createMaterial()
+        const material = await createMaterial()
+        const res = await request(app)
+            .put(`/api/materials/${material.id}`)
+            .send({ name: `  ${existing.name}  ` })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A material with this name already exists')
+    })
+
+    it('rejects renaming into a case-only variant of an existing name with 409', async () => {
+        const existing = await createMaterial()
+        const material = await createMaterial()
+        const res = await request(app)
+            .put(`/api/materials/${material.id}`)
+            .send({ name: existing.name.toUpperCase() })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A material with this name already exists')
+    })
+
+    it('rejects a whitespace-only name with 400 and leaves the row unchanged', async () => {
+        const material = await createMaterial()
+        const res = await request(app)
+            .put(`/api/materials/${material.id}`)
+            .send({ name: '   ' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.material.findUnique({ where: { id: material.id } })
+        expect(after.name).toBe(material.name)
     })
 })

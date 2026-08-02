@@ -6,6 +6,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { normalizeName } from '../lib/validation.js'
 
 const router = Router()
 
@@ -62,7 +63,8 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     const { name, unit, supplier, stockQty } = req.body
-    if (!name || !unit) {
+    const normalizedName = normalizeName(name)
+    if (!normalizedName || !unit) {
         return res.status(400).json({ error: 'name and unit are required' })
     }
     // The DB CHECK (stockQty >= 0) would reject this anyway, but as a raw 500.
@@ -72,7 +74,7 @@ router.post('/', async (req, res) => {
     let material
     try {
         material = await prisma.material.create({
-            data: { name, unit,
+            data: { name: normalizedName, unit,
                 ...(supplier !== undefined && { supplier }),
                 ...(stockQty !== undefined && { stockQty })
             }
@@ -102,7 +104,11 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { name, unit, supplier, stockQty, stockDelta } = req.body
+    const normalizedName = name !== undefined ? normalizeName(name) : undefined
 
+    if (normalizedName === '') {
+        return res.status(400).json({ error: 'name cannot be blank' })
+    }
     // Stock has a hard floor: the DB CHECK (stockQty >= 0) would reject these
     // anyway, but as an unreadable 500 — validate here for a clear message.
     if (stockQty !== undefined && (typeof stockQty !== 'number' || !Number.isFinite(stockQty) || stockQty < 0)) {
@@ -123,7 +129,7 @@ router.put('/:id', async (req, res) => {
                 ...(stockDelta !== undefined && stockDelta < 0 && { stockQty: { gte: -stockDelta } })
             },
             data: {
-                ...(name !== undefined && { name }),
+                ...(normalizedName !== undefined && { name: normalizedName }),
                 ...(unit !== undefined && { unit }),
                 ...(supplier !== undefined && { supplier }),
                 ...(stockDelta !== undefined
