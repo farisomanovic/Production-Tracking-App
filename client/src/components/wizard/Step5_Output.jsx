@@ -23,12 +23,14 @@ import TimeInput24 from '../TimeInput24'
  * @param {string} props.runId - UUID of the run created after step 2 — the completion target.
  * @param {Function} props.onDraftChange - Reports endTime/energyEnd/notes/outputs up to
  * formData on every change, since this step has no "Next" click to flush on Back like steps 1-4.
+ * @param {Function} props.onBeforeExit - Called right before navigating away after a successful
+ * completion, so NewRunPage's abandon-run guard doesn't mistake this intentional exit for one.
  * @returns {JSX.Element}
  *
  * @example
- * <Step5_Output data={formData} runId={runId} onDraftChange={handleStep5DraftChange} />
+ * <Step5_Output data={formData} runId={runId} onDraftChange={handleStep5DraftChange} onBeforeExit={markIntentionalExit} />
  */
-export default function Step5_Output({ data, runId, onDraftChange }) {
+export default function Step5_Output({ data, runId, onDraftChange, onBeforeExit }) {
 
 const navigate = useNavigate()
 
@@ -216,6 +218,7 @@ async function handleComplete() {
     }
 
     await completeRun(runId, payload)
+    onBeforeExit()
     navigate('/runs')
 
     } catch (err) {
