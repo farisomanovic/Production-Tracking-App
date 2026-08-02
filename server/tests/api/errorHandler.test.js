@@ -135,12 +135,34 @@ describe('central error middleware — logging', () => {
 })
 
 describe('central error middleware — malformed request body', () => {
-    it('maps an unparseable JSON body to 400 instead of 500', async () => {
+    it('maps an unparseable JSON body to 400 with the real parse-error message, not a generic string', async () => {
         const res = await request(app)
             .post('/api/machines')
             .set('Content-Type', 'application/json')
             .send('{not valid json')
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('Malformed request')
+        // Exact wording is V8-version-dependent (it has already changed once
+        // across Node versions) — assert it's the real, JSON-specific message
+        // and not the old hardcoded fallback string.
+        expect(res.body.error).toMatch(/JSON/)
+        expect(res.body.error).not.toBe('Malformed request')
+    })
+
+    it('maps an oversized payload to 413 with the real body-parser message', async () => {
+        // The real app's express.json() has no configured limit, so this uses
+        // a minimal throwaway app (same pattern as `throwingApp` above) with a
+        // tiny limit to trigger body-parser's 413 deterministically.
+        const tinyLimitApp = express()
+        tinyLimitApp.use(express.json({ limit: '10b' }))
+        tinyLimitApp.post('/x', (req, res) => res.json({ ok: true }))
+        tinyLimitApp.use(errorHandler)
+
+        const res = await request(tinyLimitApp)
+            .post('/x')
+            .set('Content-Type', 'application/json')
+            .send({ notes: 'this body is longer than ten bytes' })
+        expect(res.status).toBe(413)
+        expect(res.body.error).toMatch(/entity too large/i)
+        expect(res.body.error).not.toBe('Malformed request')
     })
 })
