@@ -5,8 +5,8 @@
  * fetches last-run values to prefill step 3. Step UIs do NOT belong here —
  * each lives in components/wizard/.
  */
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate, useBlocker } from 'react-router-dom'
 import Step1_BasicInfo from '../components/wizard/Step1_BasicInfo'
 import Step2_Recipe from '../components/wizard/Step2_Recipe'
 import Step3_Parameters from '../components/wizard/Step3_Parameters'
@@ -147,6 +147,43 @@ function NewRunPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [currentStep])
 
+  // Same steps-3-5 condition as the beforeunload effect above, but for in-app
+  // navigation (NavLink clicks, browser Back/Forward, popstate) — none of
+  // which trigger beforeunload. useBlocker intercepts all of those uniformly
+  // at the router level, which is why this needs the data router in App.jsx.
+  //
+  // allowExitRef lets an intentional exit (cancel/complete) bypass the guard
+  // for its own navigate() call. A ref, not state: useBlocker re-registers its
+  // predicate with the router via a useEffect, which commits after render —
+  // too late for a same-tick setState-then-navigate to be seen. The ref is
+  // read fresh at call time regardless of which render's predicate is stale.
+  const allowExitRef = useRef(false)
+  const blocker = useBlocker(
+    useCallback(
+      () => !allowExitRef.current && currentStep > 2 && runId != null,
+      [currentStep, runId]
+    )
+  )
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+
+    const confirmed = window.confirm(
+      "You have an in-progress production run. Leaving now will leave it in progress — you can complete or delete it later from the run's detail page."
+    )
+    if (confirmed) {
+      blocker.proceed()
+    } else {
+      blocker.reset()
+    }
+  }, [blocker])
+
+  // Passed to Step5_Output so its own post-completion navigate() isn't
+  // mistaken for an abandoned run — see allowExitRef above.
+  const markIntentionalExit = useCallback(() => {
+    allowExitRef.current = true
+  }, [])
+
   /**
    * Deletes the in-progress run and returns to the run list — the
    * intentional way to bail out of steps 3-5 instead of closing the tab.
@@ -165,6 +202,7 @@ function NewRunPage() {
     setIsCancelling(true)
     try {
       await deleteRun(runId)
+      allowExitRef.current = true
       navigate('/runs')
     } catch (err) {
       console.error(err)
@@ -349,6 +387,7 @@ function NewRunPage() {
             runId={runId}
             onNext={handleStepNext}
             onDraftChange={handleStep5DraftChange}
+            onBeforeExit={markIntentionalExit}
           />
         )
       default:
