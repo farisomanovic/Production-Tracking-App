@@ -82,11 +82,10 @@ export default function ProductionRunsPage() {
     loadFilterOptions()
   }, [])
 
-  // TODO: no cancellation — rapid filter changes fire overlapping requests, and
-  // a SLOW older response can land after a newer one and overwrite the list
-  // with stale results. Add a `let cancelled = false` + cleanup guard.
-  // todo.md Group 7 #1.
   useEffect(() => {
+    // `cancelled` guards against a slow older response landing after a newer
+    // one and overwriting the list with stale results — see todo.md Group 7 #1.
+    let cancelled = false
     async function loadRuns() {
       setLoading(true)
       setError(null)
@@ -99,6 +98,7 @@ export default function ProductionRunsPage() {
         if (filterDateTo) params.dateTo = filterDateTo
 
         const response = await getAllRuns(params)
+        if (cancelled) return
         const allRuns = response.data
 
         setInProgressRuns(allRuns.filter(r => r.status === 'in_progress'))
@@ -108,13 +108,15 @@ export default function ProductionRunsPage() {
         // total count to disambiguate — see todo.md Group 7 #18.
         setRunsTruncated(allRuns.length === RUNS_FETCH_LIMIT)
       } catch (err) {
+        if (cancelled) return
         setError('Failed to load production runs')
         console.error(err)
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     loadRuns()
+    return () => { cancelled = true }
   }, [filterMachineId, filterOperatorId, filterProductId, filterDateFrom, filterDateTo])
 
   // ─── FORMATTING HELPERS ─────────────────────────────────────────────────────
