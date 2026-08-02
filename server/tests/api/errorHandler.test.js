@@ -12,9 +12,23 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import request from 'supertest'
+import express from 'express'
 import app from '../../app.js'
 import prisma from '../../lib/prisma.js'
 import { getBaseline } from '../helpers.js'
+import errorHandler from '../../middleware/errorHandler.js'
+
+// A minimal throwaway app for the "genuinely unrecognized error" case below —
+// still a real HTTP request through the real middleware (supertest), just not
+// through a production route, so this test stops depending on whichever real
+// bug happens to be unfixed at the moment (this fixture has already had to be
+// re-pointed once: ?limit=abc, closed by todo.md Group 4 #2, then
+// machineParameters.js's numeric machineId, closed by Group 3 #15).
+const throwingApp = express()
+throwingApp.get('/boom', () => {
+    throw new Error('deliberately unrecognized error for test coverage')
+})
+throwingApp.use(errorHandler)
 
 const PREFIX = 'VT-ERR'
 
@@ -112,18 +126,8 @@ describe('central error middleware — logging', () => {
     })
 
     it('does console.error a genuinely unrecognized error (falls through to 500)', async () => {
-        // machineParameters.js's create route only checks machineId/parameterId
-        // are truthy, not that they're strings — a numeric machineId passes that
-        // guard, then fails Prisma's own client-side type validation before ever
-        // reaching the DB. PrismaClientValidationError has no .code (unlike
-        // PrismaClientKnownRequestError), so nothing above recognizes it —
-        // exactly the case that should still be logged. (?limit=abc used to be
-        // this fixture's trigger; todo.md Group 4 #2 closed that gap, so this
-        // test needed a different genuinely-unrecognized-error source.)
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-        const res = await request(app)
-            .post('/api/machine-parameters')
-            .send({ machineId: 12345, parameterId: baselineMachineParameter.parameterId })
+        const res = await request(throwingApp).get('/boom')
         expect(res.status).toBe(500)
         expect(errorSpy).toHaveBeenCalledTimes(1)
         errorSpy.mockRestore()

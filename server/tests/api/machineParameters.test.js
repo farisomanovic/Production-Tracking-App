@@ -82,6 +82,27 @@ describe('POST /api/machine-parameters — displayOrder type validation (Group 3
     })
 })
 
+describe('POST /api/machine-parameters — machineId/parameterId type validation (Group 3 #15)', () => {
+    it('rejects a non-string machineId with 400', async () => {
+        counter += 1
+        const parameter = await prisma.parameter.create({ data: { name: `${PREFIX} post numeric machineId`, unit: 'C' } })
+        const res = await request(app).post('/api/machine-parameters').send({
+            machineId: 12345, parameterId: parameter.id
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('machineId and parameterId are required')
+        await prisma.parameter.delete({ where: { id: parameter.id } })
+    })
+
+    it('rejects a non-string parameterId with 400', async () => {
+        const res = await request(app).post('/api/machine-parameters').send({
+            machineId: baseline.machine.id, parameterId: 12345
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('machineId and parameterId are required')
+    })
+})
+
 describe('PUT /api/machine-parameters/:id — displayOrder type validation (Group 3 #12)', () => {
     it('rejects a non-integer displayOrder with 400', async () => {
         const link = await createLink('put noninteger')

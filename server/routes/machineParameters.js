@@ -8,6 +8,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { machineHasRunInProgress } from '../lib/machineGuards.js'
 import { isForeignKeyViolation } from '../lib/errors.js'
+import { isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -52,7 +53,7 @@ router.get('/machine/:machineId', async (req, res) => {
 router.post('/', async (req, res, next) => {
     try {
         const { machineId, parameterId, displayOrder } = req.body
-        if (!machineId || !parameterId) {
+        if (!isNonEmptyString(machineId) || !isNonEmptyString(parameterId)) {
             return res.status(400).json({ error: 'machineId and parameterId are required' })
         }
         if (displayOrder !== undefined && (!Number.isInteger(displayOrder) || displayOrder < 0)) {
