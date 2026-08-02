@@ -289,7 +289,7 @@ describe('POST /api/production-runs — happy path and busy machine', () => {
             }
         })
         const res = await post(validPayload())
-        expect(res.status).toBe(400)
+        expect(res.status).toBe(409)
         expect(res.body.error).toBe('Machine already has a run in progress')
         await prisma.productionRun.delete({ where: { id: busyRun.id } })
     })

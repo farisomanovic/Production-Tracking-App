@@ -303,7 +303,7 @@ router.post('/', async (req, res, next) => {
     }
 
     if (activeRunOnMachine) {
-        return res.status(400).json({ error: 'Machine already has a run in progress' })
+        return res.status(409).json({ error: 'Machine already has a run in progress' })
     }
 
     try {
