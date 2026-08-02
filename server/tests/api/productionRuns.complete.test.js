@@ -116,6 +116,22 @@ describe('POST /api/production-runs/:id/complete — notes validation (Group 3 #
     })
 })
 
+describe('POST /api/production-runs/:id/complete — endTime type validation (Group 3 #20)', () => {
+    it('rejects a numeric endTime with 400 instead of completing the run', async () => {
+        const res = await complete({ ...validPayload(), endTime: 1789000000000 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('endTime is not a valid timestamp')
+        const run = await prisma.productionRun.findUnique({ where: { id: runId } })
+        expect(run.status).toBe('in_progress')
+    })
+
+    it('rejects an explicit null endTime with 400', async () => {
+        const res = await complete({ ...validPayload(), endTime: null })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('endTime is required to complete a run')
+    })
+})
+
 describe('POST /api/production-runs/:id/complete — relational validation (Group 3 #6)', () => {
     it('rejects a machineParameterId belonging to another machine', async () => {
         const res = await complete({

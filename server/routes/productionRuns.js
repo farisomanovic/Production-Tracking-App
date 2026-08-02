@@ -488,13 +488,11 @@ router.post('/:id/complete', async (req, res) => {
     if (!endTime) {
         return res.status(400).json({ error: 'endTime is required to complete a run' })
     }
-    // Parse endTime up front: an unparseable string gives Invalid Date, and
-    // since NaN compares false to everything, it would sail past the
-    // startTime check below and blow up inside Prisma as a 500.
-    const end = new Date(endTime)
-    if (Number.isNaN(end.getTime())) {
-        return res.status(400).json({ error: 'endTime is not a valid timestamp' })
-    }
+    // Same helper PUT /:id uses for its own endTime field (see its comment
+    // above the function definition) — type-checks before parsing so a
+    // number can't sail past as a silently-valid epoch timestamp.
+    const end = parseDateOr400(res, endTime, 'endTime')
+    if (!end) return
     // A run cannot end at or before the moment it started. The client rolls
     // overnight end times to the next day; this is the backstop for direct
     // API calls and client bugs. startTime is immutable after creation
