@@ -9,6 +9,7 @@ import { getAllParameters, createParameter } from '../api/parameters'
 import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders the parameter list with an add form.
@@ -47,7 +48,7 @@ function ParametersPage() {
       setDescription('')
       reload()
     } catch (err) {
-      setActionError('Failed to create parameter')
+      setActionError(getErrorMessage(err, 'Failed to create parameter'))
       console.error(err)
     }
   }

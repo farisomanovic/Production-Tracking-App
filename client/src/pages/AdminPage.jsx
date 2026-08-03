@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllMachines } from '../api/machines'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders the data-management grid and the machine setup list.
@@ -31,7 +32,7 @@ export default function AdminPage() {
         const response = await getAllMachines()
         setMachines(response.data)
       } catch (err) {
-        setError('Failed to load machines')
+        setError(getErrorMessage(err, 'Failed to load machines'))
         console.error(err)
       } finally {
         setLoading(false)

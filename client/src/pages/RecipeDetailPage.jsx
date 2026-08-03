@@ -12,6 +12,7 @@ import { getRecipeById } from '../api/recipes'
 import { getRecipeProducts, linkProductToRecipe, unlinkProductFromRecipe } from '../api/recipeProducts'
 import { getAllProducts } from '../api/products'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders one recipe's ingredients (read-only) and linked products (with
@@ -52,7 +53,7 @@ function RecipeDetailPage() {
         setLinkedProducts(linkedProductsRes.data)
         setAllProducts(allProductsRes.data)
       } catch (err) {
-        setLoadError('Failed to load recipe details')
+        setLoadError(getErrorMessage(err, 'Failed to load recipe details'))
         console.error(err)
       } finally {
         setLoading(false)
@@ -81,7 +82,7 @@ function RecipeDetailPage() {
       const res = await getRecipeProducts(recipeId)
       setLinkedProducts(res.data)
     } catch (err) {
-      setActionError(err.response?.data?.error || 'Failed to link product')
+      setActionError(getErrorMessage(err, 'Failed to link product'))
       console.error(err)
     }
   }
@@ -103,7 +104,7 @@ function RecipeDetailPage() {
       const res = await getRecipeProducts(recipeId)
       setLinkedProducts(res.data)
     } catch (err) {
-      setActionError(err.response?.data?.error || 'Failed to unlink product')
+      setActionError(getErrorMessage(err, 'Failed to unlink product'))
       console.error(err)
     }
   }

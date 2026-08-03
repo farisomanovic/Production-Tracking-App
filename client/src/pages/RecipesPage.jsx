@@ -13,6 +13,7 @@ import { getAllProducts } from '../api/products'
 import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders the recipe list and the collapsible recipe-builder form.
@@ -165,7 +166,7 @@ function RecipesPage() {
       setShowForm(false)
       reloadRecipes()
     } catch (err) {
-      setActionError('Failed to create recipe')
+      setActionError(getErrorMessage(err, 'Failed to create recipe'))
       console.error(err)
     }
   }
@@ -185,7 +186,7 @@ function RecipesPage() {
       await updateRecipe(id, { active: false })
       reloadRecipes()
     } catch (err) {
-      setActionError('Failed to deactivate recipe')
+      setActionError(getErrorMessage(err, 'Failed to deactivate recipe'))
       console.error(err)
     }
   }
@@ -204,7 +205,7 @@ function RecipesPage() {
       await updateRecipe(id, { active: true })
       reloadRecipes()
     } catch (err) {
-      setActionError('Failed to activate recipe')
+      setActionError(getErrorMessage(err, 'Failed to activate recipe'))
       console.error(err)
     }
   }

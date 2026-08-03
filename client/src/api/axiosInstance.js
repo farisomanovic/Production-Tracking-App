@@ -10,18 +10,4 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
 })
 
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response) {
-      const message =
-        error.response.data?.error || error.response.data?.message || 'Something went wrong. Please try again.'
-      alert(message)
-    } else {
-      alert('Could not reach the server. Check your connection and try again.')
-    }
-    return Promise.reject(error)
-  }
-)
-
 export default api

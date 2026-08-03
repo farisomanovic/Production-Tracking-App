@@ -14,7 +14,8 @@ import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
 import { createRun, getAllRuns, getRunById, deleteRun } from '../api/productionRuns'
 import { rollToNextDayIfAtOrBefore } from '../lib/dates'
-import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
+import ErrorBanner from '../components/ErrorBanner'
 
 /**
  * Glues a date input and a time input into the timestamp string the API stores.
@@ -206,7 +207,7 @@ function NewRunPage() {
       navigate('/runs')
     } catch (err) {
       console.error(err)
-      setError('Failed to cancel production run')
+      setError(getErrorMessage(err, 'Failed to cancel production run'))
       setIsCancelling(false)
     }
   }
@@ -316,7 +317,7 @@ function NewRunPage() {
 
     } catch (err) {
       console.error(err)
-      setError('Failed to create production run. Please try again.')
+      setError(getErrorMessage(err, 'Failed to create production run. Please try again.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -415,11 +416,7 @@ function NewRunPage() {
         </div>
       </div>
 
-      {error && (
-        <div style={common.errorBox}>
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
       {isSubmitting && (
         <p style={styles.loadingText}>Creating run, please wait...</p>

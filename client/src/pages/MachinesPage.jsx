@@ -10,6 +10,7 @@ import { getAllMachines, createMachine, updateMachine } from '../api/machines'
 import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders the machine list with add form, inline code editing, and active toggles.
@@ -51,7 +52,7 @@ function MachinesPage() {
       setCode('')
       reload()
     } catch (err) {
-      setActionError('Failed to create machine')
+      setActionError(getErrorMessage(err, 'Failed to create machine'))
       console.error(err)
     }
   }
@@ -71,7 +72,7 @@ function MachinesPage() {
         await updateMachine(id, { active: false })
         reload()
     } catch (err) {
-        setActionError('Failed to deactivate machine')
+        setActionError(getErrorMessage(err, 'Failed to deactivate machine'))
         console.error(err)
     }
   }
@@ -90,7 +91,7 @@ function MachinesPage() {
           await updateMachine(id, { active: true })
           reload()
       } catch (err) {
-          setActionError('Failed to activate machine')
+          setActionError(getErrorMessage(err, 'Failed to activate machine'))
           console.error(err)
       }
   }
@@ -110,7 +111,7 @@ function MachinesPage() {
           setEditingId(null)
           reload()
       } catch (err) {
-          setActionError('Failed to update machine code')
+          setActionError(getErrorMessage(err, 'Failed to update machine code'))
           console.error(err)
       }
   }

@@ -10,6 +10,7 @@ import { getAllProducts, createProduct } from '../api/products'
 import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders the product list with an add form.
@@ -64,7 +65,7 @@ function ProductsPage() {
       setUnit('')
       reload()
     } catch (err) {
-      setActionError('Failed to create product')
+      setActionError(getErrorMessage(err, 'Failed to create product'))
       console.error(err)
     }
   }

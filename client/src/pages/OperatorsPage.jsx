@@ -9,6 +9,7 @@ import { getAllOperators, createOperator, updateOperator } from '../api/operator
 import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders the operator list with an add form and active toggles.
@@ -41,7 +42,7 @@ function OperatorsPage() {
       setName('')
       reload()
     } catch (err) {
-      setActionError('Failed to create operator')
+      setActionError(getErrorMessage(err, 'Failed to create operator'))
       console.error(err)
     }
   }
@@ -61,7 +62,7 @@ function OperatorsPage() {
         await updateOperator(id, { active: false })
         reload()
     } catch (err) {
-        setActionError('Failed to deactivate operator')
+        setActionError(getErrorMessage(err, 'Failed to deactivate operator'))
         console.error(err)
     }
   }
@@ -80,7 +81,7 @@ function OperatorsPage() {
         await updateOperator(id, { active: true })
         reload()
     } catch (err) {
-        setActionError('Failed to activate operator')
+        setActionError(getErrorMessage(err, 'Failed to activate operator'))
         console.error(err)
     }
   }

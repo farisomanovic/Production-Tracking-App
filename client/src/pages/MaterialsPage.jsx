@@ -9,6 +9,7 @@ import { getAllMaterials, createMaterial, updateMaterial } from '../api/material
 import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders the material list with an add form and per-row delivery input.
@@ -53,7 +54,7 @@ function MaterialsPage() {
       setStockQty('')
       reload()
     } catch (err) {
-      setActionError('Failed to create material')
+      setActionError(getErrorMessage(err, 'Failed to create material'))
       console.error(err)
     }
   }
@@ -81,7 +82,7 @@ function MaterialsPage() {
         setEditingStock('')
         reload()
     } catch (err) {
-        setActionError('Failed to update stock')
+        setActionError(getErrorMessage(err, 'Failed to update stock'))
         console.error(err)
     }
   }

@@ -6,6 +6,7 @@
  * pages call the api helpers directly and then invoke reload().
  */
 import { useState, useEffect, useCallback } from 'react'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Fetches data on mount and exposes { data, loading, error, reload } so list
@@ -38,7 +39,7 @@ export function useApi(apiFn, errorMessage = 'Failed to load data') {
       // after a successful manual reload.
       setError(null)
     } catch (err) {
-      setError(errorMessage)
+      setError(getErrorMessage(err, errorMessage))
       console.error(err)
     } finally {
       setLoading(false)

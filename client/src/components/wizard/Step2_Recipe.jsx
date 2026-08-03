@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react'
 import { getRecipesByProduct } from '../../api/recipes'
 import { common } from '../../styles/common'
+import { getErrorMessage } from '../../lib/errorMessage'
 
 /**
  * Renders the product's recipes as selectable cards, preselecting the default.
@@ -51,7 +52,7 @@ async function loadRecipes() {
         }
     }
     } catch (err) {
-    setError('Failed to load recipes')
+    setError(getErrorMessage(err, 'Failed to load recipes'))
     console.error(err)
     } finally {
     setLoading(false)
