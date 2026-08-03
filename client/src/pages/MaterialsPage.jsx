@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { getAllMaterials, createMaterial, updateMaterial } from '../api/materials'
 import { useApi } from '../hooks/useApi'
+import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 
 /**
@@ -86,11 +87,12 @@ function MaterialsPage() {
   }
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
-  // TODO: a mutation error replaces the WHOLE page — show a banner instead.
-  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
     <div style={common.container}>
+      <ErrorBanner message={error} onDismiss={reload} dismissLabel="Retry" />
+      <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} />
+
       <h1 style={styles.heading}>Materials</h1>
 
       <div style={common.form}>
