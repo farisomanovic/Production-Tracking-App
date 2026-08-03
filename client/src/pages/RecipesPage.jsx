@@ -11,6 +11,7 @@ import { getAllRecipes, createRecipe, updateRecipe } from '../api/recipes'
 import { getAllMaterials } from '../api/materials'
 import { getAllProducts } from '../api/products'
 import { useApi } from '../hooks/useApi'
+import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 
 /**
@@ -27,10 +28,19 @@ function RecipesPage() {
   // Three useApi instances instead of one combined fetch: each has its own
   // error message, and only the recipe list ever needs reloading (after create).
   const { data: recipes, loading: loadingRecipes, error: errorRecipes, reload: reloadRecipes } = useApi(getAllRecipes, 'Failed to load recipes')
-  const { data: materials, loading: loadingMaterials, error: errorMaterials } = useApi(getAllMaterials, 'Failed to load materials')
-  const { data: products, loading: loadingProducts, error: errorProducts } = useApi(getAllProducts, 'Failed to load products')
+  const { data: materials, loading: loadingMaterials, error: errorMaterials, reload: reloadMaterials } = useApi(getAllMaterials, 'Failed to load materials')
+  const { data: products, loading: loadingProducts, error: errorProducts, reload: reloadProducts } = useApi(getAllProducts, 'Failed to load products')
   const loading = loadingRecipes || loadingMaterials || loadingProducts
   const error = errorRecipes || errorMaterials || errorProducts
+
+  // Retries whichever of the 3 independent loads failed. Reloading the ones
+  // that didn't fail is harmless (cheap GETs), and the combined `error` string
+  // above doesn't say which one it was.
+  function reloadAll() {
+    reloadRecipes()
+    reloadMaterials()
+    reloadProducts()
+  }
 
   // ─── FORM STATE ─────────────────────────────────────────────────────────────
 
@@ -208,13 +218,14 @@ function RecipesPage() {
   const totalPercentage = getTotalPercentage()
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
-  // TODO: a mutation error replaces the WHOLE page — show a banner instead.
-  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   // ─── RENDER ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={common.container}>
+      <ErrorBanner message={error} onDismiss={reloadAll} dismissLabel="Retry" />
+      <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} />
+
       <div style={styles.header}>
         <h1 style={styles.heading}>Recipes</h1>
         <button

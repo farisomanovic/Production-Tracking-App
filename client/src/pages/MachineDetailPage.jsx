@@ -4,7 +4,7 @@
  * collects and the products it may produce. This page manages the LINK tables
  * only — creating parameters/products happens on their own admin pages.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getMachineById } from '../api/machines'
 import { getMachineParameters, linkParameterToMachine, unlinkParameterFromMachine } from '../api/machineParameters'
@@ -12,6 +12,7 @@ import { getMachineProducts, linkProductToMachine, unlinkProductFromMachine } fr
 import { getAllParameters } from '../api/parameters'
 import { getAllProducts } from '../api/products'
 import { common } from '../styles/common'
+import ErrorBanner from '../components/ErrorBanner'
 
 /**
  * Renders the machine's linked parameters and products with link/unlink controls.
@@ -35,36 +36,50 @@ function MachineDetailPage() {
   const [selectedProductId, setSelectedProductId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Separate from `error` above: a failed link/unlink shouldn't be confused
+  // with "failed to load the page at all," and shouldn't blank the page.
+  const [actionError, setActionError] = useState(null)
 
   // ─── DATA LOADING ───────────────────────────────────────────────────────────
 
+  // Extracted from the effect below so the retry banner (see the !machine
+  // branch further down) can call the exact same load logic the initial
+  // mount uses, instead of duplicating it.
+  const loadMachineDetails = useCallback(async () => {
+    try {
+      setLoading(true)
+      // Five independent queries — Promise.all runs them concurrently so the
+      // page waits for the slowest one, not the sum of all five.
+      const [machineRes, linkedParamsRes, linkedProductsRes, allParamsRes, allProductsRes] = await Promise.all([
+        getMachineById(machineId),
+        getMachineParameters(machineId),
+        getMachineProducts(machineId),
+        getAllParameters(),
+        getAllProducts()
+      ])
+      setMachine(machineRes.data)
+      setLinkedParameters(linkedParamsRes.data)
+      setLinkedProducts(linkedProductsRes.data)
+      setAllParameters(allParamsRes.data)
+      setAllProducts(allProductsRes.data)
+      // Cleared on success so a stale banner from a previous failed retry
+      // disappears — nothing did this before, which is why the page used to
+      // stay blanked forever after a single load failure.
+      setError(null)
+    } catch (err) {
+      setError('Failed to load machine details')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }, [machineId])
+
   useEffect(() => {
     async function load() {
-      try {
-        setLoading(true)
-        // Five independent queries — Promise.all runs them concurrently so the
-        // page waits for the slowest one, not the sum of all five.
-        const [machineRes, linkedParamsRes, linkedProductsRes, allParamsRes, allProductsRes] = await Promise.all([
-          getMachineById(machineId),
-          getMachineParameters(machineId),
-          getMachineProducts(machineId),
-          getAllParameters(),
-          getAllProducts()
-        ])
-        setMachine(machineRes.data)
-        setLinkedParameters(linkedParamsRes.data)
-        setLinkedProducts(linkedProductsRes.data)
-        setAllParameters(allParamsRes.data)
-        setAllProducts(allProductsRes.data)
-      } catch (err) {
-        setError('Failed to load machine details')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
+      await loadMachineDetails()
     }
     load()
-  }, [machineId])
+  }, [loadMachineDetails])
 
   // ─── LINK / UNLINK HANDLERS ─────────────────────────────────────────────────
 
@@ -87,7 +102,7 @@ function MachineDetailPage() {
       const res = await getMachineParameters(machineId)
       setLinkedParameters(res.data)
     } catch (err) {
-      setError('Failed to link parameter')
+      setActionError('Failed to link parameter')
       console.error(err)
     }
   }
@@ -107,7 +122,7 @@ function MachineDetailPage() {
       const res = await getMachineParameters(machineId)
       setLinkedParameters(res.data)
     } catch (err) {
-      setError('Failed to unlink parameter')
+      setActionError('Failed to unlink parameter')
       console.error(err)
     }
   }
@@ -128,7 +143,7 @@ function MachineDetailPage() {
       const res = await getMachineProducts(machineId)
       setLinkedProducts(res.data)
     } catch (err) {
-      setError('Failed to link product')
+      setActionError('Failed to link product')
       console.error(err)
     }
   }
@@ -149,7 +164,7 @@ function MachineDetailPage() {
       const res = await getMachineProducts(machineId)
       setLinkedProducts(res.data)
     } catch (err) {
-      setError('Failed to unlink product')
+      setActionError('Failed to unlink product')
       console.error(err)
     }
   }
@@ -164,13 +179,25 @@ function MachineDetailPage() {
     (p) => !linkedProducts.some((lp) => lp.productId === p.id)
   )
 
-  if (loading) return <p style={{ padding: '16px' }}>Loading...</p>
-  if (error) return <p style={{ padding: '16px', color: 'var(--color-danger)' }}>{error}</p>
+  if (loading) return <p style={common.loadingText}>Loading...</p>
+
+  if (!machine) {
+    // Initial load failed and `machine` was never populated — nothing else on
+    // this page can render without it (machine.name below would crash), so
+    // show the retry banner in place of content instead of a blank page.
+    return (
+      <div style={common.container}>
+        <ErrorBanner message={error} onDismiss={loadMachineDetails} dismissLabel="Retry" />
+      </div>
+    )
+  }
 
   // ─── RENDER ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={common.container}>
+      <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} />
+
       <button style={styles.backButton} onClick={() => navigate('/admin')}>
         ← Back
       </button>

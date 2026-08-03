@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { getAllOperators, createOperator, updateOperator } from '../api/operators'
 import { useApi } from '../hooks/useApi'
+import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 
 /**
@@ -85,12 +86,12 @@ function OperatorsPage() {
   }
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
-  // TODO: a mutation error replaces the WHOLE page (list and form vanish) —
-  // render it as a banner above the list instead so the user can retry in place.
-  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
     <div style={common.container}>
+      <ErrorBanner message={error} onDismiss={reload} dismissLabel="Retry" />
+      <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} />
+
       <h1 style={styles.heading}>Operators</h1>
 
       <div style={styles.form}>

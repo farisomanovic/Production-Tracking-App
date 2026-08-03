@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { getAllMachines, createMachine, updateMachine } from '../api/machines'
 import { useApi } from '../hooks/useApi'
+import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 
 /**
@@ -115,12 +116,12 @@ function MachinesPage() {
   }
 
   if (loading) return <p style={common.loadingText}>Loading...</p>
-  // TODO: a mutation error replaces the WHOLE page — show a banner instead so
-  // the list stays visible and the user can retry.
-  if (error || actionError) return <p style={common.errorBox}>{error || actionError}</p>
 
   return (
     <div style={common.container}>
+      <ErrorBanner message={error} onDismiss={reload} dismissLabel="Retry" />
+      <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} />
+
       <h1 style={styles.heading}>Machines</h1>
 
       <div style={common.form}>
