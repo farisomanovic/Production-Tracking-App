@@ -13,6 +13,7 @@ import { getAllParameters } from '../api/parameters'
 import { getAllProducts } from '../api/products'
 import { common } from '../styles/common'
 import ErrorBanner from '../components/ErrorBanner'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders the machine's linked parameters and products with link/unlink controls.
@@ -67,7 +68,7 @@ function MachineDetailPage() {
       // stay blanked forever after a single load failure.
       setError(null)
     } catch (err) {
-      setError('Failed to load machine details')
+      setError(getErrorMessage(err, 'Failed to load machine details'))
       console.error(err)
     } finally {
       setLoading(false)
@@ -102,7 +103,7 @@ function MachineDetailPage() {
       const res = await getMachineParameters(machineId)
       setLinkedParameters(res.data)
     } catch (err) {
-      setActionError('Failed to link parameter')
+      setActionError(getErrorMessage(err, 'Failed to link parameter'))
       console.error(err)
     }
   }
@@ -122,7 +123,7 @@ function MachineDetailPage() {
       const res = await getMachineParameters(machineId)
       setLinkedParameters(res.data)
     } catch (err) {
-      setActionError('Failed to unlink parameter')
+      setActionError(getErrorMessage(err, 'Failed to unlink parameter'))
       console.error(err)
     }
   }
@@ -143,7 +144,7 @@ function MachineDetailPage() {
       const res = await getMachineProducts(machineId)
       setLinkedProducts(res.data)
     } catch (err) {
-      setActionError('Failed to link product')
+      setActionError(getErrorMessage(err, 'Failed to link product'))
       console.error(err)
     }
   }
@@ -164,7 +165,7 @@ function MachineDetailPage() {
       const res = await getMachineProducts(machineId)
       setLinkedProducts(res.data)
     } catch (err) {
-      setActionError('Failed to unlink product')
+      setActionError(getErrorMessage(err, 'Failed to unlink product'))
       console.error(err)
     }
   }

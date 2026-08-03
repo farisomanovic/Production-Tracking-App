@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import { getAllRuns } from '../api/productionRuns'
 import { getLocalDateString, formatLongDate, formatDisplayTime } from '../lib/dates'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders today's stat cards, live runs, and active machines.
@@ -45,7 +46,7 @@ export default function DashboardPage() {
         setRuns(todayRes.data)
         setLiveRuns(liveRes.data)
       } catch (err) {
-        setError('Failed to load dashboard data')
+        setError(getErrorMessage(err, 'Failed to load dashboard data'))
         console.error(err)
       } finally {
         setLoading(false)

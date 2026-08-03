@@ -10,6 +10,7 @@ import { completeRun } from '../../api/productionRuns'
 import { getMachineProducts } from '../../api/machineProducts'
 import { rollToNextDayIfAtOrBefore } from '../../lib/dates'
 import { common } from '../../styles/common'
+import { getErrorMessage } from '../../lib/errorMessage'
 import TimeInput24 from '../TimeInput24'
 
 /**
@@ -82,7 +83,7 @@ useEffect(() => {
         const response = await getMachineProducts(machineId)
         setProducts(response.data.map(item => item.product))
     } catch (err) {
-        setError('Failed to load products')
+        setError(getErrorMessage(err, 'Failed to load products'))
         console.error(err)
     } finally {
         setLoading(false)
@@ -225,7 +226,7 @@ async function handleComplete() {
     console.error(err)
     // Prefer the server's message: 409s carry actionable detail (which material
     // is short, or that someone else already completed this run).
-    setError(err.response?.data?.error || 'Failed to complete run. Please try again.')
+    setError(getErrorMessage(err, 'Failed to complete run. Please try again.'))
     } finally {
     setIsSubmitting(false)
     }

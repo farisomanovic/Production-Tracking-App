@@ -11,6 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getProductById } from '../api/products'
 import { getProductRecipes, setRecipeProductDefault } from '../api/recipeProducts'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
 
 /**
  * Renders one product's header and its linked recipes, each with an
@@ -47,7 +48,7 @@ function ProductDetailPage() {
         setProduct(productRes.data)
         setRecipeLinks(recipeLinksRes.data)
       } catch (err) {
-        setLoadError('Failed to load product details')
+        setLoadError(getErrorMessage(err, 'Failed to load product details'))
         console.error(err)
       } finally {
         setLoading(false)
@@ -73,7 +74,7 @@ function ProductDetailPage() {
       const res = await getProductRecipes(productId)
       setRecipeLinks(res.data)
     } catch (err) {
-      setActionError(err.response?.data?.error || 'Failed to set default recipe')
+      setActionError(getErrorMessage(err, 'Failed to set default recipe'))
       console.error(err)
     }
   }

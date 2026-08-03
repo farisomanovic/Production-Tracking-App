@@ -7,13 +7,15 @@
  * in one won't reach the other. Extract a shared RunCompletionForm.
  * todo.md Group 7 #3.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { getMachineProducts } from '../api/machineProducts'
 import { rollToNextDayIfAtOrBefore, formatDisplayDate, formatDisplayTime } from '../lib/dates'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
+import ErrorBanner from '../components/ErrorBanner'
 import TimeInput24 from '../components/TimeInput24'
 
 /**
@@ -45,12 +47,18 @@ const [error, setError] = useState(null)
 
 // ─── DATA LOADING ────────────────────────────────────────────────────────────
 
-useEffect(() => {
-    async function loadRun() {
+// Extracted from the effect below (mirrors MachineDetailPage's loadMachineDetails)
+// so the retry banner on load failure can call the exact same load logic the
+// initial mount uses, instead of duplicating it.
+const loadRun = useCallback(async () => {
     try {
-        const runRes = await getRunById(id)
+    setLoading(true)
+    const runRes = await getRunById(id)
         const fetchedRun = runRes.data
         setRun(fetchedRun)
+        // Cleared on success so a stale banner from a previous failed retry
+        // disappears.
+        setError(null)
 
         // Form config (machine parameters + allowed products) is only needed
         // when the completion form will render — completed runs skip 3 requests.
@@ -115,14 +123,19 @@ useEffect(() => {
     }
 
     } catch (err) {
-        setError('Failed to load production run')
+        setError(getErrorMessage(err, 'Failed to load production run'))
         console.error(err)
     } finally {
         setLoading(false)
     }
-    }
-    loadRun()
 }, [id])
+
+useEffect(() => {
+    async function load() {
+        await loadRun()
+    }
+    load()
+}, [loadRun])
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -154,7 +167,7 @@ async function handleDelete() {
         navigate('/runs')
     } catch (err) {
         console.error(err)
-        setError('Failed to delete production run')
+        setError(getErrorMessage(err, 'Failed to delete production run'))
     }
 }
 
@@ -220,8 +233,17 @@ function formatDuration(startStr, endStr) {
 }
 
 if (loading) return <p style={styles.loadingText}>Loading run...</p>
-if (error) return <p style={styles.errorText}>{error}</p>
-if (!run) return <p style={styles.errorText}>Run not found.</p>
+
+if (!run) {
+    // Initial load failed and `run` was never populated — nothing else on
+    // this page can render without it, so show the retry banner in place of
+    // content instead of a blank page.
+    return (
+    <div style={styles.container}>
+        <ErrorBanner message={error || 'Run not found.'} onDismiss={loadRun} dismissLabel="Retry" />
+    </div>
+    )
+}
 
 return (
     <div style={styles.container}>
@@ -625,7 +647,7 @@ async function handleComplete() {
     console.error(err)
     // Prefer the server's message: 409s carry actionable detail (which material
     // is short, or that someone else already completed this run).
-    setError(err.response?.data?.error || 'Failed to complete run. Please try again.')
+    setError(getErrorMessage(err, 'Failed to complete run. Please try again.'))
     } finally {
     setIsSubmitting(false)
     }
@@ -642,7 +664,7 @@ return (
         <SummaryRow label='Started' value={formatDisplayTime(run.startTime)} />
     </div>
 
-    {error && <div style={common.errorBox}>{error}</div>}
+    <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
 
     {/* Parameters */}
@@ -1149,10 +1171,6 @@ badgeDone: {
 },
 loadingText: {
     color: 'var(--color-text-secondary)',
-    padding: '16px',
-},
-errorText: {
-    color: 'var(--color-danger)',
     padding: '16px',
 },
 summaryCard: {

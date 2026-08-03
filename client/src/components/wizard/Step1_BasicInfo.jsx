@@ -10,6 +10,7 @@ import { getAllMachines } from '../../api/machines'
 import { getMachineProducts } from '../../api/machineProducts'
 import { getLocalDateString } from '../../lib/dates'
 import { common } from '../../styles/common'
+import { getErrorMessage } from '../../lib/errorMessage'
 import TimeInput24 from '../TimeInput24'
 
 /**
@@ -61,7 +62,7 @@ useEffect(() => {
         setOperators(operatorsRes.data)
         setMachines(machinesRes.data)
     } catch (err) {
-        setError('Failed to load operators and machines')
+        setError(getErrorMessage(err, 'Failed to load operators and machines'))
         console.error(err)
     } finally {
         setLoadingInitial(false)
@@ -82,7 +83,7 @@ async function loadProducts() {
     const productList = response.data.map(item => item.product)
     setProducts(productList)
     } catch (err) {
-    setError('Failed to load products for this machine')
+    setError(getErrorMessage(err, 'Failed to load products for this machine'))
     console.error(err)
     } finally {
     setLoadingProducts(false)

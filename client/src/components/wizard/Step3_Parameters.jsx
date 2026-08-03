@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react'
 import { getMachineParameters } from '../../api/machineParameters'
 import { common } from '../../styles/common'
+import { getErrorMessage } from '../../lib/errorMessage'
 
 /**
  * Renders one numeric input per machine parameter, in configured display order.
@@ -56,7 +57,7 @@ useEffect(() => {
         setValues(initialValues)
 
     } catch (err) {
-        setError('Failed to load parameters')
+        setError(getErrorMessage(err, 'Failed to load parameters'))
         console.error(err)
     } finally {
         setLoading(false)

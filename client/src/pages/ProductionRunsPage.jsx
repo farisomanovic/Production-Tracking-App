@@ -15,6 +15,8 @@ import { getAllOperators } from '../api/operators'
 import { getAllProducts } from '../api/products'
 import { formatDisplayDate, formatExportDate, formatFileDate, formatDisplayTime } from '../lib/dates'
 import { common } from '../styles/common'
+import { getErrorMessage } from '../lib/errorMessage'
+import ErrorBanner from '../components/ErrorBanner'
 
 // Mirrors the server's MAX_TAKE clamp (server/routes/productionRuns.js) — this
 // is the "near-term" fix for todo.md Group 7 #18: the list/export used to
@@ -109,7 +111,7 @@ export default function ProductionRunsPage() {
         setRunsTruncated(allRuns.length === RUNS_FETCH_LIMIT)
       } catch (err) {
         if (cancelled) return
-        setError('Failed to load production runs')
+        setError(getErrorMessage(err, 'Failed to load production runs'))
         console.error(err)
       } finally {
         if (!cancelled) setLoading(false)
@@ -594,7 +596,7 @@ export default function ProductionRunsPage() {
 
       } catch (err) {
           console.error(err)
-          alert('Export failed. Please try again.')
+          alert(getErrorMessage(err, 'Export failed. Please try again.'))
       }
   }
 
@@ -711,7 +713,7 @@ export default function ProductionRunsPage() {
         )}
       </div>
 
-      {error && <div style={common.errorBox}>{error}</div>}
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
       {loading ? (
         <p style={common.loadingText}>Loading runs...</p>

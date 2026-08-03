@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react'
 import { getRecipeById } from '../../api/recipes'
 import { common } from '../../styles/common'
+import { getErrorMessage } from '../../lib/errorMessage'
 
 /**
  * Renders the material usage inputs plus the quick calculator.
@@ -63,7 +64,7 @@ useEffect(() => {
         setValues(initialValues)
 
     } catch (err) {
-        setError('Failed to load recipe materials')
+        setError(getErrorMessage(err, 'Failed to load recipe materials'))
         console.error(err)
     } finally {
         setLoading(false)
