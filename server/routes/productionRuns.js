@@ -8,6 +8,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import {
+    AppError,
     RunNotFoundError,
     RunAlreadyCompletedError,
     UnknownMaterialError,
@@ -254,6 +255,13 @@ router.post('/', async (req, res, next) => {
         return res.status(400).json({ error: 'stableStartTime must be at or after startTime' })
     }
 
+    // Fast path for the normal case: these reads take no locks, so every check
+    // below can go stale between here and the create. The authoritative re-read
+    // of the three `active` flags happens under lock inside the transaction —
+    // this block exists to reject the overwhelmingly common bad request with
+    // one cheap round trip instead of opening a transaction for it, and to
+    // produce the 400s for cases the lock can't cover (unknown ids, a product
+    // not assigned to the machine).
     const [operator, machine, machineProductLink, recipe, activeRunOnMachine] = await Promise.all([
         prisma.operator.findUnique({ where: { id: operatorId } }),
         prisma.machine.findUnique({ where: { id: machineId } }),
@@ -307,26 +315,80 @@ router.post('/', async (req, res, next) => {
     }
 
     try {
-        const run = await prisma.productionRun.create({
-            data: {
-                date: parsedDate,
-                startTime: parsedStartTime,
-                operatorId,
-                machineId,
-                productId,
-                recipeId,
-                ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
-                ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
-                ...(energyStart !== undefined && { energyStart }),
-                ...(notes !== undefined && { notes }),
-                ...(potentialBuyer !== undefined && { potentialBuyer })
-            },
-            include: {
-                operator: true,
-                machine: true,
-                product: true,
-                recipe: true
+        const run = await prisma.$transaction(async (tx) => {
+            // Lock the three parents BEFORE re-reading their `active` flags
+            // (todo.md Group 4 #8). Without this the flags read above and the
+            // create below are a check-then-write straddling the deactivate
+            // routes' own check-then-write, and both guards can pass: the run
+            // lands referencing a just-deactivated entity, which for a recipe
+            // then makes /complete refuse it forever.
+            //
+            // FOR SHARE, not FOR UPDATE, and it has to be explicit. Postgres
+            // already takes an automatic FOR KEY SHARE lock on a parent row
+            // when a child row referencing it is inserted, but that is not
+            // enough here: `UPDATE ... SET active = false` touches no key
+            // column, so it takes FOR NO KEY UPDATE, which does NOT conflict
+            // with FOR KEY SHARE. FOR SHARE does conflict with it, so it blocks
+            // the deactivate — while still not conflicting with another
+            // FOR SHARE, so two concurrent run creations never queue behind
+            // each other the way FOR UPDATE would make them.
+            //
+            // Fixed order (Machine → Operator → Recipe): a deactivate only ever
+            // holds one row lock and requests no second one, so no cycle is
+            // constructible today — this pins the order against future edits,
+            // same reasoning as recipeProducts.js's ORDER BY on its own lock.
+            await tx.$queryRaw`SELECT "id" FROM "Machine" WHERE "id" = ${machineId} FOR SHARE`
+            await tx.$queryRaw`SELECT "id" FROM "Operator" WHERE "id" = ${operatorId} FOR SHARE`
+            await tx.$queryRaw`SELECT "id" FROM "Recipe" WHERE "id" = ${recipeId} FOR SHARE`
+
+            // Now authoritative: under READ COMMITTED each statement takes a
+            // fresh snapshot, so a read issued after the lock is granted sees
+            // whatever the blocking transaction committed. Sequential awaits,
+            // not Promise.all — an interactive transaction holds a single DB
+            // connection, so parallel awaits gain nothing. Messages are
+            // deliberately identical to the fast path's: which of the two
+            // checks rejected the request is an implementation detail.
+            const lockedMachine = await tx.machine.findUnique({ where: { id: machineId }, select: { active: true } })
+            if (!lockedMachine || !lockedMachine.active) {
+                throw new AppError(400, 'Machine is inactive or does not exist')
             }
+            const lockedOperator = await tx.operator.findUnique({ where: { id: operatorId }, select: { active: true } })
+            if (!lockedOperator || !lockedOperator.active) {
+                throw new AppError(400, 'Operator is inactive or does not exist')
+            }
+            const lockedRecipe = await tx.recipe.findUnique({ where: { id: recipeId }, select: { active: true } })
+            if (!lockedRecipe) {
+                throw new AppError(400, 'Recipe does not exist')
+            }
+            if (!lockedRecipe.active) {
+                throw new AppError(400, 'Recipe is inactive')
+            }
+
+            // Deliberately NOT re-checked under lock: the machineProduct link
+            // (its unlink race is a separately documented, accepted one — see
+            // machineProducts.js) and the busy-machine check, which already has
+            // a real database backstop in the P2002 handler below.
+            return tx.productionRun.create({
+                data: {
+                    date: parsedDate,
+                    startTime: parsedStartTime,
+                    operatorId,
+                    machineId,
+                    productId,
+                    recipeId,
+                    ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
+                    ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
+                    ...(energyStart !== undefined && { energyStart }),
+                    ...(notes !== undefined && { notes }),
+                    ...(potentialBuyer !== undefined && { potentialBuyer })
+                },
+                include: {
+                    operator: true,
+                    machine: true,
+                    product: true,
+                    recipe: true
+                }
+            })
         })
         res.status(201).json(run)
     } catch (error) {
