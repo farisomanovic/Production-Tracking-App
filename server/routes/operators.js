@@ -8,6 +8,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { isNonEmptyString } from '../lib/validation.js'
+import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
 
 const router = Router()
 
@@ -98,23 +99,25 @@ router.put('/:id', async (req, res) => {
   if (active !== undefined && typeof active !== 'boolean') {
     return res.status(400).json({ error: 'active must be a boolean' })
   }
-  if (active === false) {
-    const openRun = await prisma.productionRun.findFirst({
-      where: { operatorId: req.params.id, status: 'in_progress' },
-      select: { id: true }
+  // The guard and the update share one transaction so the row stays locked
+  // between them (todo.md Group 4 #8 — see lib/deactivationGuards.js). A plain
+  // rename has nothing to guard and could skip the transaction, but branching
+  // on that would mean two copies of the update; one code path is worth more
+  // than the round trip it saves at this scale.
+  const operator = await prisma.$transaction(async (tx) => {
+    if (active === false) {
+      await lockAndAssertNoOpenRun(tx, 'operator', req.params.id,
+        'Cannot deactivate this operator while a run is in progress')
+    }
+    return tx.operator.update({
+      where: { id: req.params.id },
+      data: {
+        // Spread-if-defined so omitted fields stay untouched — a plain
+        // `{ name, active }` would overwrite missing fields with undefined/null.
+        ...(name !== undefined && { name }),
+        ...(active !== undefined && { active }),
+      }
     })
-    if (openRun) {
-      return res.status(409).json({ error: 'Cannot deactivate this operator while a run is in progress' })
-    }
-  }
-  const operator = await prisma.operator.update({
-    where: { id: req.params.id },
-    data: {
-      // Spread-if-defined so omitted fields stay untouched — a plain
-      // `{ name, active }` would overwrite missing fields with undefined/null.
-      ...(name !== undefined && { name }),
-      ...(active !== undefined && { active }),
-    }
   })
   res.json(operator)
 })

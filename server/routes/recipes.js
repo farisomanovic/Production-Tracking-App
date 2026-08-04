@@ -7,6 +7,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { isNonEmptyString } from '../lib/validation.js'
+import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
 
 const router = Router()
 
@@ -249,32 +250,34 @@ router.put('/:id', async (req, res) => {
     if (active !== undefined && typeof active !== 'boolean') {
         return res.status(400).json({ error: 'active must be a boolean' })
     }
-    if (active === false) {
-        const openRun = await prisma.productionRun.findFirst({
-            where: { recipeId: req.params.id, status: 'in_progress' },
-            select: { id: true }
-        })
-        if (openRun) {
-            return res.status(409).json({ error: 'Cannot deactivate this recipe while a run is in progress' })
+    // The guard and the update share one transaction so the row stays locked
+    // between them (todo.md Group 4 #8 — see lib/deactivationGuards.js). The
+    // recipe is the case that did real damage: a run created in the old race
+    // window could never be completed, because /complete re-checks
+    // recipe.active and refuses.
+    const recipe = await prisma.$transaction(async (tx) => {
+        if (active === false) {
+            await lockAndAssertNoOpenRun(tx, 'recipe', req.params.id,
+                'Cannot deactivate this recipe while a run is in progress')
         }
-    }
-    const recipe = await prisma.recipe.update({
-        where: { id: req.params.id },
-        data: {
-            ...(name !== undefined && { name }),
-            ...(notes !== undefined && { notes }),
-            ...(active !== undefined && { active }),
-        },
-        include: {
-            products: {
-                include: { product: true }
+        return tx.recipe.update({
+            where: { id: req.params.id },
+            data: {
+                ...(name !== undefined && { name }),
+                ...(notes !== undefined && { notes }),
+                ...(active !== undefined && { active }),
             },
-            recipeItems: {
-                include: {
-                    material: true
+            include: {
+                products: {
+                    include: { product: true }
+                },
+                recipeItems: {
+                    include: {
+                        material: true
+                    }
                 }
             }
-        }
+        })
     })
     res.json(recipe)
 })

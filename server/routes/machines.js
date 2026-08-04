@@ -7,8 +7,8 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { machineHasRunInProgress } from '../lib/machineGuards.js'
 import { normalizeCode, isNonEmptyString } from '../lib/validation.js'
+import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
 
 const router = Router()
 
@@ -99,19 +99,28 @@ router.put('/:id', async (req, res) => {
   if (active !== undefined && typeof active !== 'boolean') {
     return res.status(400).json({ error: 'active must be a boolean' })
   }
-  if (active === false && await machineHasRunInProgress(req.params.id)) {
-    return res.status(409).json({ error: 'Cannot deactivate this machine while a run is in progress' })
-  }
-  const machine = await prisma.machine.update({
-    where: { id: req.params.id },
-    data: {
-      // Spread-if-defined keeps omitted fields untouched (partial update).
-      ...(name !== undefined && { name }),
-      // Blank/whitespace normalizes to null so it never occupies the unique
-      // constraint's single "" slot.
-      ...(code !== undefined && { code: normalizeCode(code) }),
-      ...(active !== undefined && { active }),
+  // The guard and the update share one transaction so the row stays locked
+  // between them (todo.md Group 4 #8 — see lib/deactivationGuards.js). This is
+  // why the check no longer goes through machineHasRunInProgress: that helper
+  // reads outside any transaction, which is exactly the race being closed. It
+  // still serves the MachineParameter/MachineProduct unlink routes, whose own
+  // races are separately documented as accepted.
+  const machine = await prisma.$transaction(async (tx) => {
+    if (active === false) {
+      await lockAndAssertNoOpenRun(tx, 'machine', req.params.id,
+        'Cannot deactivate this machine while a run is in progress')
     }
+    return tx.machine.update({
+      where: { id: req.params.id },
+      data: {
+        // Spread-if-defined keeps omitted fields untouched (partial update).
+        ...(name !== undefined && { name }),
+        // Blank/whitespace normalizes to null so it never occupies the unique
+        // constraint's single "" slot.
+        ...(code !== undefined && { code: normalizeCode(code) }),
+        ...(active !== undefined && { active }),
+      }
+    })
   })
   res.json(machine)
 })
