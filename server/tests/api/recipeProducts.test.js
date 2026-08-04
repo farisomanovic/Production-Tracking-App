@@ -84,6 +84,32 @@ async function createTwoRecipesLinkedToSameProduct() {
     return { product, recipeX, recipeY, linkX, linkY }
 }
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Takes the same `SELECT ... FOR UPDATE` lock on a recipe's link rows that the
+ * unlink route takes, holds it until `release()` is called, and only THEN runs
+ * `mutate`. That ordering is what makes the unlink route's check-then-write
+ * window reproducible instead of a coin flip: a racing request is guaranteed
+ * to be parked on this lock before the mutation it must react to exists.
+ * Await `lockAcquired` before starting the racer.
+ */
+function holdRecipeLinksLocked(recipeId, mutate) {
+    let release
+    let markAcquired
+    const held = new Promise(resolve => { release = resolve })
+    const lockAcquired = new Promise(resolve => { markAcquired = resolve })
+    const settled = prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+            SELECT "id" FROM "RecipeProduct" WHERE "recipeId" = ${recipeId} ORDER BY "id" FOR UPDATE
+        `
+        markAcquired()
+        await held
+        await mutate(tx)
+    })
+    return { lockAcquired, release: () => release(), settled }
+}
+
 describe('POST /api/recipe-products', () => {
     it('links a product to a recipe', async () => {
         const { recipe } = await createRecipeLinkedToTwoProducts()
@@ -146,6 +172,62 @@ describe('DELETE /api/recipe-products/:id', () => {
         const res = await request(app).delete(`/api/recipe-products/${crypto.randomUUID()}`)
         expect(res.status).toBe(404)
         expect(res.body.error).toBe('Link not found')
+    })
+
+    /*
+     * ── Group 4 #12: the last-product guard must be atomic ───────────────────
+     *
+     * The two tests below cover the same race at different strengths. The
+     * held-lock one is the actual regression proof: it forces the interleaving
+     * every run. The Promise.all one is a smoke test — when it passes it may
+     * simply never have interleaved, so it can miss a regression, but it can
+     * never report one that isn't there.
+     */
+    it('rejects the unlink with 409 when the recipe\'s other last link is deleted while the request is in flight (Group 4 #12)', async () => {
+        const { recipe } = await createRecipeLinkedToTwoProducts()
+        const [linkA, linkB] = recipe.products
+
+        // Hold both of the recipe's link rows locked, then delete linkB only
+        // after the racing request has had time to reach the route's own
+        // FOR UPDATE and park on it.
+        const adversary = holdRecipeLinksLocked(recipe.id, tx => tx.recipeProduct.delete({ where: { id: linkB.id } }))
+        await adversary.lockAcquired
+
+        // .then() is what actually issues a supertest request — without it the
+        // Test object sits idle until awaited and nothing would be racing.
+        const pending = request(app).delete(`/api/recipe-products/${linkA.id}`).then(res => res)
+        await sleep(150)
+        adversary.release()
+        await adversary.settled
+
+        // linkA's request re-evaluates its lock against committed state: linkB
+        // is gone, so it is now the last link and must be refused. Against the
+        // pre-fix route this returned 200 and left the recipe with no products.
+        const res = await pending
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A recipe must have at least one linked product')
+
+        const remaining = await prisma.recipeProduct.findMany({ where: { recipeId: recipe.id } })
+        expect(remaining).toHaveLength(1)
+        expect(remaining[0].id).toBe(linkA.id)
+    })
+
+    it('lets exactly one of two simultaneous unlinks of the last two links win (Group 4 #12)', async () => {
+        const { recipe } = await createRecipeLinkedToTwoProducts()
+        const [linkA, linkB] = recipe.products
+
+        const [first, second] = await Promise.all([
+            request(app).delete(`/api/recipe-products/${linkA.id}`),
+            request(app).delete(`/api/recipe-products/${linkB.id}`)
+        ])
+
+        expect([first.status, second.status].sort()).toEqual([200, 409])
+
+        const loser = first.status === 409 ? first : second
+        expect(loser.body.error).toBe('A recipe must have at least one linked product')
+
+        const remaining = await prisma.recipeProduct.findMany({ where: { recipeId: recipe.id } })
+        expect(remaining).toHaveLength(1)
     })
 })
 
