@@ -6,6 +6,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import { AppError } from '../lib/errors.js'
 
 const router = Router()
 
@@ -156,7 +157,11 @@ router.put('/:id', async (req, res) => {
  * Unlinks a product from a recipe by link-table primary key. Blocked when this
  * is the recipe's last remaining product link — a recipe must always stay
  * usable by at least one product (same "must have ≥1" contract as RecipeItem
- * on creation).
+ * on creation). The count and the delete run inside one lock-serialized
+ * transaction, so two concurrent unlinks of the recipe's last two links can't
+ * both pass the guard — unlike isDefault's partial unique index and
+ * Material.stockQty's CHECK, this invariant has no database backstop, so the
+ * route is the only thing enforcing it.
  *
  * @param {import('express').Request} req - `params.id` is the RecipeProduct link UUID.
  * @param {import('express').Response} res - 200 → confirmation message; 404 unknown id;
@@ -175,17 +180,40 @@ router.delete('/:id', async (req, res) => {
     if (!link) {
         return res.status(404).json({ error: 'Link not found' })
     }
-    // 409, not 400: this rejects because of a conflicting CURRENT state (the
-    // recipe would end up with zero products), not bad input. Known residual
-    // race: this is a plain read-then-act, not transaction-wrapped, same as
-    // machineProducts.js's unlink guard.
-    const linkedProductCount = await prisma.recipeProduct.count({ where: { recipeId: link.recipeId } })
-    if (linkedProductCount <= 1) {
-        return res.status(409).json({ error: 'A recipe must have at least one linked product' })
-    }
-    await prisma.recipeProduct.delete({
-        where: { id: req.params.id }
+
+    await prisma.$transaction(async (tx) => {
+        // Lock every one of this recipe's link rows BEFORE counting them, so a
+        // concurrent unlink of a different link of the same recipe blocks here
+        // instead of counting the same rows we just did. When the loser's lock
+        // is finally granted, Postgres re-checks each row against committed
+        // state and the winner's deleted row drops out of the result — so this
+        // array is post-commit truth, not the stale snapshot a plain count()
+        // would have read.
+        //
+        // ORDER BY "id" pins the lock acquisition order: without it two
+        // requests could grab the same rows in opposite orders and deadlock.
+        //
+        // Deliberately not covered: FOR UPDATE locks rows that exist, it does
+        // not block a concurrent POST inserting a NEW link. An insert can only
+        // make the count larger, so it can never break the ≥1 invariant — the
+        // worst case is a spurious 409 on an unlink that a moment later would
+        // have been allowed.
+        const locked = await tx.$queryRaw`
+            SELECT "id" FROM "RecipeProduct" WHERE "recipeId" = ${link.recipeId} ORDER BY "id" FOR UPDATE
+        `
+        // 409, not 400: this rejects because of a conflicting CURRENT state
+        // (the recipe would end up with zero products), not bad input.
+        if (locked.length <= 1) {
+            throw new AppError(409, 'A recipe must have at least one linked product')
+        }
+        // If a concurrent unlink took THIS link while we waited for the lock,
+        // it dropped out of `locked` above and this throws P2025, which the
+        // central error middleware already maps to 404.
+        await tx.recipeProduct.delete({
+            where: { id: req.params.id }
+        })
     })
+
     res.json({ message: 'Product unlinked from recipe successfully' })
 })
 
