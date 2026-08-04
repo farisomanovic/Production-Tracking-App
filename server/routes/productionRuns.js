@@ -403,9 +403,12 @@ router.put('/:id', async (req, res) => {
         if (!parsedEndTime) return
     }
 
-    // A completed run is meant to be an immutable log of what happened on
-    // the floor, and endTime must obey the same > startTime rule /complete
-    // enforces below — this route skipped both checks.
+    // Reads startTime for the three ordering checks below — it is immutable
+    // (POST sets it once, this route never accepts it), so it cannot go stale.
+    // The status check here is only a fast path that skips pointless work on an
+    // already-completed run; the guarantee that a completed run is an immutable
+    // log of what happened on the floor is enforced by the compare-and-swap
+    // further down, not by this read.
     const existing = await prisma.productionRun.findUnique({
         where: { id: req.params.id },
         select: { startTime: true, status: true }
@@ -431,17 +434,54 @@ router.put('/:id', async (req, res) => {
     // TODO: no UI calls this endpoint yet (the client's updateRun helper is
     // unused) — run headers are uneditable after creation. Either build the
     // edit screen or drop the route. todo.md Group 8 #2.
-    const run = await prisma.productionRun.update({
+    const data = {
+        ...(notes !== undefined && { notes }),
+        ...(potentialBuyer !== undefined && { potentialBuyer }),
+        ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
+        ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
+        ...(energyStart !== undefined && { energyStart }),
+        ...(energyEnd !== undefined && { energyEnd }),
+        ...(parsedEndTime !== undefined && { endTime: parsedEndTime })
+    }
+
+    // A body carrying none of the mutable fields writes nothing, so there is no
+    // race to guard — and it must skip the compare-and-swap, because Prisma
+    // reports count: 0 for an empty `data` even when the row matched, which
+    // would turn this long-standing no-op into a bogus 409.
+    if (Object.keys(data).length > 0) {
+        // Compare-and-swap, same pattern and same reasoning as /complete's
+        // status flip below: the status check and the write are ONE atomic
+        // UPDATE ... WHERE status = 'in_progress'. A concurrent /complete either
+        // commits first — in which case this WHERE matches 0 rows and the edit
+        // is refused — or is still holding the row, in which case this statement
+        // blocks and then re-evaluates against the committed result. The
+        // separate read above cannot enforce this: a /complete committing
+        // between it and this write would otherwise be overwritten.
+        const { count } = await prisma.productionRun.updateMany({
+            where: { id: req.params.id, status: 'in_progress' },
+            data
+        })
+        if (count === 0) {
+            // 0 rows means "no run in_progress with this id" — look the id up to
+            // tell "deleted underneath us" (404) from "completed" (409).
+            const stillExists = await prisma.productionRun.findUnique({
+                where: { id: req.params.id },
+                select: { id: true }
+            })
+            if (!stillExists) throw new RunNotFoundError()
+            throw new RunAlreadyCompletedError()
+        }
+    }
+
+    // updateMany cannot return relations, so the response shape comes from a
+    // separate read. Deliberately NOT wrapped in a transaction with the write
+    // above: a /complete committing in between would make this report
+    // status: 'completed' alongside the fields this request wrote, which is a
+    // truthful view of committed state — the edit did land while the run was
+    // still in progress. Only the "response equals exactly what this request
+    // left behind" property is given up, and not for a single-row update.
+    const run = await prisma.productionRun.findUnique({
         where: { id: req.params.id },
-        data: {
-            ...(notes !== undefined && { notes }),
-            ...(potentialBuyer !== undefined && { potentialBuyer }),
-            ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
-            ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
-            ...(energyStart !== undefined && { energyStart }),
-            ...(energyEnd !== undefined && { energyEnd }),
-            ...(parsedEndTime !== undefined && { endTime: parsedEndTime })
-        },
         include: {
             operator: true,
             machine: true,
@@ -449,6 +489,9 @@ router.put('/:id', async (req, res) => {
             recipe: true
         }
     })
+    if (!run) {
+        throw new RunNotFoundError()
+    }
     res.json(run)
 })
 
