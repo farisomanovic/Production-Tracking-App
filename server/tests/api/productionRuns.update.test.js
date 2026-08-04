@@ -3,6 +3,9 @@
  * @description Tests for PUT /api/production-runs/:id — todo.md Group 3 #13:
  * the route was missing the same endTime > startTime rule /complete enforces,
  * and never checked status, so it could silently rewrite a completed run.
+ * The concurrency block at the bottom covers todo.md Group 4 #7: that status
+ * check used to be a separate read from the write, so a run completed in
+ * between was edited anyway.
  * Fixtures follow productionRuns.complete.test.js's conventions.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
@@ -45,6 +48,28 @@ afterEach(async () => {
 })
 
 const put = (payload) => request(app).put(`/api/production-runs/${runId}`).send(payload)
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Runs `mutate` against the test run inside a transaction that then STOPS,
+ * holding the row's write lock until `release()` is called. That lock is what
+ * makes the check-then-write window below reproducible instead of a coin flip.
+ * Await `lockAcquired` before racing anything against it — otherwise the racer
+ * could get in before the mutation has even been issued.
+ */
+function holdRunLocked(mutate) {
+    let release
+    let markAcquired
+    const held = new Promise(resolve => { release = resolve })
+    const lockAcquired = new Promise(resolve => { markAcquired = resolve })
+    const settled = prisma.$transaction(async (tx) => {
+        await mutate(tx)
+        markAcquired()
+        await held
+    })
+    return { lockAcquired, release: () => release(), settled }
+}
 
 function completePayload() {
     return {
@@ -179,5 +204,68 @@ describe('PUT /api/production-runs/:id', () => {
         const res = await put({ notes: `${PREFIX} should not apply` })
         expect(res.status).toBe(409)
         expect(res.body.error).toBe('Production run is already completed')
+    })
+
+    // A body with nothing updatable in it writes no fields, and Prisma's
+    // updateMany reports count: 0 for an empty `data` even when the row matched
+    // — this pins the route's long-standing no-op 200 so the compare-and-swap
+    // below can never misreport it as a conflict.
+    it('treats a PUT with no updatable fields as a no-op 200', async () => {
+        const res = await put({})
+        expect(res.status).toBe(200)
+        expect(res.body.id).toBe(runId)
+        expect(res.body.status).toBe('in_progress')
+    })
+
+    /*
+     * ── Group 4 #7: the completed-run guard must BE the write ────────────────
+     *
+     * A plain Promise.all([put, complete]) proves nothing when it passes — it
+     * may simply never interleave inside the window. These two tests force the
+     * interleaving with a real Postgres row lock: an uncommitted transaction
+     * holds the run's row, so the route's own pre-read (a plain SELECT, which
+     * under READ COMMITTED does NOT block on a row lock) is guaranteed to see
+     * the pre-change snapshot, pass its status check, and then park on the
+     * write until the adversary commits.
+     *
+     * Known limitation, stated so nobody over-trusts these: if the pre-read
+     * were ever scheduled after the adversary's commit, the route would return
+     * the same status for the boring reason. They can MISS a regression here;
+     * they cannot report one that isn't there.
+     */
+    it('rejects an edit to a run that completes while the request is in flight (Group 4 #7)', async () => {
+        const adversary = holdRunLocked(tx => tx.productionRun.update({
+            where: { id: runId },
+            data: { status: 'completed', endTime: new Date(Date.now() + 60_000) }
+        }))
+        await adversary.lockAcquired
+
+        // .then() is what actually issues a supertest request — without it the
+        // Test object sits idle until awaited and nothing would be racing.
+        const pending = put({ notes: `${PREFIX} raced` }).then(res => res)
+        await sleep(150)
+        adversary.release()
+        await adversary.settled
+
+        const res = await pending
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('Production run is already completed')
+
+        const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
+        expect(run.status).toBe('completed')
+        expect(run.notes).toBeNull()
+    })
+
+    it('returns 404 for a run deleted while the request is in flight (Group 4 #7)', async () => {
+        const adversary = holdRunLocked(tx => tx.productionRun.delete({ where: { id: runId } }))
+        await adversary.lockAcquired
+
+        const pending = put({ notes: `${PREFIX} raced` }).then(res => res)
+        await sleep(150)
+        adversary.release()
+        await adversary.settled
+
+        const res = await pending
+        expect(res.status).toBe(404)
     })
 })
