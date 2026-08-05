@@ -103,6 +103,14 @@ function NewRunPage() {
     // Local merge used immediately because setFormData is asynchronous — reading
     // formData right after setting it would hand stale data to handleCreateRun.
     const updatedData = { ...formData, ...stepData }
+
+    // Recipes are product-specific; a stale recipeId from a different product
+    // (e.g. left over from a failed run-creation attempt) must not leak into
+    // step 2's product-B recipe list once Back-to-step-1 can change productId.
+    if (currentStep === 1 && stepData.productId !== formData.productId) {
+      updatedData.recipeId = ''
+    }
+
     setFormData(updatedData)
 
     // Step 2 is the commit point: header info is complete, so the run is
@@ -324,9 +332,11 @@ function NewRunPage() {
   }
 
   /**
-   * Steps back within the post-creation phase (steps 3–5 only). Steps 1–2 are
-   * unreachable on purpose: the run already exists in the database, and editing
-   * its header from here would desynchronize wizard state from the stored row.
+   * Steps back through the wizard. Step 1 is the start (no-op). Step 2 only
+   * allows going back to step 1 before the run exists and is not mid-submit —
+   * once the run is created (steps 3+, or a step-2 revisit after one), its
+   * header is already persisted, so editing step 1 from here would
+   * desynchronize wizard state from the stored row.
    *
    * @returns {void}
    *
@@ -335,7 +345,7 @@ function NewRunPage() {
    */
   function handleBack() {
     if (currentStep === 1) return
-    if (currentStep <= 2) return
+    if (currentStep === 2 && (isSubmitting || runId != null)) return
 
     setCurrentStep(prev => prev - 1)
   }
@@ -424,18 +434,24 @@ function NewRunPage() {
 
       {renderStep()}
 
-      {currentStep > 2 && (
+      {currentStep >= 2 && (
         <div style={styles.stepActions}>
-          <button onClick={handleBack} style={styles.backButton}>
+          <button
+            onClick={handleBack}
+            style={styles.backButton}
+            disabled={currentStep === 2 && (isSubmitting || runId != null)}
+          >
             Back
           </button>
-          <button
-            onClick={handleCancelRun}
-            style={styles.cancelButton}
-            disabled={isSubmitting || isCancelling || !runId}
-          >
-            Cancel Run
-          </button>
+          {currentStep > 2 && (
+            <button
+              onClick={handleCancelRun}
+              style={styles.cancelButton}
+              disabled={isSubmitting || isCancelling || !runId}
+            >
+              Cancel Run
+            </button>
+          )}
         </div>
       )}
 
