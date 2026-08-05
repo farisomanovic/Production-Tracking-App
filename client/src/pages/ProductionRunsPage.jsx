@@ -59,6 +59,7 @@ export default function ProductionRunsPage() {
   // True when the fetch hit RUNS_FETCH_LIMIT — the list/export may be missing
   // older runs. See todo.md Group 7 #18.
   const [runsTruncated, setRunsTruncated] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   // ─── DATA LOADING ───────────────────────────────────────────────────────────
 
@@ -411,6 +412,11 @@ export default function ProductionRunsPage() {
           return
       }
 
+      // Belt-and-suspenders: the button is disabled while exporting, but a
+      // fast double-click can still land a second call before React re-renders.
+      if (isExporting) return
+
+      setIsExporting(true)
       try {
           // TODO: N+1 — one HTTP request per completed run on every click; a
           // year of data is hundreds of round-trips. Needs a dedicated export
@@ -597,6 +603,8 @@ export default function ProductionRunsPage() {
       } catch (err) {
           console.error(err)
           alert(getErrorMessage(err, 'Export failed. Please try again.'))
+      } finally {
+          setIsExporting(false)
       }
   }
 
@@ -678,12 +686,12 @@ export default function ProductionRunsPage() {
           <div style={styles.dateRangeField}>
               <span style={styles.dateLabel}>Export</span>
               <button
-                  style={runsTruncated ? { ...styles.exportButton, ...styles.exportButtonDisabled } : styles.exportButton}
+                  style={(runsTruncated || isExporting) ? { ...styles.exportButton, ...styles.exportButtonDisabled } : styles.exportButton}
                   onClick={handleExport}
-                  disabled={runsTruncated}
+                  disabled={runsTruncated || isExporting}
                   title={runsTruncated ? `Narrow your date range to export — showing the newest ${RUNS_FETCH_LIMIT} runs only` : undefined}
               >
-                  Export XLSX
+                  {isExporting ? 'Exporting…' : 'Export XLSX'}
               </button>
           </div>
 
