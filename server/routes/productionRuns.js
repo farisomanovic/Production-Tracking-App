@@ -2,7 +2,7 @@
  * @file productionRuns.js
  * @description Routes for the transactional heart of the app: production runs.
  * Covers the two-step lifecycle (create as in_progress → complete with
- * measurements/materials/outputs), filtered listing, detail reads, and deletion
+ * measurements/materials/quantity), filtered listing, detail reads, and deletion
  * with stock reversal. Master-data CRUD does NOT belong here.
  */
 import { Router } from 'express'
@@ -146,7 +146,7 @@ router.get('/', async (req, res) => {
 
 /**
  * Fetches one run with every relation the detail page needs: recipe
- * composition, measured parameter values, material usage, and outputs.
+ * composition, measured parameter values, and material usage.
  *
  * @param {import('express').Request} req - `params.id` is the run UUID.
  * @param {import('express').Response} res - 200 → full run aggregate; 404 unknown id; 500 on DB failure.
@@ -154,10 +154,10 @@ router.get('/', async (req, res) => {
  *
  * @example
  * // GET /api/production-runs/ab12…
- * // → 200 { id: "ab12…", status: "completed",
+ * // → 200 { id: "ab12…", status: "completed", quantityProduced: 500,
+ * //          product: { name: "PP traka 12mm" },
  * //          runParameterValues: [{ value: 210, machineParameter: { parameter: { name: "Melt temp" } } }],
- * //          materialUsages: [{ quantityUsed: 480, material: { name: "PP granulat" } }],
- * //          runOutputs: [{ quantityProduced: 500, product: { name: "PP traka 12mm" } }] }
+ * //          materialUsages: [{ quantityUsed: 480, material: { name: "PP granulat" } }] }
  */
 router.get('/:id', async (req, res) => {
     const run = await prisma.productionRun.findUnique({
@@ -185,9 +185,6 @@ router.get('/:id', async (req, res) => {
             },
             materialUsages: {
                 include: { material: true }
-            },
-            runOutputs: {
-                include: { product: true }
             }
         }
     })
@@ -576,34 +573,38 @@ router.put('/:id', async (req, res) => {
 // ─── COMPLETE (transactional) ────────────────────────────────────────────────
 
 /**
- * Completes a run: flips status, stores measured parameters, material usage,
- * and outputs, and decrements material stock — all in ONE transaction so a
- * run can never be "completed" with only half its production data saved.
+ * Completes a run: flips status, stores measured parameters, material usage and
+ * the produced quantity, and decrements material stock — all in ONE transaction
+ * so a run can never be "completed" with only half its production data saved.
+ *
+ * What was produced needs no productId: the run already carries one, validated
+ * against the machine's product whitelist at creation and immutable afterwards
+ * (PUT accepts none of the four foreign keys).
  *
  * @param {import('express').Request} req - `params.id` UUID. Body: `endTime` (required),
- * `parameterValues[]` ({ machineParameterId, value }; min 1 unless the run's machine has
- * zero linked parameters, in which case an empty array is required), `outputs[]`
- * ({ productId, quantityProduced }, min 1), `materialUsages[]` optional,
- * `energyEnd`/`notes` optional, run-level weights `netWeightPerUnit`/
- * `grossWeightPerUnit`/`scrapKg` optional (numbers ≥ 0).
+ * `quantityProduced` (required, number > 0), `parameterValues[]` ({ machineParameterId, value };
+ * min 1 unless the run's machine has zero linked parameters, in which case an empty array is
+ * required), `materialUsages[]` optional, `energyEnd`/`notes` optional, run-level weights
+ * `netWeightPerUnit`/`grossWeightPerUnit`/`scrapKg` optional (numbers ≥ 0).
  * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid payload
- * (including an unparseable endTime, one at/before the run's startTime, a duplicate id within
- * `parameterValues`/`materialUsages`, any id that doesn't belong to this run's machine/recipe,
- * or the run's recipe having been deactivated since the run started);
+ * (including an unparseable endTime, one at/before the run's startTime, a missing or
+ * non-positive quantityProduced, a duplicate id within `parameterValues`/`materialUsages`,
+ * any id that doesn't belong to this run's machine/recipe, or the run's recipe having been
+ * deactivated since the run started);
  * 404 unknown run; 409 already completed or insufficient stock; 500 on transaction failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
  * // POST /api/production-runs/ab12…/complete
- * // { "endTime": "2026-07-04T14:30:00.000",
+ * // { "endTime": "2026-07-04T14:30:00.000Z",
+ * //   "quantityProduced": 500,
  * //   "parameterValues": [{ "machineParameterId": "31f0…", "value": 210 }],
  * //   "materialUsages": [{ "materialId": "a9d2…", "quantityUsed": 480 }],
- * //   "outputs": [{ "productId": "c771…", "quantityProduced": 500 }],
  * //   "netWeightPerUnit": 1.5, "grossWeightPerUnit": 1.6, "scrapKg": 10 }
- * // → 200 { id: "ab12…", status: "completed", … }
+ * // → 200 { id: "ab12…", status: "completed", quantityProduced: 500, … }
  */
 router.post('/:id/complete', async (req, res) => {
-    const { endTime, energyEnd, notes, parameterValues, materialUsages, outputs,
+    const { endTime, energyEnd, notes, parameterValues, materialUsages, quantityProduced,
         netWeightPerUnit, grossWeightPerUnit, scrapKg } = req.body
 
     if (!endTime) {
@@ -618,18 +619,17 @@ router.post('/:id/complete', async (req, res) => {
     // overnight end times to the next day; this is the backstop for direct
     // API calls and client bugs. startTime is immutable after creation
     // (PUT never accepts it), so this pre-transaction read cannot go stale.
-    // Also pulls the run's machine/recipe context (their parameter list,
-    // product whitelist, and recipe items) in the same round trip — narrowed
-    // to just the id fields the relational checks below actually read, since
-    // these collections scale with how much a machine/recipe has configured.
+    // Also pulls the run's machine/recipe context (its parameter list and the
+    // recipe's items) in the same round trip — narrowed to just the id fields
+    // the relational checks below actually read, since these collections scale
+    // with how much a machine/recipe has configured.
     const existing = await prisma.productionRun.findUnique({
         where: { id: req.params.id },
         select: {
             startTime: true,
             machine: {
                 select: {
-                    machineParameters: { select: { id: true } },
-                    machineProducts: { select: { productId: true } }
+                    machineParameters: { select: { id: true } }
                 }
             },
             recipe: {
@@ -665,8 +665,12 @@ router.post('/:id/complete', async (req, res) => {
     if (parameterValues.length === 0 && existing.machine.machineParameters.length > 0) {
         return res.status(400).json({ error: 'At least one parameter value is required' })
     }
-    if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
-        return res.status(400).json({ error: 'At least one output is required' })
+    // The run's whole point is that something came off the machine, so this is
+    // required rather than optional-with-a-default. The DB backs it up with a
+    // CHECK (ProductionRun_quantityProduced_valid) that refuses a completed row
+    // without a positive quantity, no matter which code path writes it.
+    if (!isFiniteNumber(quantityProduced) || quantityProduced <= 0) {
+        return res.status(400).json({ error: 'quantityProduced must be a number greater than 0' })
     }
 
     // Numeric validation BEFORE the transaction: a negative quantityUsed
@@ -692,11 +696,6 @@ router.post('/:id/complete', async (req, res) => {
     for (const m of materialUsages || []) {
         if (!m.materialId || !isFiniteNumber(m.quantityUsed) || m.quantityUsed <= 0) {
             return res.status(400).json({ error: 'Each material usage needs a materialId and a quantityUsed greater than 0' })
-        }
-    }
-    for (const o of outputs) {
-        if (!o.productId || !isFiniteNumber(o.quantityProduced) || o.quantityProduced <= 0) {
-            return res.status(400).json({ error: 'Each output needs a productId and a quantityProduced greater than 0' })
         }
     }
     // Run-level weights are optional (old clients / rework runs may omit
@@ -725,17 +724,13 @@ router.post('/:id/complete', async (req, res) => {
     }
 
     // Each id must belong to THIS run's machine/recipe, not just exist
-    // somewhere in the database — otherwise a parameter reading could be
-    // filed under another machine's config, a material outside the run's
-    // recipe could silently decrement unrelated stock, or an output could
-    // record a product the machine isn't configured to make.
+    // somewhere in the database — otherwise a parameter reading could be filed
+    // under another machine's config, or a material outside the run's recipe
+    // could silently decrement unrelated stock. The produced product needs no
+    // such check: it is the run's own productId, whitelisted at creation.
     const validMachineParameterIds = new Set(existing.machine.machineParameters.map(mp => mp.id))
     if (!allBelongTo(machineParameterIds, validMachineParameterIds)) {
         return res.status(400).json({ error: "One or more parameterValues reference a machine parameter that does not belong to this run's machine" })
-    }
-    const validProductIds = new Set(existing.machine.machineProducts.map(mp => mp.productId))
-    if (!allBelongTo(outputs.map(o => o.productId), validProductIds)) {
-        return res.status(400).json({ error: "One or more outputs reference a product not assigned to this run's machine" })
     }
     const validMaterialIds = new Set(existing.recipe.recipeItems.map(ri => ri.materialId))
     if (!allBelongTo(materialIds, validMaterialIds)) {
@@ -752,6 +747,10 @@ router.post('/:id/complete', async (req, res) => {
             data: {
                 status: 'completed',
                 endTime: end,
+                // Set in the SAME statement as the status flip, not after it:
+                // the DB's CHECK is evaluated per statement, so a flip to
+                // 'completed' without the quantity would be rejected outright.
+                quantityProduced,
                 ...(energyEnd !== undefined && { energyEnd }),
                 ...(notes !== undefined && { notes }),
                 ...(netWeightPerUnit !== undefined && { netWeightPerUnit }),
@@ -821,14 +820,6 @@ router.post('/:id/complete', async (req, res) => {
             })
         }
 
-        await tx.runOutput.createMany({
-            data: outputs.map(o => ({
-                productionRunId: req.params.id,
-                productId: o.productId,
-                quantityProduced: o.quantityProduced
-            }))
-        })
-
         // Re-fetch inside the transaction so the response reflects exactly the
         // state that was committed, in the shape the detail view expects.
         return tx.productionRun.findUnique({
@@ -848,9 +839,6 @@ router.post('/:id/complete', async (req, res) => {
                 },
                 materialUsages: {
                     include: { material: true }
-                },
-                runOutputs: {
-                    include: { product: true }
                 }
             }
         })
@@ -911,7 +899,7 @@ router.delete('/:id', async (req, res) => {
             }
         }
 
-        // Child rows (parameter values, usages, outputs) are removed by the
+        // Child rows (parameter values, material usages) are removed by the
         // DB itself: their foreign keys are ON DELETE CASCADE.
         await tx.productionRun.delete({ where: { id: req.params.id } })
     })

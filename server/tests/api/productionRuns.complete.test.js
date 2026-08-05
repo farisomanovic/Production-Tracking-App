@@ -1,22 +1,22 @@
 /**
  * @file productionRuns.complete.test.js
  * @description Tests for POST /api/production-runs/:id/complete — the
- * relational validation added for todo.md Group 3 #6: parameterValues,
- * materialUsages, and outputs ids must belong to the run's own
- * machine/recipe, not just exist somewhere in the database. Duplicate ids
- * within one payload are also rejected before they can hit a @@unique
- * constraint mid-transaction. The rest of /complete's behavior (races, stock
- * floor, cascade delete, endTime guards) is covered by completion.e2e.test.js,
- * not here.
+ * relational validation added for todo.md Group 3 #6: parameterValues and
+ * materialUsages ids must belong to the run's own machine/recipe, not just
+ * exist somewhere in the database. Duplicate ids within one payload are also
+ * rejected before they can hit a @@unique constraint mid-transaction. Since
+ * todo.md Group 5 #11 this file also covers the scalar `quantityProduced`
+ * that replaced the outputs array, including the DB CHECK standing behind it.
+ * The rest of /complete's behavior (races, stock floor, cascade delete,
+ * endTime guards) is covered by completion.e2e.test.js, not here.
  *
  * Fixtures created directly via prisma with the VT-COMPLETE prefix: a second
  * machine + parameter (for a machineParameterId foreign to the baseline
- * machine), a material outside the baseline recipe, a product not linked
- * to the baseline machine, and a third machine with zero linked parameters
- * (its own product/recipe) for Group 3 #19. A fresh in_progress run on the
- * baseline machine is created before each test and cleaned up through the
- * DELETE route after, so a rejected /complete (which leaves the run
- * in_progress) never leaks into the next test.
+ * machine), a material outside the baseline recipe, and a third machine with
+ * zero linked parameters (its own product/recipe) for Group 3 #19. A fresh
+ * in_progress run on the baseline machine is created before each test and
+ * cleaned up through the DELETE route after, so a rejected /complete (which
+ * leaves the run in_progress) never leaks into the next test.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
@@ -30,7 +30,6 @@ let baseline
 let machineParameter
 let foreignMachineParameter
 let rogueMaterial
-let unlinkedProduct
 let zeroParamMachine
 let zeroParamProduct
 let zeroParamRecipe
@@ -61,7 +60,6 @@ beforeAll(async () => {
         data: { machineId: foreignMachine.id, parameterId: foreignParameter.id }
     })
     rogueMaterial = await prisma.material.create({ data: { name: `${PREFIX} rogue material`, unit: 'kg', stockQty: 1000 } })
-    unlinkedProduct = await prisma.product.create({ data: { name: `${PREFIX} unlinked product`, code: `${PREFIX}-P2`, unit: 'kg' } })
 
     // Group 3 #19: a machine with zero MachineParameter links — no parameter
     // row is created for it, unlike every other machine in this file.
@@ -102,7 +100,7 @@ function validPayload() {
         endTime: new Date().toISOString(),
         parameterValues: [{ machineParameterId: machineParameter.id, value: 1 }],
         materialUsages: [{ materialId: baseline.material.id, quantityUsed: 1 }],
-        outputs: [{ productId: baseline.product.id, quantityProduced: 1 }]
+        quantityProduced: 1
     }
 }
 
@@ -183,25 +181,24 @@ describe('POST /api/production-runs/:id/complete — relational validation (Grou
         expect(res.body.error).toBe('materialUsages contains a duplicate materialId')
     })
 
-    it("rejects a productId not linked to the run's machine", async () => {
-        const res = await complete({
-            ...validPayload(),
-            outputs: [{ productId: unlinkedProduct.id, quantityProduced: 1 }]
-        })
-        expect(res.status).toBe(400)
-        expect(res.body.error).toBe("One or more outputs reference a product not assigned to this run's machine")
-    })
-
+    // Re-anchored to a foreign machineParameterId when Group 5 #11 removed the
+    // outputs array this used to be rejected by: the point of the test is that
+    // ANY rejection leaves nothing half-written, not which rule did the
+    // rejecting. The parameter values are the last thing validated before the
+    // transaction, so they are the closest equivalent trigger.
     it('leaves the run in_progress with no partial child rows after a rejection', async () => {
-        await complete({ ...validPayload(), outputs: [{ productId: unlinkedProduct.id, quantityProduced: 1 }] })
+        await complete({
+            ...validPayload(),
+            parameterValues: [{ machineParameterId: foreignMachineParameter.id, value: 1 }]
+        })
         const run = await prisma.productionRun.findUnique({
             where: { id: runId },
-            include: { runParameterValues: true, materialUsages: true, runOutputs: true }
+            include: { runParameterValues: true, materialUsages: true }
         })
         expect(run.status).toBe('in_progress')
+        expect(run.quantityProduced).toBeNull()
         expect(run.runParameterValues).toHaveLength(0)
         expect(run.materialUsages).toHaveLength(0)
-        expect(run.runOutputs).toHaveLength(0)
     })
 
     it("accepts a payload where every id genuinely belongs to the run's machine/recipe", async () => {
@@ -226,7 +223,7 @@ describe('POST /api/production-runs/:id/complete — zero-parameter machine (Gro
         const res = await request(app).post(`/api/production-runs/${run.id}/complete`).send({
             endTime: new Date().toISOString(),
             parameterValues: [],
-            outputs: [{ productId: zeroParamProduct.id, quantityProduced: 1 }]
+            quantityProduced: 1
         })
         expect(res.status).toBe(200)
         expect(res.body.status).toBe('completed')
@@ -278,5 +275,70 @@ describe('POST /api/production-runs/:id/complete — recipe deactivated after th
             // inactive would break every later test relying on it).
             await prisma.recipe.update({ where: { id: baseline.recipe.id }, data: { active: true } })
         }
+    })
+})
+
+describe('POST /api/production-runs/:id/complete — quantityProduced (Group 5 #11)', () => {
+    // Every rejection also asserts the run is still in_progress: the quantity
+    // check runs before the transaction, so a bad value must not consume the
+    // run's one chance to be completed.
+    it.each([
+        ['omitted entirely', {}],
+        ['explicitly null', { quantityProduced: null }],
+        ['exactly 0', { quantityProduced: 0 }],
+        ['negative', { quantityProduced: -5 }],
+        ['a numeric string', { quantityProduced: '500' }],
+        ['NaN', { quantityProduced: Number.NaN }]
+    ])('rejects a quantityProduced that is %s', async (_label, override) => {
+        const payload = { ...validPayload(), ...override }
+        if (Object.keys(override).length === 0) delete payload.quantityProduced
+
+        const res = await complete(payload)
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('quantityProduced must be a number greater than 0')
+        const run = await prisma.productionRun.findUnique({ where: { id: runId } })
+        expect(run.status).toBe('in_progress')
+        expect(run.quantityProduced).toBeNull()
+    })
+
+    it('stores the quantity on the run itself and returns it', async () => {
+        const res = await complete({ ...validPayload(), quantityProduced: 42.5 })
+        expect(res.status).toBe(200)
+        expect(res.body.quantityProduced).toBe(42.5)
+        const run = await prisma.productionRun.findUnique({ where: { id: runId } })
+        expect(run.quantityProduced).toBe(42.5)
+    })
+})
+
+// The route check above is the friendly 400; this is the guarantee underneath
+// it. Prisma cannot express a CHECK constraint, so without these two cases
+// nothing in the suite would notice the constraint silently disappearing from
+// the database (todo.md Group 8 #16 is the broader version of this worry).
+describe('ProductionRun_quantityProduced_valid CHECK constraint (Group 5 #11)', () => {
+    it('refuses a completed run with no quantity, bypassing the route entirely', async () => {
+        await expect(
+            prisma.productionRun.update({
+                where: { id: runId },
+                data: { status: 'completed', endTime: new Date() }
+            })
+        ).rejects.toThrow(/ProductionRun_quantityProduced_valid/)
+
+        const run = await prisma.productionRun.findUnique({ where: { id: runId } })
+        expect(run.status).toBe('in_progress')
+    })
+
+    it('refuses a completed run whose quantity is 0', async () => {
+        await expect(
+            prisma.productionRun.update({
+                where: { id: runId },
+                data: { status: 'completed', endTime: new Date(), quantityProduced: 0 }
+            })
+        ).rejects.toThrow(/ProductionRun_quantityProduced_valid/)
+    })
+
+    it('allows an in_progress run to have no quantity at all', async () => {
+        const run = await prisma.productionRun.findUnique({ where: { id: runId } })
+        expect(run.status).toBe('in_progress')
+        expect(run.quantityProduced).toBeNull()
     })
 })

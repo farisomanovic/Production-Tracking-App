@@ -88,6 +88,8 @@ describe('GET /api/production-runs — stable order & select shape (Group 4 #4)'
                 date: new Date('2026-06-16T00:00:00.000Z'),
                 startTime: new Date('2026-06-16T08:00:00.000Z'),
                 status: 'completed',
+                // Required by ProductionRun_quantityProduced_valid (Group 5 #11).
+                quantityProduced: 1,
                 operatorId: baseline.operator.id,
                 machineId: baseline.machine.id,
                 productId: baseline.product.id,
@@ -102,6 +104,7 @@ describe('GET /api/production-runs — stable order & select shape (Group 4 #4)'
                 date: new Date('2026-06-16T00:00:00.000Z'),
                 startTime: new Date('2026-06-16T14:00:00.000Z'),
                 status: 'completed',
+                quantityProduced: 1,
                 operatorId: baseline.operator.id,
                 machineId: baseline.machine.id,
                 productId: baseline.product.id,

@@ -76,7 +76,7 @@ function completePayload() {
         endTime: new Date().toISOString(),
         parameterValues: [{ machineParameterId: machineParameter.id, value: 1 }],
         materialUsages: [{ materialId: baseline.material.id, quantityUsed: 1 }],
-        outputs: [{ productId: baseline.product.id, quantityProduced: 1 }]
+        quantityProduced: 1
     }
 }
 
@@ -236,7 +236,11 @@ describe('PUT /api/production-runs/:id', () => {
     it('rejects an edit to a run that completes while the request is in flight (Group 4 #7)', async () => {
         const adversary = holdRunLocked(tx => tx.productionRun.update({
             where: { id: runId },
-            data: { status: 'completed', endTime: new Date(Date.now() + 60_000) }
+            // quantityProduced rides along because the DB's
+            // ProductionRun_quantityProduced_valid CHECK refuses a completed
+            // run without one (Group 5 #11) — the adversary has to look like a
+            // real completion, not just a status flip.
+            data: { status: 'completed', endTime: new Date(Date.now() + 60_000), quantityProduced: 1 }
         }))
         await adversary.lockAcquired
 
