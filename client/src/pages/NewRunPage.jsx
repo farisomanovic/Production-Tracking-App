@@ -51,13 +51,13 @@ function NewRunPage() {
     recipeId: '',
     parameterValues: [],
     materialUsages: [],
-    // Step 4's calculator slice: null (not '') marks "never entered", which
-    // both the last-run prefill and step 5's payload spreads rely on.
+    // Step 4's slice: null (not '') marks "never entered", which both the
+    // last-run prefill and step 5's payload spreads rely on. quantityProduced
+    // is the run's produced quantity, not just a calculator input (Group 5 #11).
     quantityProduced: null,
     netWeightPerUnit: null,
     grossWeightPerUnit: null,
     scrapKg: null,
-    outputs: [],
     endTime: '',
     energyEnd: '',
     notes: ''
@@ -111,7 +111,7 @@ function NewRunPage() {
    * step; its only action is "Complete Run"), so it reports every change as
    * it happens instead, keeping formData current for if the operator hits Back.
    *
-   * @param {Object} stepData - Step 5's current endTime/energyEnd/notes/outputs.
+   * @param {Object} stepData - Step 5's current endTime/energyEnd/notes.
    * @returns {void}
    *
    * @example
@@ -204,7 +204,7 @@ function NewRunPage() {
   /**
    * Creates the run from steps 1–2 data, then tries to prefill steps 3–5 from
    * the last completed run on the same machine + product: parameter values,
-   * actual material usages (copied verbatim, not recomputed), total produced
+   * actual material usages (copied verbatim, not recomputed), the produced
    * quantity, and the run-level weights — settings and yields rarely change
    * between runs of the same product.
    *
@@ -261,7 +261,7 @@ function NewRunPage() {
 
         if (lastRunSummary) {
           // Second request because the list endpoint doesn't include the
-          // children (parameters, usages, outputs) — only the detail does.
+          // children (parameters, usages) — only the detail does.
           const lastRunDetail = await getRunById(lastRunSummary.id)
           const lastRun = lastRunDetail.data
 
@@ -283,16 +283,9 @@ function NewRunPage() {
             }))
           }
 
-          // SUM across all outputs: the calculator's quantity is the run total
-          // even when several products came off the machine.
-          if (lastRun.runOutputs && lastRun.runOutputs.length > 0) {
-            prefill.quantityProduced = lastRun.runOutputs.reduce(
-                (sum, o) => sum + o.quantityProduced, 0
-            )
-          }
-
           // != null guards: pre-migration runs have no neto (and possibly no
           // bruto/scrap) — leave those fields blank instead of seeding "null".
+          if (lastRun.quantityProduced != null) prefill.quantityProduced = lastRun.quantityProduced
           if (lastRun.netWeightPerUnit != null) prefill.netWeightPerUnit = lastRun.netWeightPerUnit
           if (lastRun.grossWeightPerUnit != null) prefill.grossWeightPerUnit = lastRun.grossWeightPerUnit
           if (lastRun.scrapKg != null) prefill.scrapKg = lastRun.scrapKg

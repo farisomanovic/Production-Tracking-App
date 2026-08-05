@@ -11,7 +11,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
-import { getMachineProducts } from '../api/machineProducts'
 import { rollToNextDayIfAtOrBefore, formatDisplayDate, formatDisplayTime } from '../lib/dates'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
@@ -35,7 +34,6 @@ const navigate = useNavigate()
 
 const [run, setRun] = useState(null)
 const [machineParameters, setMachineParameters] = useState([])
-const [products, setProducts] = useState([])
 const [lastRunParameterValues, setLastRunParameterValues] = useState([])
 const [lastRunMaterialUsages, setLastRunMaterialUsages] = useState([])
 const [lastRunQuantityProduced, setLastRunQuantityProduced] = useState('')
@@ -60,15 +58,14 @@ const loadRun = useCallback(async () => {
         // disappears.
         setError(null)
 
-        // Form config (machine parameters + allowed products) is only needed
-        // when the completion form will render — completed runs skip 3 requests.
+        // Form config (the machine's parameters) is only needed when the
+        // completion form will render — completed runs skip these requests.
         if (fetchedRun.status === 'in_progress') {
-        const [paramsRes, productsRes] = await Promise.all([
-            getMachineParameters(fetchedRun.machineId),
-            getMachineProducts(fetchedRun.machineId)
-        ])
+        // Only the machine's parameters: the completion form no longer picks a
+        // product (the run's own is the only possible answer since Group 5 #11),
+        // so the machine-products request it used to feed is gone.
+        const paramsRes = await getMachineParameters(fetchedRun.machineId)
         setMachineParameters(paramsRes.data)
-        setProducts(productsRes.data.map(item => item.product))
 
         // Same prefill idea as the wizard: machine settings rarely change
         // between runs of the same product, so the last completed run's values
@@ -96,15 +93,11 @@ const loadRun = useCallback(async () => {
                         quantityUsed: mu.quantityUsed
                     })))
                 }
-                // SUM across all outputs: the calculator's quantity is the run
-                // total even when several products came off the machine.
-                if (lastRun.runOutputs && lastRun.runOutputs.length > 0) {
-                    setLastRunQuantityProduced(String(
-                        lastRun.runOutputs.reduce((sum, o) => sum + o.quantityProduced, 0)
-                    ))
-                }
                 // != null guards: pre-migration runs have no neto (and possibly
                 // no bruto/scrap) — leave those fields blank instead of "null".
+                if (lastRun.quantityProduced != null) {
+                    setLastRunQuantityProduced(String(lastRun.quantityProduced))
+                }
                 if (lastRun.netWeightPerUnit != null) {
                     setLastRunNetWeightPerUnit(String(lastRun.netWeightPerUnit))
                 }
@@ -263,7 +256,6 @@ return (
         <RunCompleteView
             run={run}
             machineParameters={machineParameters}
-            products={products}
             lastRunParameterValues={lastRunParameterValues}
             lastRunMaterialUsages={lastRunMaterialUsages}
             lastRunQuantityProduced={lastRunQuantityProduced}
@@ -291,18 +283,17 @@ return (
 // ─── COMPLETION FORM (in-progress runs) ──────────────────────────────────────
 
 /**
- * Completion form: parameters, material usage, outputs, and end-of-run fields
- * for a run still in progress. Near-duplicate of wizard Steps 3–5 (see the
- * file-level TODO).
+ * Completion form: parameters, material usage, produced quantity, and
+ * end-of-run fields for a run still in progress. Near-duplicate of wizard
+ * Steps 3–5 (see the file-level TODO).
  *
  * @component
  * @param {Object} props
  * @param {Object} props.run - The in_progress run aggregate (recipe items included).
  * @param {Array} props.machineParameters - The machine's parameter links, in display order.
- * @param {Array} props.products - Products this machine may output.
  * @param {Array} props.lastRunParameterValues - Prefill values from the last completed matching run.
  * @param {Array} props.lastRunMaterialUsages - Prefill usage from the last completed matching run.
- * @param {string} props.lastRunQuantityProduced - Prefill quantity: SUM across the last run's outputs.
+ * @param {string} props.lastRunQuantityProduced - Prefill quantity from the last completed matching run.
  * @param {string} props.lastRunNetWeightPerUnit - Prefill neto (per-unit kg) from the last run.
  * @param {string} props.lastRunGrossWeightPerUnit - Prefill bruto (per-unit kg) from the last run.
  * @param {string} props.lastRunScrapKg - Prefill total scrap kg from the last run.
@@ -311,13 +302,13 @@ return (
  * @returns {JSX.Element}
  *
  * @example
- * <RunCompleteView run={run} machineParameters={mps} products={prods}
+ * <RunCompleteView run={run} machineParameters={mps}
  *   lastRunParameterValues={[]} lastRunMaterialUsages={[]}
  *   lastRunQuantityProduced="" lastRunNetWeightPerUnit=""
  *   lastRunGrossWeightPerUnit="" lastRunScrapKg=""
  *   onCompleted={() => navigate('/runs')} onDelete={handleDelete} />
  */
-function RunCompleteView({ run, machineParameters, products, lastRunParameterValues, lastRunMaterialUsages, lastRunQuantityProduced, lastRunNetWeightPerUnit, lastRunGrossWeightPerUnit, lastRunScrapKg, onCompleted, onDelete }) {
+function RunCompleteView({ run, machineParameters, lastRunParameterValues, lastRunMaterialUsages, lastRunQuantityProduced, lastRunNetWeightPerUnit, lastRunGrossWeightPerUnit, lastRunScrapKg, onCompleted, onDelete }) {
 
 const [endTime, setEndTime] = useState('')
 const [energyEnd, setEnergyEnd] = useState('')
@@ -350,12 +341,6 @@ const [quantityProduced, setQuantityProduced] = useState(lastRunQuantityProduced
 const [netWeightPerUnit, setNetWeightPerUnit] = useState(lastRunNetWeightPerUnit)
 const [grossWeightPerUnit, setGrossWeightPerUnit] = useState(lastRunGrossWeightPerUnit)
 const [scrapKg, setScrapKg] = useState(lastRunScrapKg)
-
-const [outputs, setOutputs] = useState(() => [{
-    id: Date.now(),
-    productId: run.productId,
-    quantityProduced: lastRunQuantityProduced
-}])
 
 const [isSubmitting, setIsSubmitting] = useState(false)
 const [error, setError] = useState(null)
@@ -434,10 +419,13 @@ function handleRecalculate() {
 }
 
 /**
- * Updates the calculator's quantity. Does not touch material amounts — see
- * handleRecalculate. Also does NOT update the output rows below — the
- * calculator quantity and output quantity are independent fields here,
- * unlike in the wizard.
+ * Updates the produced quantity. Does not touch material amounts — see
+ * handleRecalculate.
+ *
+ * Before Group 5 #11 this fed only the calculator, and a SEPARATE output row
+ * held the quantity that was actually submitted — so the material math and the
+ * recorded output could disagree with nothing to catch it. There is one field
+ * now, and this is it.
  *
  * @param {string} value - Raw input string.
  * @returns {void}
@@ -492,56 +480,8 @@ function handleGrossWeightChange(value) {
 }
 
 /**
- * Updates one field of one output row by its local list key.
- *
- * @param {number} id - Local row id (React key only, never sent to the server).
- * @param {string} field - "productId" | "quantityProduced".
- * @param {string} value - Raw input value.
- * @returns {void}
- *
- * @example
- * handleOutputChange(1751623945000, 'quantityProduced', '500')
- */
-function handleOutputChange(id, field, value) {
-    setOutputs(prev => prev.map(o =>
-    o.id === id ? { ...o, [field]: value } : o
-    ))
-}
-
-/**
- * Appends an empty output row for multi-product runs.
- *
- * @returns {void}
- *
- * @example
- * <button onClick={addOutput}>+ Add Another Output</button>
- */
-function addOutput() {
-    setOutputs(prev => [...prev, {
-    id: Date.now(),
-    productId: '',
-    quantityProduced: ''
-    }])
-}
-
-/**
- * Removes an output row — except the last, since the server requires at least
- * one output to complete a run.
- *
- * @param {number} id - Local row id to remove.
- * @returns {void}
- *
- * @example
- * removeOutput(1751623945000)
- */
-function removeOutput(id) {
-    if (outputs.length === 1) return
-    setOutputs(prev => prev.filter(o => o.id !== id))
-}
-
-/**
- * Checks completion requirements: end time set, all parameters and materials
- * filled, every output row complete with positive quantities.
+ * Checks completion requirements: end time set, a positive produced quantity,
+ * and every parameter and material filled in.
  *
  * @returns {boolean} true when the payload is safe to send; false after setting an error.
  *
@@ -551,6 +491,11 @@ function removeOutput(id) {
 function validate() {
     if (!endTime) {
     setError('End time is required.')
+    return false
+    }
+
+    if (quantityProduced.trim() === '' || !(Number(quantityProduced) > 0)) {
+    setError('Quantity produced is required and must be greater than 0.')
     return false
     }
 
@@ -569,23 +514,6 @@ function validate() {
     })
     if (!allMaterialsFilled) {
     setError('Please fill in all material quantities.')
-    return false
-    }
-
-    const allOutputsFilled = outputs.every(o =>
-    o.productId &&
-    o.quantityProduced !== ''
-    )
-    if (!allOutputsFilled) {
-    setError('Please fill in all fields for every output row.')
-    return false
-    }
-
-    const allPositive = outputs.every(o =>
-    Number(o.quantityProduced) > 0
-    )
-    if (!allPositive) {
-    setError('Quantities must be positive.')
     return false
     }
 
@@ -627,10 +555,7 @@ async function handleComplete() {
         materialId: item.materialId,
         quantityUsed: Number(materialValues[item.materialId])
         })),
-        outputs: outputs.map(o => ({
-        productId: o.productId,
-        quantityProduced: Number(o.quantityProduced)
-        })),
+        quantityProduced: Number(quantityProduced),
         // !== '' (not truthiness): a scrap of 0 is a real value that must be
         // sent — a perfect run's zero scrap is still worth recording.
         ...(netWeightPerUnit !== '' && { netWeightPerUnit: Number(netWeightPerUnit) }),
@@ -690,27 +615,35 @@ return (
         </div>
     )}
 
+    {/* Outside the calculator card on purpose: this is the run's produced
+        quantity (Group 5 #11), required for every completion, and the
+        calculator only borrows it. A recipe with no items hides the card, and
+        the field must not disappear with it. */}
+    <div style={styles.section}>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Output</p>
+        <div style={common.field}>
+        <label style={common.label}>Quantity Produced * ({run.product.name})</label>
+        <div style={common.inputRow}>
+            <input
+            style={styles.input}
+            type='number'
+            value={quantityProduced}
+            onChange={e => handleQuantityChange(e.target.value)}
+            onWheel={e => e.target.blur()}
+            placeholder='e.g. 500'
+            min='0'
+            step='1'
+            />
+            <span style={common.unit}>pcs</span>
+        </div>
+        </div>
+    </div>
+
     {/* Quick Calculator */}
     {run.recipe.recipeItems.length > 0 && (
         <div style={styles.calculator}>
         <p style={styles.calcLabel}>Quick Calculator</p>
         <div style={styles.calcGrid}>
-            <div style={styles.calcField}>
-            <label style={common.label}>Quantity Produced</label>
-            <div style={common.inputRow}>
-                <input
-                style={styles.calcInput}
-                type='number'
-                value={quantityProduced}
-                onChange={e => handleQuantityChange(e.target.value)}
-                onWheel={e => e.target.blur()}
-                placeholder='e.g. 500'
-                min='0'
-                step='1'
-                />
-                <span style={common.unit}>pcs</span>
-            </div>
-            </div>
             <div style={styles.calcField}>
             <label style={common.label}>Neto Weight per Unit</label>
             <div style={common.inputRow}>
@@ -801,61 +734,6 @@ return (
         </div>
     )}
 
-    {/* Outputs */}
-    <div style={styles.section}>
-        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Production Outputs</p>
-        {outputs.map((output, index) => (
-        <div key={output.id} style={styles.outputCard}>
-            <div style={styles.outputCardHeader}>
-            <span style={styles.outputCardTitle}>Output {index + 1}</span>
-            {outputs.length > 1 && (
-                <button
-                style={styles.removeButton}
-                onClick={() => removeOutput(output.id)}
-                >
-                Remove
-                </button>
-            )}
-            </div>
-
-            <div style={common.field}>
-            <label style={common.label}>Product *</label>
-            <select
-                style={styles.input}
-                value={output.productId}
-                onChange={e => handleOutputChange(output.id, 'productId', e.target.value)}
-            >
-                <option value=''>Select product...</option>
-                {products.map(product => (
-                <option key={product.id} value={product.id}>
-                    {product.name}{product.code ? ` — ${product.code}` : ''}
-                </option>
-                ))}
-            </select>
-            </div>
-
-            <div style={common.field}>
-            <label style={common.label}>Quantity Produced *</label>
-            <input
-                style={styles.input}
-                type='number'
-                value={output.quantityProduced}
-                onChange={e => handleOutputChange(output.id, 'quantityProduced', e.target.value)}
-                onWheel={e => e.target.blur()}
-                placeholder='0'
-                min='0'
-                step='1'
-            />
-            </div>
-
-        </div>
-        ))}
-
-        <button style={styles.addButton} onClick={addOutput}>
-        + Add Another Output
-        </button>
-    </div>
-
     {/* End Time */}
     <div style={styles.section}>
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Completion</p>
@@ -919,7 +797,7 @@ return (
 
 /**
  * Read-only record of a completed run: info, times, energy, parameters,
- * materials, outputs, notes — plus the delete action.
+ * materials, output, notes — plus the delete action.
  *
  * @component
  * @param {Object} props
@@ -1052,18 +930,17 @@ return (
         </div>
     )}
 
-    {run.runOutputs.length > 0 && (
-        <div style={styles.section}>
-        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Outputs</p>
-        {run.runOutputs.map((output, index) => (
-            <div key={output.id} style={styles.outputCard}>
-            <p style={styles.outputTitle}>Output {index + 1}</p>
-            <InfoRow label='Product' value={output.product.name} />
-            <InfoRow label='Quantity' value={output.quantityProduced} />
-            </div>
-        ))}
+    {/* Always rendered for a completed run: the DB's
+        ProductionRun_quantityProduced_valid CHECK guarantees a completed run
+        has a positive quantity, so a missing one means data older than
+        Group 5 #11's migration — worth showing as "—" rather than hiding. */}
+    <div style={styles.section}>
+        <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Output</p>
+        <div style={styles.infoCard}>
+        <InfoRow label='Product' value={run.product.name} />
+        <InfoRow label='Quantity Produced' value={run.quantityProduced} />
         </div>
-    )}
+    </div>
 
     {run.notes && (
         <div style={styles.section}>
@@ -1205,32 +1082,6 @@ infoValue: {
     fontSize: '0.85rem',
     textAlign: 'right',
 },
-outputCard: {
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: '8px',
-    border: '1px solid var(--color-border)',
-    overflow: 'hidden',
-    marginBottom: '0.75rem',
-},
-outputTitle: {
-    color: 'var(--color-text-primary)',
-    fontSize: '0.85rem',
-    fontWeight: 'bold',
-    padding: '10px 16px',
-    borderBottom: '1px solid var(--color-border-muted)',
-},
-outputCardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '10px 16px',
-    borderBottom: '1px solid var(--color-border-muted)',
-},
-outputCardTitle: {
-    color: 'var(--color-text-primary)',
-    fontSize: '0.85rem',
-    fontWeight: 'bold',
-},
 notesText: {
     color: 'var(--color-text-primary)',
     fontSize: '0.85rem',
@@ -1262,15 +1113,6 @@ textarea: {
     fontFamily: 'inherit',
     width: '100%',
     boxSizing: 'border-box',
-},
-removeButton: {
-    backgroundColor: 'transparent',
-    border: '1px solid var(--color-danger)',
-    color: 'var(--color-danger)',
-    padding: '0.25rem 0.75rem',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.8rem',
 },
 addButton: {
     width: '100%',

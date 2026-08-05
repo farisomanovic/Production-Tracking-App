@@ -495,10 +495,11 @@ export default function ProductionRunsPage() {
                   return match ? Number(match.quantityUsed) : ''
               })
 
-              // Multiple outputs are SUMMED into one row: the report is one line
-              // per run, so per-product output detail is deliberately lost here
-              // (it stays visible on the run detail page).
-              const totalQty = run.runOutputs.reduce((sum, o) => sum + Number(o.quantityProduced || 0), 0)
+              // One run, one quantity since Group 5 #11 — no summing left to do.
+              // null (not '') for a run without one, so the two total columns
+              // below can tell "no quantity" from a real number instead of
+              // multiplying '' into a misleading 0.
+              const quantity = run.quantityProduced != null ? Number(run.quantityProduced) : null
 
               return [
                   formatExportDate(run.date),
@@ -515,19 +516,19 @@ export default function ProductionRunsPage() {
                   energyConsumed,
                   ...paramValues,
                   ...materialValues,
-                  totalQty,
+                  quantity != null ? quantity : '',
                   // The run stores per-unit neto/bruto; totals multiply back by
                   // the produced quantity. Per-unit values go in raw (rounding
                   // would lose precision on light products), totals are rounded
                   // to hide float-multiplication noise. Blank ('') for runs
-                  // without weights — Excel's SUM skips blanks.
+                  // missing either factor — Excel's SUM skips blanks.
                   run.netWeightPerUnit != null ? run.netWeightPerUnit : '',
-                  run.netWeightPerUnit != null
-                      ? Number((totalQty * run.netWeightPerUnit).toFixed(1))
+                  quantity != null && run.netWeightPerUnit != null
+                      ? Number((quantity * run.netWeightPerUnit).toFixed(1))
                       : '',
                   run.grossWeightPerUnit != null ? run.grossWeightPerUnit : '',
-                  run.grossWeightPerUnit != null
-                      ? Number((totalQty * run.grossWeightPerUnit).toFixed(1))
+                  quantity != null && run.grossWeightPerUnit != null
+                      ? Number((quantity * run.grossWeightPerUnit).toFixed(1))
                       : '',
                   run.scrapKg != null ? run.scrapKg : '',
                   sanitizeCellText(run.notes)
