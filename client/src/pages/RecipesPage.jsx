@@ -132,8 +132,12 @@ function RecipesPage() {
     return items.reduce((sum, item) => sum + item.percentage, 0)
   }
 
+  // Keep in sync with server/routes/recipes.js's PERCENT_TOLERANCE — no shared
+  // client/server module exists in this repo, so this is a mirrored constant.
+  const PERCENT_TOLERANCE = 0.001
+
   function isTotalValid(total) {
-    return Math.abs(total - 100) <= 0.001
+    return Math.abs(total - 100) <= PERCENT_TOLERANCE
   }
 
   /**
@@ -314,7 +318,7 @@ function RecipesPage() {
               <div style={styles.totalRow}>
                 <span style={styles.totalLabel}>Total</span>
                 <span style={isTotalValid(totalPercentage) ? styles.totalGood : styles.totalBad}>
-                  {totalPercentage}%
+                  {parseFloat(totalPercentage.toFixed(2))}%
                 </span>
               </div>
             </div>
