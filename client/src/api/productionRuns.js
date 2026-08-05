@@ -23,7 +23,7 @@ export function getAllRuns(params) {
 }
 
 /**
- * Fetches one run with all completion data (parameters, materials, outputs).
+ * Fetches one run with all completion data (parameters, materials, quantity).
  *
  * @param {string} id - ProductionRun UUID.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = full run aggregate.
@@ -72,12 +72,13 @@ export function updateRun(id, data) {
 }
 
 /**
- * Completes an in-progress run with its measurements, usage, and outputs —
- * one call, one server-side transaction.
+ * Completes an in-progress run with its measurements, usage, and produced
+ * quantity — one call, one server-side transaction. What was produced needs no
+ * productId: it is the run's own product, fixed when the run was created.
  *
  * @param {string} id - ProductionRun UUID.
- * @param {Object} data - `{ endTime, parameterValues: [{ machineParameterId, value }],
- * outputs: [{ productId, quantityProduced }] }` required;
+ * @param {Object} data - `{ endTime, quantityProduced,
+ * parameterValues: [{ machineParameterId, value }] }` required;
  * `{ materialUsages: [{ materialId, quantityUsed }], energyEnd, notes,
  * netWeightPerUnit, grossWeightPerUnit, scrapKg }` optional (run-level weights, ≥ 0).
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = completed run aggregate.
@@ -86,10 +87,10 @@ export function updateRun(id, data) {
  *
  * @example
  * await completeRun('ab12…', {
- *   endTime: '2026-07-04T14:30:00.000',
+ *   endTime: '2026-07-04T14:30:00.000Z',
+ *   quantityProduced: 500,
  *   parameterValues: [{ machineParameterId: '31f0…', value: 210 }],
  *   materialUsages: [{ materialId: 'a9d2…', quantityUsed: 480 }],
- *   outputs: [{ productId: 'c771…', quantityProduced: 500 }],
  *   netWeightPerUnit: 1.5, grossWeightPerUnit: 1.6, scrapKg: 10
  * })
  */

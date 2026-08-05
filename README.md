@@ -1,8 +1,8 @@
 # PakOm Production Tracker
 
-A full-stack shop-floor tracking app for PakOm d.o.o., a manufacturer of PP strapping and LDPE foil. It replaces paper production logs with a digital workflow: start a run, record machine parameters and material usage, log outputs, and export finished runs to Excel for reporting.
+A full-stack shop-floor tracking app for PakOm d.o.o., a manufacturer of PP strapping and LDPE foil. It replaces paper production logs with a digital workflow: start a run, record machine parameters and material usage, log what was produced, and export finished runs to Excel for reporting.
 
-Every production run links an operator, machine, product, and recipe together with the measurements, materials, and outputs recorded during that run — the goal is full traceability from raw material to finished product.
+Every production run links an operator, machine, product, and recipe together with the measurements, materials, and produced quantity recorded during that run — the goal is full traceability from raw material to finished product.
 
 ## Repository Layout
 
@@ -45,8 +45,8 @@ React page -> Axios helper (client/src/api) -> Express router (server/routes) ->
 ```
 
 - **Pages** (`client/src/pages`) own screen state and call functions from `client/src/api`. Several list pages (Operators, Machines, Products, Materials, Parameters) share the `useApi` hook (`client/src/hooks/useApi.js`), which handles fetch/loading/error state and exposes a `reload()` callback — this was extracted to remove duplicated fetch boilerplate across those pages.
-- **New Run wizard** (`client/src/components/wizard`) is a 5-step flow: `Step1_BasicInfo` -> `Step2_Recipe` -> `Step3_Parameters` -> `Step4_Materials` -> `Step5_Output`. Step 4 includes a calculator that derives material quantities from the recipe's percentages and the produced quantity — applied via an explicit **Recalculate** button, so hand-corrected values are never silently overwritten.
-- **Run detail / completion** (`client/src/pages/RunDetailPage.jsx`) shows a completed run's full record, or — if the run is still `in_progress` — renders a completion form (parameters, materials, outputs) so a run can be finished outside the original wizard session.
+- **New Run wizard** (`client/src/components/wizard`) is a 5-step flow: `Step1_BasicInfo` -> `Step2_Recipe` -> `Step3_Parameters` -> `Step4_Materials` -> `Step5_Output`. Step 4 collects the produced quantity and includes a calculator that derives material quantities from it and the recipe's percentages — applied via an explicit **Recalculate** button, so hand-corrected values are never silently overwritten. Step 5 only confirms that quantity back before closing the run.
+- **Run detail / completion** (`client/src/pages/RunDetailPage.jsx`) shows a completed run's full record, or — if the run is still `in_progress` — renders a completion form (parameters, materials, produced quantity) so a run can be finished outside the original wizard session.
 - **Express routers** (`server/routes`) validate input strictly (required fields, primitive types, real timestamps, guarded query params) and talk to PostgreSQL exclusively through the shared Prisma client in `server/lib/prisma.js`.
 - **Central error middleware** (`server/middleware/errorHandler.js`) is the single place that turns thrown/rejected errors into HTTP responses: unique-constraint violations become 409, broken foreign-key references become 400 (or 409 on a blocked DELETE), missing records become 404, and everything unrecognized falls back to a logged 500. Routes only catch errors they want to translate into a friendlier message.
 - **Startup and shutdown are strict:** the server refuses to start if `CLIENT_ORIGIN` is missing or malformed (a falsy CORS origin would silently allow every site), and SIGTERM/SIGINT trigger a graceful shutdown that stops the listener and disconnects Prisma.
@@ -91,12 +91,12 @@ Defined in `server/prisma/schema.prisma`.
 | `MachineProduct` | Which products a machine is allowed to produce. |
 | `Recipe` / `RecipeItem` | A reusable material formula (percentages should total 100). Soft-deleted via `active: false` so run history stays intact. |
 | `RecipeProduct` | Links one recipe to the many products it can produce. Its `isDefault` flag marks the wizard's preselected recipe *per product* — at most one default per product, enforced by a partial unique index. |
-| `ProductionRun` | The transactional record: operator, machine, product, recipe, timing, energy, status (`in_progress` -> `completed`), notes, buyer, and run-level weights recorded at completion (`netWeightPerUnit`, `grossWeightPerUnit`, `scrapKg`). |
-| `RunParameterValue`, `MaterialUsage`, `RunOutput` | Per-run measurements, material consumption, and produced quantities (weights live on the run, not on outputs). |
+| `ProductionRun` | The transactional record: operator, machine, product, recipe, timing, energy, status (`in_progress` -> `completed`), notes, buyer, and what was recorded at completion — `quantityProduced` plus the run-level weights (`netWeightPerUnit`, `grossWeightPerUnit`, `scrapKg`). |
+| `RunParameterValue`, `MaterialUsage` | Per-run measurements and material consumption. What the run produced is not a child table: one run makes one product (its own `productId`) in one quantity, both stored on the run itself. |
 
 ## Key Behaviors
 
-- **Two-step run lifecycle:** a run is created (`in_progress`) with header info, then completed later with measurements, material usage, and outputs. Completion runs inside a single Prisma transaction that updates status, records usage, decrements material stock, and creates output rows together. Stock can never go negative — completing a run that would overdraw a material is rejected.
+- **Two-step run lifecycle:** a run is created (`in_progress`) with header info, then completed later with measurements, material usage, and the produced quantity. Completion runs inside a single Prisma transaction that updates status, records usage and quantity, and decrements material stock together. Stock can never go negative — completing a run that would overdraw a material is rejected, and a DB-level CHECK refuses a completed run that records no quantity.
 - **One live run per machine:** a partial unique index guarantees at most one `in_progress` run per machine at the database level. If two requests race to start a run on the same machine, exactly one succeeds — the loser gets a clean 409 instead of creating an orphaned duplicate.
 - **Run creation is validated relationally:** the machine must exist and be active, be linked to the chosen product, and the recipe must be linked to that product and active. The same checks run again at completion, so unlinking master data mid-run can't slip through.
 - **Master data is protected while a run is live:** deactivating an operator, machine, or recipe that has a run in progress is rejected, and completing a run whose recipe was deactivated mid-run is rejected too (delete the run or reactivate the recipe instead).

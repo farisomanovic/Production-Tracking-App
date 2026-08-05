@@ -46,7 +46,7 @@ const basePayload = (usage) => ({
     endTime: new Date().toISOString(),
     parameterValues: [{ machineParameterId, value: 210 }],
     materialUsages: usage,
-    outputs: [{ productId: template.productId, quantityProduced: 1 }],
+    quantityProduced: 1,
     // Run-level weights (optional in the API) ride along so the happy paths
     // exercise their persistence too — Test H asserts they come back.
     netWeightPerUnit: 1.5, grossWeightPerUnit: 1.6, scrapKg: 2
@@ -81,11 +81,15 @@ const loser = r1.status === 409 ? r1 : r2
 check('loser gets the conflict message', (await j(loser)).error === 'Production run is already completed')
 check('stock decremented exactly once', await stockNow() === stockBefore - 1, `stock ${await stockNow()}`)
 const children = await prisma.productionRun.findUnique({
-    where: { id: runA }, include: { runParameterValues: true, materialUsages: true, runOutputs: true }
+    where: { id: runA }, include: { runParameterValues: true, materialUsages: true }
 })
 check('exactly one set of child rows',
-    children.runParameterValues.length === 1 && children.materialUsages.length === 1 && children.runOutputs.length === 1,
-    `${children.runParameterValues.length}/${children.materialUsages.length}/${children.runOutputs.length}`)
+    children.runParameterValues.length === 1 && children.materialUsages.length === 1,
+    `${children.runParameterValues.length}/${children.materialUsages.length}`)
+// The loser must not have added its quantity on top of the winner's: with the
+// quantity now a column on the run rather than a row per output, a double
+// completion would show up here as 2 instead of 1.
+check('quantity written exactly once', children.quantityProduced === 1, `got ${children.quantityProduced}`)
 
 // ── Test B: sequential re-completion → 409 ───────────────────────────────────
 console.log('\nB. Completing an already-completed run')
@@ -98,7 +102,6 @@ const rC = await fetch(`${API}/production-runs/${runA}`, { method: 'DELETE' })
 check('delete → 200', rC.status === 200, `got ${rC.status}`)
 const orphans = await prisma.runParameterValue.count({ where: { productionRunId: runA } })
     + await prisma.materialUsage.count({ where: { productionRunId: runA } })
-    + await prisma.runOutput.count({ where: { productionRunId: runA } })
 check('children removed by DB cascade', orphans === 0, `${orphans} orphans`)
 check('stock restored', await stockNow() === stockBefore, `stock ${await stockNow()}`)
 
@@ -119,7 +122,8 @@ console.log('\nE. Validation')
 const cases = [
     ['negative quantityUsed', basePayload([{ materialId: material.id, quantityUsed: -5 }])],
     ['string quantityUsed', basePayload([{ materialId: material.id, quantityUsed: '5' }])],
-    ['zero quantityProduced', { ...basePayload([]), outputs: [{ productId: template.productId, quantityProduced: 0 }] }],
+    ['zero quantityProduced', { ...basePayload([]), quantityProduced: 0 }],
+    ['missing quantityProduced', (() => { const p = basePayload([]); delete p.quantityProduced; return p })()],
     ['non-numeric parameter value', { ...basePayload([]), parameterValues: [{ machineParameterId, value: 'hot' }] }],
     ['negative scrapKg', { ...basePayload([]), scrapKg: -1 }],
     ['negative netWeightPerUnit', { ...basePayload([]), netWeightPerUnit: -0.5 }],
@@ -178,8 +182,7 @@ const bodyH = await j(rH4)
 check('run-level weights persisted',
     bodyH.netWeightPerUnit === 1.5 && bodyH.grossWeightPerUnit === 1.6 && bodyH.scrapKg === 2,
     `got ${bodyH.netWeightPerUnit}/${bodyH.grossWeightPerUnit}/${bodyH.scrapKg}`)
-check('outputs carry no weight fields',
-    bodyH.runOutputs?.[0]?.grossWeightKg === undefined && bodyH.runOutputs?.[0]?.scrapKg === undefined)
+check('produced quantity persisted on the run itself', bodyH.quantityProduced === 1, `got ${bodyH.quantityProduced}`)
 await fetch(`${API}/production-runs/${runH.id}`, { method: 'DELETE' })
 
 // ── Test I: delete-vs-complete race — no interleaving corrupts stock ─────────
@@ -205,7 +208,6 @@ const runIGone = await prisma.productionRun.findUnique({ where: { id: runI } })
 check('run no longer exists', runIGone === null)
 const orphansI = await prisma.runParameterValue.count({ where: { productionRunId: runI } })
     + await prisma.materialUsage.count({ where: { productionRunId: runI } })
-    + await prisma.runOutput.count({ where: { productionRunId: runI } })
 check('zero orphaned child rows', orphansI === 0, `${orphansI} orphans`)
 
 console.log(`\n${pass} passed, ${fail} failed`)

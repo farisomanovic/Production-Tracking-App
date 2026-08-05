@@ -1,7 +1,8 @@
 /**
  * @file Step4_Materials.jsx
- * @description Wizard step 4: record actual kg used per recipe material, with a
- * calculator that derives the amounts from (quantity × neto weight + scrap) ×
+ * @description Wizard step 4: record how much the run produced and the actual
+ * kg used per recipe material, with a calculator that derives the amounts from
+ * (quantity × neto weight + scrap) ×
  * recipe percentages so the operator doesn't do mental math at the machine.
  * Bruto (per-unit gross weight) is recorded here too but never enters the
  * formula — packaging weight isn't made of raw material.
@@ -21,7 +22,8 @@ import { getErrorMessage } from '../../lib/errorMessage'
  * last-run prefill seeded by NewRunPage).
  * @param {string} props.runId - The created run's UUID (unused here, passed for step API symmetry).
  * @param {Function} props.onNext - Called with `{ materialUsages: [{ materialId, quantityUsed }],
- * quantityProduced, netWeightPerUnit, grossWeightPerUnit, scrapKg }` (weights are null when left blank).
+ * quantityProduced, netWeightPerUnit, grossWeightPerUnit, scrapKg }` (weights are null when left blank;
+ * quantityProduced is always a positive number — this step refuses to advance without one).
  * @returns {JSX.Element}
  *
  * @example
@@ -197,10 +199,14 @@ function handleChange(materialId, newValue) {
 // ─── VALIDATION & SUBMIT ─────────────────────────────────────────────────────
 
 /**
- * Requires a positive number for every material, then passes usage rows, the
- * produced quantity (which step 5 uses to prefill its first output), and the
- * run-level weights (null when blank, so step 5 can skip them cleanly and a
- * revisit restores them as empty inputs via String(null ?? '')).
+ * Requires a positive produced quantity and a positive number for every
+ * material, then passes usage rows, the quantity, and the run-level weights
+ * (null when blank, so step 5 can skip them cleanly and a revisit restores
+ * them as empty inputs via String(null ?? '')).
+ *
+ * Since Group 5 #11 the quantity here IS the run's produced quantity, not just
+ * a calculator input — step 5 only displays it back — so it is required here
+ * rather than being re-asked for later.
  *
  * @returns {void} Calls onNext on success; sets an error message otherwise.
  *
@@ -208,6 +214,11 @@ function handleChange(materialId, newValue) {
  * <button onClick={handleNext}>Next →</button>
  */
 function handleNext() {
+    if (quantityProduced.trim() === '' || !(Number(quantityProduced) > 0)) {
+    setError('Quantity produced is required and must be greater than 0.')
+    return
+    }
+
     const allFilled = recipeItems.every(item => {
     const val = values[item.materialId]
     return val !== undefined && val.trim() !== ''
@@ -239,7 +250,7 @@ function handleNext() {
 
     onNext({
     materialUsages,
-    quantityProduced: quantityProduced !== '' ? Number(quantityProduced) : null,
+    quantityProduced: Number(quantityProduced),
     netWeightPerUnit: netWeightPerUnit !== '' ? Number(netWeightPerUnit) : null,
     grossWeightPerUnit: grossWeightPerUnit !== '' ? Number(grossWeightPerUnit) : null,
     scrapKg: scrapKg !== '' ? Number(scrapKg) : null
@@ -259,6 +270,28 @@ return (
 
     {error && <div style={common.errorBox}>{error}</div>}
 
+    {/* Outside the recipe-items branch below on purpose: this is the run's own
+        produced quantity (Group 5 #11), required for every run, and the
+        calculator merely borrows it. Inside that branch, a recipe with no
+        materials would leave the field unrendered but still required, and the
+        wizard would refuse to advance with no way to fix it. */}
+    <div style={common.field}>
+        <label style={common.label}>Quantity Produced *</label>
+        <div style={common.inputRow}>
+        <input
+            style={styles.input}
+            type='number'
+            value={quantityProduced}
+            onChange={e => handleQuantityChange(e.target.value)}
+            onWheel={e => e.target.blur()}
+            placeholder='e.g. 500'
+            min='0'
+            step='1'
+        />
+        <span style={common.unit}>pcs</span>
+        </div>
+    </div>
+
     {recipeItems.length === 0 ? (
         <div style={common.emptyBox}>
         <p style={common.emptyText}>No materials found in this recipe.</p>
@@ -271,22 +304,6 @@ return (
         <div style={styles.calculator}>
             <p style={styles.calcLabel}>Quick Calculator</p>
             <div style={styles.calcGrid}>
-            <div style={styles.calcField}>
-                <label style={common.label}>Quantity Produced</label>
-                <div style={common.inputRow}>
-                <input
-                    style={styles.calcInput}
-                    type='number'
-                    value={quantityProduced}
-                    onChange={e => handleQuantityChange(e.target.value)}
-                    onWheel={e => e.target.blur()}
-                    placeholder='e.g. 500'
-                    min='0'
-                    step='1'
-                />
-                <span style={common.unit}>pcs</span>
-                </div>
-            </div>
             <div style={styles.calcField}>
                 <label style={common.label}>Neto Weight per Unit</label>
                 <div style={common.inputRow}>

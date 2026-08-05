@@ -86,7 +86,7 @@ Production tracking web app for PakOm d.o.o., a family manufacturing business in
 - **Material** — raw materials with stock tracking (`stockQty`)
 - **Recipe** — formula linking materials to products
 - **Parameter** — machine settings (temperature, speed, etc.), linked to machines via `MachineParameter` join table
-- **ProductionRun** — a single production session with timestamps, parameter values, material usage, and outputs
+- **ProductionRun** — a single production session with timestamps, parameter values, material usage, and the produced quantity
 
 ### Backend API Routes
 
@@ -125,7 +125,8 @@ Production tracking web app for PakOm d.o.o., a family manufacturing business in
 - Routes forward errors to the central error middleware (`next(err)`) — no per-route `console.error`; only the middleware logs genuinely unrecognized errors
 - Soft delete via `active: false` for operators and machines
 - Hard DELETE only for junction table links (MachineParameter, MachineProduct) and production runs
-- No separate routes for nested models (RunOutput, MaterialUsage) — they are part of the ProductionRun lifecycle
+- No separate routes for nested models (RunParameterValue, MaterialUsage) — they are part of the ProductionRun lifecycle
+- One output per run: `RunOutput` was dropped (2026-08-05) and `quantityProduced` lives on `ProductionRun` alongside its existing `productId`. Real usage never produced two products in one run, and two quantity fields for one physical quantity let the material math and the recorded output disagree. Don't re-introduce a per-run outputs collection.
 
 ### General
 

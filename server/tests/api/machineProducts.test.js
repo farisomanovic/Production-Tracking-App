@@ -3,11 +3,12 @@
  * @description Tests for DELETE /api/machine-products/:id — happy path +
  * main failure case tier per CLAUDE.md. The main failure case is the new
  * guard blocking an unlink while the machine has an in_progress run — before
- * this guard, unlinking a product mid-run would either wrongly get a
- * legitimate output rejected by /complete's relational validation, or in a
- * tighter race, let a RunOutput row insert with no MachineProduct backing it
- * (this link table has no RESTRICT foreign key protecting it at all, unlike
- * MachineParameter).
+ * this guard, unlinking a product mid-run would leave the run referencing a
+ * product its machine is no longer configured to make — with no RESTRICT
+ * foreign key anywhere to stop it, unlike MachineParameter. (Before Group 5
+ * #11 the same unlink could also get a legitimate output rejected by
+ * /complete's relational validation; that check is gone now that the produced
+ * product is simply the run's own, validated once at creation.)
  *
  * Fixtures created directly via prisma with the VT-MACHINEPRODUCTS prefix: a
  * throwaway Product linked to the baseline machine, with no run history of

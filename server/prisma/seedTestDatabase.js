@@ -4,8 +4,9 @@
  * shared by the seed-test.js CLI script and the Vitest globalSetup. Resets
  * production_tracker_test to a small, fake, static baseline: one of each
  * master-data entity, wired together, plus one completed ProductionRun with a
- * recorded parameter value (completion.e2e.test.js borrows it as its template
- * fixture, and tests/helpers.js re-fetches it by the TEST-M1/TEST-P1 codes).
+ * recorded parameter value and quantity (completion.e2e.test.js borrows it as
+ * its template fixture, and tests/helpers.js re-fetches it by the
+ * TEST-M1/TEST-P1 codes).
  * No $disconnect() and no process.exit() here — callers own the process
  * lifecycle.
  */
@@ -17,7 +18,6 @@ export async function seedTestDatabase() {
     // Children before parents, so every foreign key is gone before its target row.
     await prisma.runParameterValue.deleteMany()
     await prisma.materialUsage.deleteMany()
-    await prisma.runOutput.deleteMany()
     await prisma.productionRun.deleteMany()
     await prisma.recipeItem.deleteMany()
     await prisma.recipeProduct.deleteMany()
@@ -58,6 +58,10 @@ export async function seedTestDatabase() {
             startTime: now,
             endTime: now,
             status: 'completed',
+            // Required by ProductionRun_quantityProduced_valid: a completed run
+            // must record what it produced. Before Group 5 #11 this fixture had
+            // no output row at all, which the old schema quietly allowed.
+            quantityProduced: 1,
             operatorId: operator.id,
             machineId: machine.id,
             productId: product.id,
