@@ -186,8 +186,11 @@ router.post('/', async (req, res) => {
         }
     }
     const total = items.reduce((sum, item) => sum + item.percentage, 0)
-    if (Math.abs(total - 100) > 0.001) {
-        return res.status(400).json({ error: `Recipe items must add up to 100%. Currently: ${total}%` })
+    // Keep in sync with client/src/pages/RecipesPage.jsx's PERCENT_TOLERANCE — no
+    // shared client/server module exists in this repo, so this is a mirrored constant.
+    const PERCENT_TOLERANCE = 0.001
+    if (Math.abs(total - 100) > PERCENT_TOLERANCE) {
+        return res.status(400).json({ error: `Recipe items must add up to 100%. Currently: ${parseFloat(total.toFixed(2))}%` })
     }
 
     const recipe = await prisma.recipe.create({
