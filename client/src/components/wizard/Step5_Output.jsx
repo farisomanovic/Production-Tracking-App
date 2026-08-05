@@ -198,10 +198,9 @@ async function handleComplete() {
 
     try {
     const payload = {
-        // No timezone suffix on purpose: the DB column is a naive Timestamp, so
-        // "what the wall clock said" is stored as-is (see todo.md Group 6 #3).
-        // The helper rolls the date to the next day for overnight runs
-        // (end wall-clock at or before start wall-clock).
+        // rollToNextDayIfAtOrBefore converts the local wall-clock end time to
+        // a real UTC timestamp, rolling the date to the next day for
+        // overnight runs (end wall-clock at or before start wall-clock).
         endTime: rollToNextDayIfAtOrBefore(data.date, data.startTime, endTime),
         parameterValues: data.parameterValues,
         materialUsages: data.materialUsages,

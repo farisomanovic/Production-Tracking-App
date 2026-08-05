@@ -130,6 +130,14 @@ describe('POST /api/production-runs/:id/complete — endTime type validation (Gr
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('endTime is required to complete a run')
     })
+
+    it('rejects a naive (no timezone) endTime with 400 (Group 6 #3)', async () => {
+        const res = await complete({ ...validPayload(), endTime: '2026-07-04T09:00:00.000' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('endTime must include a timezone (e.g. end in "Z")')
+        const run = await prisma.productionRun.findUnique({ where: { id: runId } })
+        expect(run.status).toBe('in_progress')
+    })
 })
 
 describe('POST /api/production-runs/:id/complete — relational validation (Group 3 #6)', () => {
