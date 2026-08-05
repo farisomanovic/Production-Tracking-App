@@ -94,7 +94,6 @@ model Product {
 
   machineProducts MachineProduct[]
   recipeProducts  RecipeProduct[]
-  runOutputs      RunOutput[]
   productionRuns  ProductionRun[]
 }
 
@@ -190,9 +189,13 @@ model RecipeItem {
 }
 
 // The central transactional record. Two-step lifecycle: created as in_progress
-// with header data only, then /complete adds measurements + outputs and flips
-// status. `date` is the production day (DATE, no time) used for filtering;
-// startTime/endTime carry the clock times.
+// with header data only, then /complete adds measurements, material usage and
+// the produced quantity, and flips status. `date` is the production day (DATE,
+// no time) used for filtering; startTime/endTime carry the clock times.
+// A DB-level CHECK (ProductionRun_quantityProduced_valid, added in the
+// single_output_per_run migration) enforces that quantityProduced is NULL only
+// while the run is unfinished, and positive once it is completed — Prisma's
+// schema language cannot express CHECK, so it lives in raw SQL only.
 // TODO: status is a raw string — an enum (in_progress | completed) would make
 // typos unrepresentable. todo.md Group 5 #4.
 // TODO: no indexes on machineId/operatorId/productId/status/date although every
@@ -210,8 +213,11 @@ model ProductionRun {
   potentialBuyer  String?
   status          String    @default("in_progress")
 
-  // Run-level weights, written at completion. Neto/bruto are per-unit
-  // averages across all outputs; scrap is the run's total waste in kg.
+  // Written at completion, never at creation — hence nullable, same reasoning
+  // as endTime. quantityProduced is what the run made, in the product's own
+  // `unit`; neto/bruto are that product's per-unit weights and scrap is the
+  // run's total waste in kg.
+  quantityProduced   Float?
   netWeightPerUnit   Float?
   grossWeightPerUnit Float?
   scrapKg            Float?
@@ -228,7 +234,6 @@ model ProductionRun {
 
   runParameterValues RunParameterValue[]
   materialUsages     MaterialUsage[]
-  runOutputs         RunOutput[]
 }
 
 // One measured value per machine parameter per run — the unique pair enforces
@@ -261,19 +266,4 @@ model MaterialUsage {
   material      Material      @relation(fields: [materialId], references: [id])
 
   @@unique([productionRunId, materialId])
-}
-
-// Deliberately NO unique pair here: one run may output the same product in
-// several batches. Rows are product + quantity only; weights live on the run.
-// TODO: productionRunId has no index (the other children get one from their
-// @@unique prefix) — detail reads and deletes scan. todo.md Group 5 #1.
-model RunOutput {
-  id               String  @id @default(uuid())
-  quantityProduced Float
-
-  productionRunId String
-  productId       String
-
-  productionRun ProductionRun @relation(fields: [productionRunId], references: [id], onDelete: Cascade)
-  product       Product       @relation(fields: [productId], references: [id])
 }
