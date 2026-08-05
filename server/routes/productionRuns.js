@@ -18,6 +18,15 @@ import { hasDuplicates, allBelongTo, isFiniteNumber } from '../lib/validation.js
 
 const router = Router()
 
+// Requires an explicit `Z` or numeric offset (`+HH:MM`/`-HH:MM`) so a naive,
+// timezone-less string is rejected loudly instead of being silently parsed
+// as the server process's own local time — which is ambiguous the moment
+// the server's timezone differs from the operator's (todo.md Group 6 #3).
+// Every caller of parseDateOr400 sends real UTC (the client converts local
+// wall-clock input via localToUTCISOString before it ever leaves the
+// browser), so this is enforcement, not a new constraint on legitimate input.
+const TZ_QUALIFIED_TIMESTAMP_RE = /(Z|[+-]\d{2}:\d{2})$/
+
 // Shared by POST and PUT below: new Date() never throws on a garbage string, and
 // silently succeeds (as the Unix epoch) on null or a number — both cases only
 // surface once Prisma writes the result. This turns both into a 400 naming the
@@ -30,6 +39,13 @@ function parseDateOr400(res, value, fieldName) {
     const parsed = new Date(value)
     if (Number.isNaN(parsed.getTime())) {
         res.status(400).json({ error: `${fieldName} is not a valid timestamp` })
+        return null
+    }
+    // Checked after the NaN test, not before: a garbage string like "banana"
+    // should read as "not a valid timestamp", not "missing a timezone" — this
+    // only fires for strings that parse fine but are ambiguously naive.
+    if (!TZ_QUALIFIED_TIMESTAMP_RE.test(value)) {
+        res.status(400).json({ error: `${fieldName} must include a timezone (e.g. end in "Z")` })
         return null
     }
     return parsed

@@ -13,28 +13,9 @@ import Step3_Parameters from '../components/wizard/Step3_Parameters'
 import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
 import { createRun, getAllRuns, getRunById, deleteRun } from '../api/productionRuns'
-import { rollToNextDayIfAtOrBefore } from '../lib/dates'
+import { rollToNextDayIfAtOrBefore, localToUTCISOString } from '../lib/dates'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
-
-/**
- * Glues a date input and a time input into the timestamp string the API stores.
- * Deliberately has NO timezone suffix: the DB columns are naive timestamps, so
- * "what the wall clock said" is preserved as typed.
- *
- * @param {string} dateStr - Date input value, "YYYY-MM-DD".
- * @param {string} timeStr - Time input value, "HH:mm".
- * @returns {string} Local ISO-like timestamp, e.g. "2026-07-04T08:30:00.000".
- *
- * @example
- * toLocalISO('2026-07-04', '08:30') // → "2026-07-04T08:30:00.000"
- */
-// TODO: this whole approach breaks the moment server and client disagree on
-// timezone — the fix_timestamp_timezone migration is proof it already bit once.
-// Standardize on UTC end-to-end. todo.md Group 6 #3.
-function toLocalISO(dateStr, timeStr) {
-  return `${dateStr}T${timeStr}:00.000`
-}
 
 /**
  * Renders the wizard shell: progress bar, current step, and Back control.
@@ -239,10 +220,11 @@ function NewRunPage() {
 
     try {
       const payload = {
-        // date goes through toISOString (UTC) while the times below stay naive —
-        // two conventions in one payload. TODO: unify, see todo.md Group 6 #3.
+        // Every timestamp in this payload is real UTC now — date and the
+        // wall-clock fields alike both go through the browser's own
+        // local-to-UTC conversion (todo.md Group 6 #3).
         date: new Date(data.date).toISOString(),
-        startTime: toLocalISO(data.date, data.startTime),
+        startTime: localToUTCISOString(data.date, data.startTime),
         operatorId: data.operatorId,
         machineId: data.machineId,
         productId: data.productId,
@@ -250,7 +232,7 @@ function NewRunPage() {
         ...(data.warmupStartTime && {
           // No rollover: warmup legitimately precedes startTime on the same
           // calendar day (todo.md Group 6 #7), unlike stableStartTime below.
-          warmupStartTime: toLocalISO(data.date, data.warmupStartTime)
+          warmupStartTime: localToUTCISOString(data.date, data.warmupStartTime)
         }),
         ...(data.stableStartTime && {
           // Rolls forward a day when stable's wall-clock is at/before start's —

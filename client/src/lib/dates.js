@@ -1,8 +1,10 @@
 /**
  * @file dates.js
- * @description Shared date/time helpers for the naive "wall clock" timestamps
- * this app exchanges with the server (no timezone suffix — see todo.md
- * Group 6 #3 for the long-term standardization plan).
+ * @description Shared date/time helpers. Wall-clock input (date + "HH:mm")
+ * is converted to a real UTC ISO string as soon as it leaves the browser —
+ * see localToUTCISOString — so every timestamp the server stores and returns
+ * is unambiguous UTC; the formatters below convert it back to local time for
+ * display, and only for display.
  */
 
 /**
@@ -26,10 +28,34 @@ export function getLocalDateString(date = new Date()) {
 }
 
 /**
- * Builds a timestamp from the run date and a target wall-clock time, rolling
- * the date forward one day when the target is at or before the anchor —
- * i.e. it wrapped past midnight relative to the anchor. Used for any
- * "this time happens after an earlier one, possibly on the next calendar
+ * Converts a local wall-clock date + time into a real UTC ISO string. The
+ * naive "date + time" string is parsed by the JS engine as local time in
+ * whatever timezone is running the code — in the browser, that's the
+ * operator's own timezone, exactly what they meant when they typed it into
+ * `<input type="date">`/TimeInput24 — and toISOString() then converts that
+ * instant to UTC. This is the single place local input becomes the
+ * timezone-qualified string the server requires. Must only be called
+ * client-side: the same naive string parsed in Node would be interpreted in
+ * the server process's timezone instead, which is exactly the bug this
+ * closes (todo.md Group 6 #3).
+ *
+ * @param {string} dateStr - Date input value, "YYYY-MM-DD".
+ * @param {string} timeStr - Time input value, "HH:mm".
+ * @returns {string} UTC ISO timestamp, e.g. "2026-07-04T07:30:00.000Z" for
+ * 08:30 local time in a UTC+1 timezone.
+ *
+ * @example
+ * localToUTCISOString('2026-07-04', '08:30') // → "2026-07-04T07:30:00.000Z" (UTC+1)
+ */
+export function localToUTCISOString(dateStr, timeStr) {
+  return new Date(`${dateStr}T${timeStr}:00`).toISOString()
+}
+
+/**
+ * Builds a UTC timestamp from the run date and a target wall-clock time,
+ * rolling the date forward one day when the target is at or before the
+ * anchor — i.e. it wrapped past midnight relative to the anchor. Used for
+ * any "this time happens after an earlier one, possibly on the next calendar
  * day" pair: endTime vs. startTime, and stableStartTime vs. startTime.
  *
  * A run that starts at 22:00 and ends at 02:00 crossed midnight, so its end
@@ -41,18 +67,18 @@ export function getLocalDateString(date = new Date()) {
  *
  * Both inputs are zero-padded "HH:mm" strings, so plain string comparison
  * orders them correctly ("02:00" < "22:00") — no Date parsing needed for
- * the overnight test. The rolled date is re-formatted from LOCAL date parts;
- * toISOString() would convert to UTC and could shift the day.
+ * the overnight test. The rolled date is re-formatted from LOCAL date parts
+ * (getLocalDateString), not toISOString(), so the rollover itself can't be
+ * shifted by a day before localToUTCISOString ever runs.
  *
  * @param {string} dateStr - Run date, "YYYY-MM-DD".
  * @param {string} anchorHHmm - Reference wall-clock time, "HH:mm" (e.g. startTime).
  * @param {string} targetHHmm - Wall-clock time to place relative to the anchor, "HH:mm".
- * @returns {string} Naive local timestamp, e.g. "2026-07-08T02:00:00.000" —
- * the same format toLocalISO produces for startTime.
+ * @returns {string} UTC ISO timestamp — see localToUTCISOString.
  *
  * @example
- * rollToNextDayIfAtOrBefore('2026-07-07', '22:00', '02:00') // → "2026-07-08T02:00:00.000"
- * rollToNextDayIfAtOrBefore('2026-07-07', '08:00', '14:30') // → "2026-07-07T14:30:00.000"
+ * rollToNextDayIfAtOrBefore('2026-07-07', '22:00', '02:00') // → UTC instant for 2026-07-08T02:00 local
+ * rollToNextDayIfAtOrBefore('2026-07-07', '08:00', '14:30') // → UTC instant for 2026-07-07T14:30 local
  */
 export function rollToNextDayIfAtOrBefore(dateStr, anchorHHmm, targetHHmm) {
   let targetDate = dateStr
@@ -61,7 +87,7 @@ export function rollToNextDayIfAtOrBefore(dateStr, anchorHHmm, targetHHmm) {
     d.setDate(d.getDate() + 1)
     targetDate = getLocalDateString(d)
   }
-  return `${targetDate}T${targetHHmm}:00.000`
+  return localToUTCISOString(targetDate, targetHHmm)
 }
 
 /**

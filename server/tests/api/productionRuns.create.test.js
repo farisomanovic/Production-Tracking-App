@@ -121,6 +121,48 @@ describe('POST /api/production-runs — required fields and dates', () => {
     })
 })
 
+describe('POST /api/production-runs — naive (timezone-less) timestamps rejected (Group 6 #3)', () => {
+    it('rejects a naive startTime with 400 instead of silently guessing the server timezone', async () => {
+        const res = await post({ ...validPayload(), startTime: '2026-07-04T08:30:00.000' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('startTime must include a timezone (e.g. end in "Z")')
+    })
+
+    it('rejects a naive date with 400', async () => {
+        const res = await post({ ...validPayload(), date: '2026-07-04T00:00:00.000' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('date must include a timezone (e.g. end in "Z")')
+    })
+
+    it('accepts a startTime with an explicit numeric offset (not just "Z")', async () => {
+        const res = await post({ ...validPayload(), startTime: '2026-07-04T08:30:00.000+02:00' })
+        expect(res.status).toBe(201)
+        const del = await request(app).delete(`/api/production-runs/${res.body.id}`)
+        expect(del.status).toBe(200)
+    })
+})
+
+describe('POST /api/production-runs — UTC round-trip (Group 6 #3)', () => {
+    it('stores and returns startTime as the exact same UTC instant that was sent', async () => {
+        const knownInstant = '2026-06-15T07:30:00.000Z'
+        const res = await post({ ...validPayload(), startTime: knownInstant })
+        expect(res.status).toBe(201)
+        expect(new Date(res.body.startTime).toISOString()).toBe(knownInstant)
+
+        // Independent re-fetch (not the create response's in-memory echo) proves
+        // the instant survives an actual round trip through Postgres — this is
+        // the direct check behind the plan's "no schema.prisma change needed"
+        // assumption: Prisma normalizes the naive @db.Timestamp column to UTC
+        // on both write and read.
+        const getRes = await request(app).get(`/api/production-runs/${res.body.id}`)
+        expect(getRes.status).toBe(200)
+        expect(new Date(getRes.body.startTime).toISOString()).toBe(knownInstant)
+
+        const del = await request(app).delete(`/api/production-runs/${res.body.id}`)
+        expect(del.status).toBe(200)
+    })
+})
+
 describe('POST /api/production-runs — notes/potentialBuyer validation (Group 3 #18)', () => {
     it('rejects a numeric notes with 400', async () => {
         const res = await post({ ...validPayload(), notes: 123 })
