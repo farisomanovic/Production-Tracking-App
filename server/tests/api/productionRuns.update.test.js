@@ -19,6 +19,7 @@ const PREFIX = 'VT-UPDATE'
 let baseline
 let machineParameter
 let runId
+let runStartTime
 
 beforeAll(async () => {
     baseline = await getBaseline()
@@ -41,6 +42,7 @@ beforeEach(async () => {
         }
     })
     runId = run.id
+    runStartTime = run.startTime
 })
 
 afterEach(async () => {
@@ -71,9 +73,11 @@ function holdRunLocked(mutate) {
     return { lockAcquired, release: () => release(), settled }
 }
 
+// Same startTime-derived endTime as productionRuns.complete.test.js's
+// validPayload, and for the same reason — see the comment there.
 function completePayload() {
     return {
-        endTime: new Date().toISOString(),
+        endTime: new Date(runStartTime.getTime() + 60_000).toISOString(),
         parameterValues: [{ machineParameterId: machineParameter.id, value: 1 }],
         materialUsages: [{ materialId: baseline.material.id, quantityUsed: 1 }],
         quantityProduced: 1
