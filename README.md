@@ -191,13 +191,11 @@ Running tests:
 npm test              # full API suite — reseeds the test DB itself, no server needed
 npm run test:watch    # re-runs on save (reseeds only on launch; test files clean up
                       # after themselves, and `npm run seed:test` resets anytime)
-npm run test:e2e      # older completion/stock e2e suite — needs `npm run dev:test`
-                      # running in a second terminal first
 ```
 
 ## Development Commands
 
-**Backend** (`server/`): `npm run dev` (nodemon), `npm start`, `npm test` (Vitest API suite), `npm run test:e2e`, `npx prisma generate`, `npx prisma migrate dev`
+**Backend** (`server/`): `npm run dev` (nodemon), `npm start`, `npm test` (Vitest API suite), `npx prisma generate`, `npx prisma migrate dev`
 
 **Frontend** (`client/`): `npm run dev`, `npm run lint`, `npm run build`, `npm run preview`
 

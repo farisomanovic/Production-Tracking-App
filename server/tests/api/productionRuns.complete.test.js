@@ -8,7 +8,7 @@
  * todo.md Group 5 #11 this file also covers the scalar `quantityProduced`
  * that replaced the outputs array, including the DB CHECK standing behind it.
  * The rest of /complete's behavior (races, stock floor, cascade delete,
- * endTime guards) is covered by completion.e2e.test.js, not here.
+ * endTime guards) is covered by productionRuns.stockRace.test.js, not here.
  *
  * Fixtures created directly via prisma with the VT-COMPLETE prefix: a second
  * machine + parameter (for a machineParameterId foreign to the baseline

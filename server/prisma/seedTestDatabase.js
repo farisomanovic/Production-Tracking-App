@@ -4,8 +4,8 @@
  * shared by the seed-test.js CLI script and the Vitest globalSetup. Resets
  * production_tracker_test to a small, fake, static baseline: one of each
  * master-data entity, wired together, plus one completed ProductionRun with a
- * recorded parameter value and quantity (completion.e2e.test.js borrows it as
- * its template fixture, and tests/helpers.js re-fetches it by the
+ * recorded parameter value and quantity (the list/filter tests need a run that
+ * is already completed, and tests/helpers.js re-fetches the master data by the
  * TEST-M1/TEST-P1 codes).
  * No $disconnect() and no process.exit() here — callers own the process
  * lifecycle.

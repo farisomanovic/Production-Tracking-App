@@ -3,7 +3,8 @@
  * @description Tests for POST /api/production-runs — the relational
  * validation matrix from PR #24 (machine/product/recipe wiring, inactive
  * entities, busy machine) plus the date guards. Completion and deletion are
- * covered by completion.e2e.test.js, not here.
+ * covered by productionRuns.complete.test.js and
+ * productionRuns.stockRace.test.js, not here.
  *
  * Fixtures created directly via prisma with the VT-RUNS prefix: an inactive
  * operator, an inactive machine, a product NOT linked to any machine, and a

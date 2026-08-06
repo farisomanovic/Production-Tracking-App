@@ -1,11 +1,10 @@
 /**
  * @file vitest.config.js
- * @description Vitest configuration for the backend API test suite. The two
- * load-bearing choices: files run one at a time (they share one test
- * database), and the .e2e.test.js suffix is excluded (that suite runs under
- * plain node via `npm run test:e2e`, not Vitest).
+ * @description Vitest configuration for the backend API test suite. The
+ * load-bearing choice: files run one at a time, because they share one test
+ * database.
  */
-import { defineConfig, configDefaults } from 'vitest/config'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
     test: {
@@ -27,8 +26,5 @@ export default defineConfig({
         globalSetup: ['./tests/globalSetup.js'],
 
         include: ['tests/**/*.test.js'],
-        // Overriding `exclude` REPLACES the defaults (node_modules etc.),
-        // so spread the defaults back in.
-        exclude: [...configDefaults.exclude, 'tests/**/*.e2e.test.js'],
     },
 })

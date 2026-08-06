@@ -66,7 +66,7 @@ If you are unsure which tier applies, use the full plan.
   cd client && npm test     # vitest run — src/lib/*.test.js
   ```
 
-  `server/tests/completion.e2e.test.js` is deliberately excluded from Vitest and runs on its own via `npm run test:e2e` (plain node, against the test DB). "All green" from the two commands above does **not** include it — run it explicitly when you touch run completion.
+  Those two commands are the whole suite — there is no third one to remember, and nothing is excluded from them.
 - Test depth is proportional to damage-if-silently-broken:
   - **Thorough:** production run completion, run deletion with stock restoration, all stock (`stockQty`) math, Prisma transactions.
   - **Happy path + main failure case:** every API route.
