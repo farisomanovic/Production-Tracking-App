@@ -230,11 +230,11 @@ router.post('/', async (req, res, next) => {
     if (!date || !startTime || !operatorId || !machineId || !productId || !recipeId) {
         return res.status(400).json({ error: 'date, startTime, operatorId, machineId, productId and recipeId are required' })
     }
-    // An energy meter reading never legitimately sits at exactly 0 (the
-    // counter only ever climbs), so unlike the completion route's weight
-    // fields, 0 is rejected here alongside negatives/strings.
-    if (energyStart !== undefined && (!isFiniteNumber(energyStart) || energyStart <= 0)) {
-        return res.status(400).json({ error: 'energyStart must be a number greater than 0 when provided' })
+    // 0 is a legal reading: a freshly installed or replaced kWh totalizer
+    // starts there. Only negatives are impossible on a counter that climbs,
+    // which puts energy on the same footing as the completion route's weights.
+    if (energyStart !== undefined && (!isFiniteNumber(energyStart) || energyStart < 0)) {
+        return res.status(400).json({ error: 'energyStart must be a number of at least 0 when provided' })
     }
     if (notes !== undefined && typeof notes !== 'string') {
         return res.status(400).json({ error: 'notes must be a string' })
@@ -448,12 +448,13 @@ router.put('/:id', async (req, res) => {
         endTime
     } = req.body
 
-    // Same "0 is never legitimate" reasoning as POST / — see the comment there.
-    if (energyStart !== undefined && (!isFiniteNumber(energyStart) || energyStart <= 0)) {
-        return res.status(400).json({ error: 'energyStart must be a number greater than 0 when provided' })
+    // Same "0 is a legal meter reading, negatives aren't" rule as POST / —
+    // see the comment there.
+    if (energyStart !== undefined && (!isFiniteNumber(energyStart) || energyStart < 0)) {
+        return res.status(400).json({ error: 'energyStart must be a number of at least 0 when provided' })
     }
-    if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd <= 0)) {
-        return res.status(400).json({ error: 'energyEnd must be a number greater than 0 when provided' })
+    if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd < 0)) {
+        return res.status(400).json({ error: 'energyEnd must be a number of at least 0 when provided' })
     }
     if (notes !== undefined && typeof notes !== 'string') {
         return res.status(400).json({ error: 'notes must be a string' })
@@ -677,10 +678,10 @@ router.post('/:id/complete', async (req, res) => {
     // would silently INCREMENT stock (decrement of a negative), and Prisma
     // stores NaN/strings as garbage or throws a raw 500. Parameter values
     // only need to be real numbers — a measured reading of 0 is legitimate.
-    // energyEnd is checked separately below (unlike the weight fields further
-    // down, a meter reading of exactly 0 is never legitimate).
-    if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd <= 0)) {
-        return res.status(400).json({ error: 'energyEnd must be a number greater than 0 when provided' })
+    // energyEnd follows the same rule as the weight fields further down: 0 is
+    // a real reading (a meter replaced mid-run starts there), negatives aren't.
+    if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd < 0)) {
+        return res.status(400).json({ error: 'energyEnd must be a number of at least 0 when provided' })
     }
     if (notes !== undefined && typeof notes !== 'string') {
         return res.status(400).json({ error: 'notes must be a string' })

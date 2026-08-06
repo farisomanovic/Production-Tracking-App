@@ -228,19 +228,24 @@ describe('POST /api/production-runs — energyStart type validation (Group 3 #12
     it('rejects a non-numeric energyStart with 400', async () => {
         const res = await post({ ...validPayload(), energyStart: 'broken' })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('energyStart must be a number greater than 0 when provided')
+        expect(res.body.error).toBe('energyStart must be a number of at least 0 when provided')
     })
 
     it('rejects a negative energyStart with 400', async () => {
         const res = await post({ ...validPayload(), energyStart: -5 })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('energyStart must be a number greater than 0 when provided')
+        expect(res.body.error).toBe('energyStart must be a number of at least 0 when provided')
     })
 
-    it('rejects an energyStart of exactly 0 with 400', async () => {
+    // A freshly installed or replaced kWh totalizer reads 0, and the stored
+    // value must be 0 rather than null — "meter at zero" and "operator didn't
+    // record a reading" are different facts (Group 7 #32).
+    it('accepts an energyStart of exactly 0', async () => {
         const res = await post({ ...validPayload(), energyStart: 0 })
-        expect(res.status).toBe(400)
-        expect(res.body.error).toBe('energyStart must be a number greater than 0 when provided')
+        expect(res.status).toBe(201)
+        expect(res.body.energyStart).toBe(0)
+        const del = await request(app).delete(`/api/production-runs/${res.body.id}`)
+        expect(del.status).toBe(200)
     })
 
     it('accepts a valid energyStart', async () => {

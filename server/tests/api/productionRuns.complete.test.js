@@ -249,15 +249,25 @@ describe('POST /api/production-runs/:id/complete — energyEnd type validation (
     it('rejects a non-numeric energyEnd with 400 instead of aborting the transaction', async () => {
         const res = await complete({ ...validPayload(), energyEnd: 'broken' })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('energyEnd must be a number greater than 0 when provided')
+        expect(res.body.error).toBe('energyEnd must be a number of at least 0 when provided')
         const run = await prisma.productionRun.findUnique({ where: { id: runId } })
         expect(run.status).toBe('in_progress')
     })
 
-    it('rejects an energyEnd of exactly 0 with 400', async () => {
-        const res = await complete({ ...validPayload(), energyEnd: 0 })
+    it('rejects a negative energyEnd with 400 instead of aborting the transaction', async () => {
+        const res = await complete({ ...validPayload(), energyEnd: -1 })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('energyEnd must be a number greater than 0 when provided')
+        expect(res.body.error).toBe('energyEnd must be a number of at least 0 when provided')
+        const run = await prisma.productionRun.findUnique({ where: { id: runId } })
+        expect(run.status).toBe('in_progress')
+    })
+
+    // 0 is a real reading on a meter installed or replaced during the run, so
+    // completion must store it rather than 400 (Group 7 #32).
+    it('accepts an energyEnd of exactly 0', async () => {
+        const res = await complete({ ...validPayload(), energyEnd: 0 })
+        expect(res.status).toBe(200)
+        expect(res.body.energyEnd).toBe(0)
     })
 
     it('accepts a valid energyEnd', async () => {

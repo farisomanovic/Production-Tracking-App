@@ -122,19 +122,27 @@ describe('PUT /api/production-runs/:id', () => {
     it('rejects a non-numeric energyStart with 400 (Group 3 #12)', async () => {
         const res = await put({ energyStart: 'broken' })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('energyStart must be a number greater than 0 when provided')
+        expect(res.body.error).toBe('energyStart must be a number of at least 0 when provided')
     })
 
-    it('rejects an energyEnd of exactly 0 with 400 (Group 3 #12)', async () => {
-        const res = await put({ energyEnd: 0 })
+    it('rejects a negative energyStart with 400 (Group 3 #12)', async () => {
+        const res = await put({ energyStart: -1 })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('energyEnd must be a number greater than 0 when provided')
+        expect(res.body.error).toBe('energyStart must be a number of at least 0 when provided')
+    })
+
+    // 0 is a real reading on a meter that was just installed or replaced, so
+    // it must persist as 0 rather than being rejected (Group 7 #32).
+    it('accepts an energyEnd of exactly 0 (Group 7 #32)', async () => {
+        const res = await put({ energyEnd: 0 })
+        expect(res.status).toBe(200)
+        expect(res.body.energyEnd).toBe(0)
     })
 
     it('rejects a negative energyEnd with 400 (Group 3 #12)', async () => {
         const res = await put({ energyEnd: -1 })
         expect(res.status).toBe(400)
-        expect(res.body.error).toBe('energyEnd must be a number greater than 0 when provided')
+        expect(res.body.error).toBe('energyEnd must be a number of at least 0 when provided')
     })
 
     it('rejects an endTime at or before the run startTime', async () => {
