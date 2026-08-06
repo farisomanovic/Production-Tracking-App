@@ -164,7 +164,9 @@ npm run dev
 
 Vite prints the local URL, typically `http://localhost:5173`.
 
-The client reads the API base URL from `VITE_API_URL` and falls back to `http://localhost:3000/api`. If your backend runs elsewhere, copy `client/.env.example` to `client/.env` and adjust it.
+The client reads the API base URL from `VITE_API_URL`. For local development you can leave it unset — the dev server falls back to `http://localhost:3000/api`. If your backend runs elsewhere, copy `client/.env.example` to `client/.env` and adjust it.
+
+For any real deploy `VITE_API_URL` is **required**: `npm run build` refuses to build without it. Vite inlines the value at build time, so a bundle built without it would tell every user's browser to call `localhost:3000` on their own machine — the app would load and every request would fail. Set it to the URL the *browser* will use to reach the backend.
 
 ## Testing
 
