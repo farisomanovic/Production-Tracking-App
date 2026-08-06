@@ -1,0 +1,34 @@
+-- Normalizes Material.unit and Product.unit onto the allow-list that
+-- server/lib/validation.js has enforced since PR #67 (todo.md Group 7 #34).
+--
+-- PR #67 added VALID_UNITS = ['kg','m','roll','pcs'] and rejects anything else
+-- at POST/PUT, but never checked the list against the rows already in the
+-- table. A read-only audit on 2026-08-06 found that NOT ONE row satisfied it:
+--
+--   SELECT 'Material', unit, COUNT(*) FROM "Material" GROUP BY unit
+--   UNION ALL
+--   SELECT 'Product',  unit, COUNT(*) FROM "Product"  GROUP BY unit;
+--
+--   Material | KG    | 8
+--   Product  | KG    | 4
+--   Product  | Rolna | 5
+--
+-- So the allow-list described nothing in the data it governed. Two things
+-- follow. First, the dropdown this migration ships alongside would have shown
+-- 'kg' while every existing row read 'KG' — two spellings of one unit on the
+-- same screen, forever. Second, Group 5 #15 turns this column into a Prisma
+-- enum, and an enum migration against a table where every row violates the
+-- enum aborts. Correcting 17 rows now is three statements; after #15 it is a
+-- blocked migration on live data.
+--
+-- Safe to run because the column is a display label and nothing else: no code
+-- in server/ or client/src branches on its value, and unlike Parameter.unit it
+-- never reaches the XLSX export. The only visible effect is that MaterialsPage,
+-- ProductsPage and ProductDetailPage read 'kg'/'roll' instead of 'KG'/'Rolna'.
+--
+-- Idempotent by construction — each WHERE stops matching once applied, so a
+-- re-run is a no-op rather than a corruption. Rollback is the reverse UPDATE,
+-- not a schema revert; nothing structural changes here.
+UPDATE "Material" SET unit = 'kg'   WHERE unit = 'KG';
+UPDATE "Product"  SET unit = 'kg'   WHERE unit = 'KG';
+UPDATE "Product"  SET unit = 'roll' WHERE unit = 'Rolna';
