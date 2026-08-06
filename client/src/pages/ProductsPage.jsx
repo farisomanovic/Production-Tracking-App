@@ -11,6 +11,7 @@ import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
+import { UNITS } from '../lib/units'
 
 /**
  * Renders the product list with an add form.
@@ -125,13 +126,16 @@ function ProductsPage() {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
-        <input
+        <select
           style={common.input}
-          type="text"
-          placeholder="Unit"
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
-        />
+        >
+          <option value="">Unit...</option>
+          {UNITS.map((u) => (
+            <option key={u} value={u}>{u}</option>
+          ))}
+        </select>
         <button style={common.button} onClick={handleSubmit}>
           Add Product
         </button>

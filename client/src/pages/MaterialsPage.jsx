@@ -10,6 +10,7 @@ import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
+import { UNITS } from '../lib/units'
 
 /**
  * Renders the material list with an add form and per-row delivery input.
@@ -104,13 +105,16 @@ function MaterialsPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <input
+        <select
           style={common.input}
-          type="text"
-          placeholder="Unit"
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
-        />
+        >
+          <option value="">Unit...</option>
+          {UNITS.map((u) => (
+            <option key={u} value={u}>{u}</option>
+          ))}
+        </select>
         <input
           style={common.input}
           type="text"
