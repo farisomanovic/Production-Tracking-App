@@ -124,8 +124,10 @@ function handleNext() {
     productId,
     date,
     startTime,
-    // Optionals are spread-if-truthy so the payload builder later doesn't have
-    // to distinguish "" (untouched input) from a real value.
+    // Optionals are only forwarded once the operator has actually filled them
+    // in, so the payload builder never has to distinguish "" (untouched input)
+    // from a real value. energyStart tests !== '' rather than truthiness
+    // because 0 is a real meter reading, not an empty field.
     ...(warmupStartTime && { warmupStartTime }),
     ...(stableStartTime && { stableStartTime }),
     ...(energyStart !== '' && { energyStart }),
