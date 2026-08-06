@@ -239,7 +239,11 @@ function NewRunPage() {
           // same rule already applied to endTime (see rollToNextDayIfAtOrBefore).
           stableStartTime: rollToNextDayIfAtOrBefore(data.date, data.startTime, data.stableStartTime)
         }),
-        ...(data.energyStart !== undefined && { energyStart: Number(data.energyStart) }),
+        // !== '' rather than !== undefined: formData seeds energyStart as '',
+        // so a blank field was never undefined and went out as Number('') → 0,
+        // recording a meter reading nobody took. Truthiness would be wrong the
+        // other way — 0 is a real reading on a newly installed meter.
+        ...(data.energyStart !== '' && { energyStart: Number(data.energyStart) }),
         ...(data.potentialBuyer && { potentialBuyer: data.potentialBuyer }),
         ...(data.notes && { notes: data.notes }),
       }
