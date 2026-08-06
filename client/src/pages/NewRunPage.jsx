@@ -13,7 +13,7 @@ import Step3_Parameters from '../components/wizard/Step3_Parameters'
 import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
 import { createRun, getAllRuns, getRunById, deleteRun } from '../api/productionRuns'
-import { rollToNextDayIfAtOrBefore, localToUTCISOString } from '../lib/dates'
+import { rollToNextDayIfBefore, localToUTCISOString } from '../lib/dates'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
 
@@ -235,9 +235,11 @@ function NewRunPage() {
           warmupStartTime: localToUTCISOString(data.date, data.warmupStartTime)
         }),
         ...(data.stableStartTime && {
-          // Rolls forward a day when stable's wall-clock is at/before start's —
-          // same rule already applied to endTime (see rollToNextDayIfAtOrBefore).
-          stableStartTime: rollToNextDayIfAtOrBefore(data.date, data.startTime, data.stableStartTime)
+          // Rolls forward only when stable's wall-clock is STRICTLY before
+          // start's. Deliberately not endTime's at-or-before rule: an equal
+          // pair means the line stabilised the instant it started, which the
+          // server accepts and which rolling would store a day late.
+          stableStartTime: rollToNextDayIfBefore(data.date, data.startTime, data.stableStartTime)
         }),
         // !== '' rather than !== undefined: formData seeds energyStart as '',
         // so a blank field was never undefined and went out as Number('') → 0,
