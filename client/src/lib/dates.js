@@ -52,24 +52,49 @@ export function localToUTCISOString(dateStr, timeStr) {
 }
 
 /**
- * Builds a UTC timestamp from the run date and a target wall-clock time,
- * rolling the date forward one day when the target is at or before the
- * anchor — i.e. it wrapped past midnight relative to the anchor. Used for
- * any "this time happens after an earlier one, possibly on the next calendar
- * day" pair: endTime vs. startTime, and stableStartTime vs. startTime.
+ * Shared core of the two rollover helpers below. Builds a UTC timestamp from
+ * the run date and a target wall-clock time, rolling the date forward one day
+ * when the target's clock reads earlier than the anchor's — i.e. it wrapped
+ * past midnight. `rollOnEqual` decides what an EQUAL pair means, which is the
+ * only thing the two callers disagree about; see their JSDoc for why.
+ *
+ * Both time inputs are zero-padded "HH:mm" strings, so plain string
+ * comparison orders them correctly ("02:00" < "22:00") — no Date parsing
+ * needed for the overnight test. The rolled date is re-formatted from LOCAL
+ * date parts (getLocalDateString), not toISOString(), so the rollover itself
+ * can't be shifted by a day before localToUTCISOString ever runs.
+ *
+ * @param {string} dateStr - Run date, "YYYY-MM-DD".
+ * @param {string} anchorHHmm - Reference wall-clock time, "HH:mm".
+ * @param {string} targetHHmm - Wall-clock time to place relative to the anchor, "HH:mm".
+ * @param {boolean} rollOnEqual - Whether an equal pair counts as having wrapped.
+ * @returns {string} UTC ISO timestamp — see localToUTCISOString.
+ */
+function rollToNextDay(dateStr, anchorHHmm, targetHHmm, rollOnEqual) {
+  const wrapped = rollOnEqual ? targetHHmm <= anchorHHmm : targetHHmm < anchorHHmm
+  let targetDate = dateStr
+  if (wrapped) {
+    const d = new Date(`${dateStr}T00:00:00`)
+    d.setDate(d.getDate() + 1)
+    targetDate = getLocalDateString(d)
+  }
+  return localToUTCISOString(targetDate, targetHHmm)
+}
+
+/**
+ * Places a time that measures the END of a span: endTime vs. startTime.
  *
  * A run that starts at 22:00 and ends at 02:00 crossed midnight, so its end
- * belongs to the NEXT calendar day. The only signal we have is the wall
- * clock itself: a target time at or before the anchor can only mean the
- * clock wrapped around. Equal times read as "came all the way around" — a
- * 24-hour span. Spans longer than 24h cannot be expressed with a time-only
- * input; that would need an end-date field.
+ * belongs to the NEXT calendar day. The only signal we have is the wall clock
+ * itself: a target time before the anchor can only mean the clock wrapped
+ * around. Equal times roll too, because for a span they read as "came all the
+ * way around" — a 24-hour run, not a zero-length one (the server rejects
+ * endTime <= startTime outright, so a zero-length run isn't expressible
+ * anyway). Spans longer than 24h can't be expressed with a time-only input;
+ * that would need an end-date field.
  *
- * Both inputs are zero-padded "HH:mm" strings, so plain string comparison
- * orders them correctly ("02:00" < "22:00") — no Date parsing needed for
- * the overnight test. The rolled date is re-formatted from LOCAL date parts
- * (getLocalDateString), not toISOString(), so the rollover itself can't be
- * shifted by a day before localToUTCISOString ever runs.
+ * Contrast rollToNextDayIfBefore, which is for a point INSIDE the span and
+ * therefore must not roll on equality.
  *
  * @param {string} dateStr - Run date, "YYYY-MM-DD".
  * @param {string} anchorHHmm - Reference wall-clock time, "HH:mm" (e.g. startTime).
@@ -79,15 +104,38 @@ export function localToUTCISOString(dateStr, timeStr) {
  * @example
  * rollToNextDayIfAtOrBefore('2026-07-07', '22:00', '02:00') // → UTC instant for 2026-07-08T02:00 local
  * rollToNextDayIfAtOrBefore('2026-07-07', '08:00', '14:30') // → UTC instant for 2026-07-07T14:30 local
+ * rollToNextDayIfAtOrBefore('2026-07-07', '08:00', '08:00') // → UTC instant for 2026-07-08T08:00 local
  */
 export function rollToNextDayIfAtOrBefore(dateStr, anchorHHmm, targetHHmm) {
-  let targetDate = dateStr
-  if (targetHHmm <= anchorHHmm) {
-    const d = new Date(`${dateStr}T00:00:00`)
-    d.setDate(d.getDate() + 1)
-    targetDate = getLocalDateString(d)
-  }
-  return localToUTCISOString(targetDate, targetHHmm)
+  return rollToNextDay(dateStr, anchorHHmm, targetHHmm, true)
+}
+
+/**
+ * Places a time that marks a POINT INSIDE the run: stableStartTime vs.
+ * startTime.
+ *
+ * Strict comparison, unlike rollToNextDayIfAtOrBefore. Stable start is the
+ * moment the line reached steady output, not the length of anything, so an
+ * equal pair means it stabilised the instant production began — same calendar
+ * day. Rolling it would store a measurement 24 hours late, which is not a real
+ * scenario on a shift-length run, and the server explicitly allows
+ * stableStartTime === startTime (productionRuns.js POST / and PUT /:id), so
+ * nothing downstream would catch it. todo.md Group 6 #8.
+ *
+ * A strictly earlier clock still rolls: a run starting 23:30 and stabilising
+ * at 00:15 genuinely crossed midnight.
+ *
+ * @param {string} dateStr - Run date, "YYYY-MM-DD".
+ * @param {string} anchorHHmm - Reference wall-clock time, "HH:mm" (e.g. startTime).
+ * @param {string} targetHHmm - Wall-clock time to place relative to the anchor, "HH:mm".
+ * @returns {string} UTC ISO timestamp — see localToUTCISOString.
+ *
+ * @example
+ * rollToNextDayIfBefore('2026-07-07', '08:00', '08:00') // → UTC instant for 2026-07-07T08:00 local
+ * rollToNextDayIfBefore('2026-07-07', '23:30', '00:15') // → UTC instant for 2026-07-08T00:15 local
+ */
+export function rollToNextDayIfBefore(dateStr, anchorHHmm, targetHHmm) {
+  return rollToNextDay(dateStr, anchorHHmm, targetHHmm, false)
 }
 
 /**

@@ -110,7 +110,9 @@ function handleNext() {
 
     // warmupStartTime never rolls to the next day (it legitimately precedes
     // startTime on the same day) — a later clock value here is always a
-    // mistake, unlike stableStartTime which NewRunPage rolls forward instead.
+    // mistake. stableStartTime is deliberately left unvalidated here instead:
+    // a strictly earlier clock is a real midnight crossing, which NewRunPage
+    // rolls forward, and an equal one is now kept on the same day.
     if (warmupStartTime && warmupStartTime > startTime) {
     setError('Warmup Start Time must be at or before Start Time.')
     return
