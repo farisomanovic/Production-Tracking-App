@@ -86,26 +86,38 @@ async function createTwoRecipesLinkedToSameProduct() {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
+// The two `SELECT ... FOR UPDATE` locks the routes themselves take: DELETE
+// locks a recipe's links, PUT locks a product's. Spelled out as two functions
+// rather than one with a column argument because $queryRaw parameterizes
+// values, not identifiers — a dynamic column name would mean raw string
+// concatenation into SQL.
+const lockRecipeLinks = (tx, recipeId) => tx.$queryRaw`
+    SELECT "id" FROM "RecipeProduct" WHERE "recipeId" = ${recipeId} ORDER BY "id" FOR UPDATE
+`
+const lockProductLinks = (tx, productId) => tx.$queryRaw`
+    SELECT "id" FROM "RecipeProduct" WHERE "productId" = ${productId} ORDER BY "id" FOR UPDATE
+`
+
 /**
- * Takes the same `SELECT ... FOR UPDATE` lock on a recipe's link rows that the
- * unlink route takes, holds it until `release()` is called, and only THEN runs
- * `mutate`. That ordering is what makes the unlink route's check-then-write
- * window reproducible instead of a coin flip: a racing request is guaranteed
- * to be parked on this lock before the mutation it must react to exists.
- * Await `lockAcquired` before starting the racer.
+ * Takes `lock` on a set of link rows, holds it until `release()` is called, and
+ * only THEN runs `mutate` (if given) before committing. That ordering is what
+ * makes each route's concurrency window reproducible instead of a coin flip: a
+ * racing request is guaranteed to be parked on this lock before the state it
+ * must react to exists. Await `lockAcquired` before starting the racer.
+ *
+ * `mutate` is optional — for the deadlock test the adversary changes nothing,
+ * it only needs to pin both racers behind one lock before releasing them.
  */
-function holdRecipeLinksLocked(recipeId, mutate) {
+function holdLinksLocked(lock, mutate) {
     let release
     let markAcquired
     const held = new Promise(resolve => { release = resolve })
     const lockAcquired = new Promise(resolve => { markAcquired = resolve })
     const settled = prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`
-            SELECT "id" FROM "RecipeProduct" WHERE "recipeId" = ${recipeId} ORDER BY "id" FOR UPDATE
-        `
+        await lock(tx)
         markAcquired()
         await held
-        await mutate(tx)
+        if (mutate) await mutate(tx)
     })
     return { lockAcquired, release: () => release(), settled }
 }
@@ -190,7 +202,10 @@ describe('DELETE /api/recipe-products/:id', () => {
         // Hold both of the recipe's link rows locked, then delete linkB only
         // after the racing request has had time to reach the route's own
         // FOR UPDATE and park on it.
-        const adversary = holdRecipeLinksLocked(recipe.id, tx => tx.recipeProduct.delete({ where: { id: linkB.id } }))
+        const adversary = holdLinksLocked(
+            tx => lockRecipeLinks(tx, recipe.id),
+            tx => tx.recipeProduct.delete({ where: { id: linkB.id } })
+        )
         await adversary.lockAcquired
 
         // .then() is what actually issues a supertest request — without it the
@@ -309,6 +324,48 @@ describe('PUT /api/recipe-products/:id — default flag', () => {
         const res = await request(app).put(`/api/recipe-products/${linkX.id}`).send({ isDefault: true })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('Cannot set an inactive recipe as the default')
+    })
+
+    /*
+     * ── Group 4 #13: two concurrent "set as default" calls must not deadlock ─
+     *
+     * Same two-strength pairing as the DELETE race above. The held-lock one is
+     * the regression proof: it pins both requests behind one lock so they are
+     * guaranteed to race, which against the pre-fix route deadlocked on every
+     * run. The Promise.all one is the smoke test — it was the ONLY coverage
+     * here before, and it reported this bug as a 3-in-5 flake precisely
+     * because it can also pass by never interleaving at all.
+     */
+    it('queues two concurrent "set as default" requests instead of deadlocking (Group 4 #13)', async () => {
+        const { product, linkX, linkY } = await createTwoRecipesLinkedToSameProduct()
+
+        // Hold BOTH of the product's link rows, so neither request can take a
+        // lock until the release. Pre-fix there was no lock to park on: both
+        // requests instead parked on their updateMany, then grabbed the two
+        // rows in opposite orders the instant this committed — X held Y and
+        // wanted X, Y held X and wanted Y, and Postgres killed one with 40P01.
+        const adversary = holdLinksLocked(tx => lockProductLinks(tx, product.id))
+        await adversary.lockAcquired
+
+        // .then() is what actually issues a supertest request — without it the
+        // Test object sits idle until awaited and nothing would be racing.
+        const pendingX = request(app).put(`/api/recipe-products/${linkX.id}`).send({ isDefault: true }).then(res => res)
+        const pendingY = request(app).put(`/api/recipe-products/${linkY.id}`).send({ isDefault: true }).then(res => res)
+        await sleep(150)
+        adversary.release()
+        await adversary.settled
+
+        // Both now queue on the route's own FOR UPDATE in the same id order
+        // and run one after the other. A 500 here is the deadlock coming back.
+        const [resX, resY] = await Promise.all([pendingX, pendingY])
+        expect(resX.status).toBe(200)
+        expect(resY.status).toBe(200)
+
+        const [nowX, nowY] = await Promise.all([
+            prisma.recipeProduct.findUnique({ where: { id: linkX.id } }),
+            prisma.recipeProduct.findUnique({ where: { id: linkY.id } })
+        ])
+        expect([nowX.isDefault, nowY.isDefault].filter(Boolean)).toHaveLength(1)
     })
 
     it('handles two concurrent "set as default" requests for the same product without a false 409', async () => {

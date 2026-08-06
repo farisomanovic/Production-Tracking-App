@@ -94,11 +94,11 @@ router.post('/', async (req, res, next) => {
  * partial unique index backing "one default per product") is never even
  * transiently at risk from this route's own write. This is a last-write-wins
  * UI toggle, not a race for a scarce resource — two concurrent "set as
- * default" calls for the same product both succeed (200/200); the
- * transaction's updateMany serializes them via Postgres row locking, so
- * whichever commits second simply re-clears the other's flag and sets its
- * own. Setting false needs no transaction — clearing a flag can't collide
- * with the unique index.
+ * default" calls for the same product both succeed (200/200), serialized by
+ * the FOR UPDATE lock the transaction takes before either write (see the
+ * comment on it), so whichever commits second simply re-clears the other's
+ * flag and sets its own. Setting false needs no transaction — clearing a
+ * flag can't collide with the unique index.
  *
  * @param {import('express').Request} req - `params.id` is the RecipeProduct link UUID; `body.isDefault` (required boolean).
  * @param {import('express').Response} res - 200 → updated link (with `product`); 400 missing/non-boolean isDefault, or setting true on an inactive recipe's link; 404 unknown link id; 500 on DB failure.
@@ -140,6 +140,28 @@ router.put('/:id', async (req, res) => {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
+        // Lock every one of this product's link rows BEFORE either write.
+        // Without it the two statements below take their locks in opposite
+        // orders under concurrency: this request's updateMany (NOT: { id })
+        // locks the OTHER link and then updates its own, while a simultaneous
+        // request on that other link does the mirror image — each ends up
+        // holding exactly the row the other is waiting for, and Postgres kills
+        // one with 40P01, which errorHandler.js can only report as a raw 500.
+        // Both writes below now touch rows this transaction already holds, so
+        // the order between them stops mattering.
+        //
+        // ORDER BY "id" is what makes this general rather than local: every
+        // lock taken on this table (here by productId, in DELETE by recipeId)
+        // acquires rows in the same global ascending order, so no waits-for
+        // cycle is constructible between any two of them.
+        //
+        // Deliberately not covered, same as DELETE's lock: FOR UPDATE locks
+        // rows that exist, it does not block a concurrent POST inserting a NEW
+        // link. A new link is created with isDefault false, so it can never
+        // collide with the partial unique index this transaction protects.
+        await tx.$queryRaw`
+            SELECT "id" FROM "RecipeProduct" WHERE "productId" = ${link.productId} ORDER BY "id" FOR UPDATE
+        `
         await tx.recipeProduct.updateMany({
             where: { productId: link.productId, NOT: { id: req.params.id } },
             data: { isDefault: false }
