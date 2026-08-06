@@ -2,9 +2,9 @@
  * @file assertTestDatabase.js
  * @description Refuses to proceed unless DATABASE_URL points at a test
  * database. Imported for its side effect, as the first line, by every script
- * that writes throwaway data (the e2e test suite, the test-DB seed script) so
- * a missing or misconfigured .env.test fails loudly instead of silently
- * running against real production data.
+ * that writes throwaway data (the Vitest setup and globalSetup, the test-DB
+ * seed script) so a missing or misconfigured .env.test fails loudly instead of
+ * silently running against real production data.
  *
  * assertTestDatabaseUrl is split out as a pure, throwing predicate (mirroring
  * assertClientOrigin.js) so it's unit-testable without a real process exit.
