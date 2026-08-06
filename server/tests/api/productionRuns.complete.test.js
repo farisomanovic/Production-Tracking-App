@@ -34,6 +34,7 @@ let zeroParamMachine
 let zeroParamProduct
 let zeroParamRecipe
 let runId
+let runStartTime
 
 async function cleanupFixtures(machineId) {
     await prisma.productionRun.deleteMany({ where: { machineId, status: 'in_progress' } })
@@ -87,6 +88,7 @@ beforeEach(async () => {
         }
     })
     runId = run.id
+    runStartTime = run.startTime
 })
 
 afterEach(async () => {
@@ -95,9 +97,14 @@ afterEach(async () => {
     await request(app).delete(`/api/production-runs/${runId}`)
 })
 
+// endTime is derived from the run's own startTime, never from a second
+// new Date(). /complete rejects an endTime at or BEFORE startTime, and the two
+// wall-clock reads are separated by a single INSERT — often fast enough to land
+// in the same millisecond. That made ~5% of suite runs fail on whichever test
+// happened to be running, always blaming the rule it never reached.
 function validPayload() {
     return {
-        endTime: new Date().toISOString(),
+        endTime: new Date(runStartTime.getTime() + 60_000).toISOString(),
         parameterValues: [{ machineParameterId: machineParameter.id, value: 1 }],
         materialUsages: [{ materialId: baseline.material.id, quantityUsed: 1 }],
         quantityProduced: 1
@@ -220,8 +227,9 @@ describe('POST /api/production-runs/:id/complete — zero-parameter machine (Gro
                 recipeId: zeroParamRecipe.id
             }
         })
+        // Own run, so it needs the same startTime-derived endTime validPayload uses.
         const res = await request(app).post(`/api/production-runs/${run.id}/complete`).send({
-            endTime: new Date().toISOString(),
+            endTime: new Date(run.startTime.getTime() + 60_000).toISOString(),
             parameterValues: [],
             quantityProduced: 1
         })
