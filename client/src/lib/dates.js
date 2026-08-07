@@ -37,7 +37,7 @@ export function getLocalDateString(date = new Date()) {
  * timezone-qualified string the server requires. Must only be called
  * client-side: the same naive string parsed in Node would be interpreted in
  * the server process's timezone instead, which is exactly the bug this
- * closes (todo.md Group 6 #3).
+ * closes.
  *
  * @param {string} dateStr - Date input value, "YYYY-MM-DD".
  * @param {string} timeStr - Time input value, "HH:mm".
@@ -120,7 +120,7 @@ export function rollToNextDayIfAtOrBefore(dateStr, anchorHHmm, targetHHmm) {
  * day. Rolling it would store a measurement 24 hours late, which is not a real
  * scenario on a shift-length run, and the server explicitly allows
  * stableStartTime === startTime (productionRuns.js POST / and PUT /:id), so
- * nothing downstream would catch it. todo.md Group 6 #8.
+ * nothing downstream would catch it.
  *
  * A strictly earlier clock still rolls: a run starting 23:30 and stabilising
  * at 00:15 genuinely crossed midnight.
@@ -204,7 +204,7 @@ export function formatFileDate(dateStr) {
  * Formats a timestamp as a 24-hour en-GB clock time — the single time
  * convention used everywhere in the app (screen and XLSX export alike), so a
  * run's start time reads the same on the Dashboard, the run detail page, and
- * in an exported report. todo.md Group 6 #5.
+ * in an exported report.
  *
  * @param {string} dateStr - ISO timestamp; caller handles null/empty.
  * @returns {string} e.g. "14:00".

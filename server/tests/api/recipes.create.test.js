@@ -65,19 +65,19 @@ describe('POST /api/recipes — required fields', () => {
         expect(res.body.error).toBe('name and at least one productId are required')
     })
 
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const res = await post({ ...validPayload(), name: 123 })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('name and at least one productId are required')
     })
 
-    it('rejects a non-string productId element with 400 (Group 3 #18)', async () => {
+    it('rejects a non-string productId element with 400', async () => {
         const res = await post({ ...validPayload(), productIds: [123] })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('Each productId must be a non-empty string')
     })
 
-    it('rejects a numeric notes with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric notes with 400', async () => {
         const res = await post({ ...validPayload(), notes: 123 })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('notes must be a string')
@@ -130,13 +130,13 @@ describe('POST /api/recipes — item list shape', () => {
         expect(res.body.error).toBe('Each recipe item needs a materialId')
     })
 
-    it('rejects a null item with 400 instead of throwing a TypeError (Group 3 #18)', async () => {
+    it('rejects a null item with 400 instead of throwing a TypeError', async () => {
         const res = await post({ ...validPayload(), items: [null] })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('Each recipe item must be an object')
     })
 
-    it('rejects a numeric materialId with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric materialId with 400', async () => {
         const res = await post({
             ...validPayload(),
             items: [{ materialId: 123, percentage: 100 }]
@@ -276,7 +276,7 @@ describe('POST /api/recipes — happy path', () => {
     })
 })
 
-describe('PUT /api/recipes/:id — string field type validation (Group 3 #18)', () => {
+describe('PUT /api/recipes/:id — string field type validation', () => {
     it('rejects a numeric name with 400', async () => {
         const recipe = await post(validPayload()).then((res) => res.body)
         const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ name: 123 })

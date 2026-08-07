@@ -56,7 +56,7 @@ describe('rollToNextDayIfAtOrBefore (endTime)', () => {
 })
 
 describe('rollToNextDayIfBefore (stableStartTime)', () => {
-  // The regression test for todo.md Group 6 #8: this exact case used to store
+  // Regression test: this exact case used to store
   // the stable measurement a full 24 hours late, with nothing rejecting it.
   it('stays on the same day when stable equals start', () => {
     const iso = rollToNextDayIfBefore('2026-08-05', '08:00', '08:00')

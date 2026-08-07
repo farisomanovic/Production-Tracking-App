@@ -1,9 +1,9 @@
 /**
  * @file productionRuns.update.test.js
- * @description Tests for PUT /api/production-runs/:id — todo.md Group 3 #13:
+ * @description Tests for PUT /api/production-runs/:id —
  * the route was missing the same endTime > startTime rule /complete enforces,
  * and never checked status, so it could silently rewrite a completed run.
- * The concurrency block at the bottom covers todo.md Group 4 #7: that status
+ * The concurrency block at the bottom covers the completed-run race: that status
  * check used to be a separate read from the write, so a run completed in
  * between was edited anyway.
  * Fixtures follow productionRuns.complete.test.js's conventions.
@@ -107,25 +107,25 @@ describe('PUT /api/production-runs/:id', () => {
         expect(res.body.notes).toBe(`${PREFIX} note`)
     })
 
-    it('rejects a numeric notes with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric notes with 400', async () => {
         const res = await put({ notes: 123 })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('notes must be a string')
     })
 
-    it('rejects a numeric potentialBuyer with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric potentialBuyer with 400', async () => {
         const res = await put({ potentialBuyer: 123 })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('potentialBuyer must be a string')
     })
 
-    it('rejects a non-numeric energyStart with 400 (Group 3 #12)', async () => {
+    it('rejects a non-numeric energyStart with 400', async () => {
         const res = await put({ energyStart: 'broken' })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('energyStart must be a number of at least 0 when provided')
     })
 
-    it('rejects a negative energyStart with 400 (Group 3 #12)', async () => {
+    it('rejects a negative energyStart with 400', async () => {
         const res = await put({ energyStart: -1 })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('energyStart must be a number of at least 0 when provided')
@@ -139,7 +139,7 @@ describe('PUT /api/production-runs/:id', () => {
         expect(res.body.energyEnd).toBe(0)
     })
 
-    it('rejects a negative energyEnd with 400 (Group 3 #12)', async () => {
+    it('rejects a negative energyEnd with 400', async () => {
         const res = await put({ energyEnd: -1 })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('energyEnd must be a number of at least 0 when provided')
@@ -176,27 +176,27 @@ describe('PUT /api/production-runs/:id', () => {
         expect(new Date(res.body.endTime).toISOString()).toBe(future)
     })
 
-    it('rejects a warmupStartTime after the run startTime (Group 6 #7)', async () => {
+    it('rejects a warmupStartTime after the run startTime', async () => {
         const after = new Date(Date.now() + 60_000).toISOString()
         const res = await put({ warmupStartTime: after })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('warmupStartTime must be at or before the run start time')
     })
 
-    it('rejects a stableStartTime before the run startTime (Group 6 #7)', async () => {
+    it('rejects a stableStartTime before the run startTime', async () => {
         const before = new Date(0).toISOString()
         const res = await put({ stableStartTime: before })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('stableStartTime must be at or after the run start time')
     })
 
-    it('accepts a warmupStartTime exactly equal to the run startTime (Group 6 #7)', async () => {
+    it('accepts a warmupStartTime exactly equal to the run startTime', async () => {
         const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
         const res = await put({ warmupStartTime: run.startTime.toISOString() })
         expect(res.status).toBe(200)
     })
 
-    it('accepts a stableStartTime exactly equal to the run startTime (Group 6 #7)', async () => {
+    it('accepts a stableStartTime exactly equal to the run startTime', async () => {
         const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
         const res = await put({ stableStartTime: run.startTime.toISOString() })
         expect(res.status).toBe(200)
@@ -230,7 +230,7 @@ describe('PUT /api/production-runs/:id', () => {
     })
 
     /*
-     * ── Group 4 #7: the completed-run guard must BE the write ────────────────
+     * ── The completed-run guard must BE the write ────────────────────────────
      *
      * A plain Promise.all([put, complete]) proves nothing when it passes — it
      * may simply never interleave inside the window. These two tests force the
@@ -245,12 +245,12 @@ describe('PUT /api/production-runs/:id', () => {
      * the same status for the boring reason. They can MISS a regression here;
      * they cannot report one that isn't there.
      */
-    it('rejects an edit to a run that completes while the request is in flight (Group 4 #7)', async () => {
+    it('rejects an edit to a run that completes while the request is in flight', async () => {
         const adversary = holdRunLocked(tx => tx.productionRun.update({
             where: { id: runId },
             // quantityProduced rides along because the DB's
             // ProductionRun_quantityProduced_valid CHECK refuses a completed
-            // run without one (Group 5 #11) — the adversary has to look like a
+            // run without one — the adversary has to look like a
             // real completion, not just a status flip.
             data: { status: 'completed', endTime: new Date(Date.now() + 60_000), quantityProduced: 1 }
         }))
@@ -272,7 +272,7 @@ describe('PUT /api/production-runs/:id', () => {
         expect(run.notes).toBeNull()
     })
 
-    it('returns 404 for a run deleted while the request is in flight (Group 4 #7)', async () => {
+    it('returns 404 for a run deleted while the request is in flight', async () => {
         const adversary = holdRunLocked(tx => tx.productionRun.delete({ where: { id: runId } }))
         await adversary.lockAcquired
 

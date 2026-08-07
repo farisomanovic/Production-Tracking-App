@@ -122,7 +122,7 @@ describe('POST /api/production-runs — required fields and dates', () => {
     })
 })
 
-describe('POST /api/production-runs — naive (timezone-less) timestamps rejected (Group 6 #3)', () => {
+describe('POST /api/production-runs — naive (timezone-less) timestamps rejected', () => {
     it('rejects a naive startTime with 400 instead of silently guessing the server timezone', async () => {
         const res = await post({ ...validPayload(), startTime: '2026-07-04T08:30:00.000' })
         expect(res.status).toBe(400)
@@ -143,7 +143,7 @@ describe('POST /api/production-runs — naive (timezone-less) timestamps rejecte
     })
 })
 
-describe('POST /api/production-runs — UTC round-trip (Group 6 #3)', () => {
+describe('POST /api/production-runs — UTC round-trip', () => {
     it('stores and returns startTime as the exact same UTC instant that was sent', async () => {
         const knownInstant = '2026-06-15T07:30:00.000Z'
         const res = await post({ ...validPayload(), startTime: knownInstant })
@@ -164,7 +164,7 @@ describe('POST /api/production-runs — UTC round-trip (Group 6 #3)', () => {
     })
 })
 
-describe('POST /api/production-runs — notes/potentialBuyer validation (Group 3 #18)', () => {
+describe('POST /api/production-runs — notes/potentialBuyer validation', () => {
     it('rejects a numeric notes with 400', async () => {
         const res = await post({ ...validPayload(), notes: 123 })
         expect(res.status).toBe(400)
@@ -178,7 +178,7 @@ describe('POST /api/production-runs — notes/potentialBuyer validation (Group 3
     })
 })
 
-describe('POST /api/production-runs — warmup/stable ordering (Group 6 #7)', () => {
+describe('POST /api/production-runs — warmup/stable ordering', () => {
     it('rejects a warmupStartTime after startTime with 400', async () => {
         const payload = validPayload()
         const after = new Date(new Date(payload.startTime).getTime() + 60_000).toISOString()
@@ -225,7 +225,7 @@ describe('POST /api/production-runs — warmup/stable ordering (Group 6 #7)', ()
     })
 })
 
-describe('POST /api/production-runs — energyStart type validation (Group 3 #12)', () => {
+describe('POST /api/production-runs — energyStart type validation', () => {
     it('rejects a non-numeric energyStart with 400', async () => {
         const res = await post({ ...validPayload(), energyStart: 'broken' })
         expect(res.status).toBe(400)

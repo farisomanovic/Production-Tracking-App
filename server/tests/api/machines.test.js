@@ -1,9 +1,9 @@
 /**
  * @file machines.test.js
  * @description Tests for /api/machines — "happy path + main failure case"
- * tier per CLAUDE.md. Covers the `name` string-type validation added by
- * todo.md Group 3 #18 (a non-string name used to reach Prisma and crash as
- * an unclassifiable 500 instead of a clean 400). `code` normalization has
+ * tier per CLAUDE.md. Covers the `name` string-type validation (a non-string
+ * name used to reach Prisma and crash as an unclassifiable 500 instead of a
+ * clean 400). `code` normalization has
  * its own dedicated file, machines.codeNormalize.test.js.
  *
  * Every row this file creates is named with the VT-MACH prefix; beforeAll
@@ -32,7 +32,7 @@ describe('POST /api/machines — name validation', () => {
         expect(res.body.error).toBe('name is required')
     })
 
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const res = await request(app).post('/api/machines').send({ name: 123 })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('name is required')
@@ -46,7 +46,7 @@ describe('POST /api/machines — name validation', () => {
 })
 
 describe('PUT /api/machines/:id — name validation', () => {
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const machine = await prisma.machine.create({ data: { name: `${PREFIX} put target` } })
         const res = await request(app).put(`/api/machines/${machine.id}`).send({ name: 123 })
         expect(res.status).toBe(400)

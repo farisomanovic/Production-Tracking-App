@@ -1,6 +1,6 @@
 /**
  * @file cors.test.js
- * @description Proves the CLIENT_ORIGIN guard (todo.md Group 1 #5) actually
+ * @description Proves the CLIENT_ORIGIN guard actually
  * rejects a missing/blank value, rejects a malformed-shape value (trailing
  * slash, path, comma-list, non-http scheme), and trims a padded one, AND that
  * app.js is actually wired to it (not just the predicate in isolation).

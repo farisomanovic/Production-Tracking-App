@@ -1,6 +1,6 @@
 /**
  * @file productionRuns.deactivateRace.test.js
- * @description Tests for todo.md Group 4 #8 — the deactivate-vs-create race
+ * @description Tests for the deactivate-vs-create race
  * between POST /api/production-runs and the `active: false` path of
  * PUT /api/operators/:id, /api/machines/:id and /api/recipes/:id.
  *
@@ -12,7 +12,7 @@
  * reactivating the retired recipe or deleting the run.
  *
  * Two strengths of coverage, same structure recipeProducts.test.js uses for
- * the Group 4 #12 race: the held-lock tests force the interleaving on every
+ * the last-product-unlink race: the held-lock tests force the interleaving on every
  * run and are the actual regression proof; the Promise.all one is a smoke test
  * that may simply never interleave, so it can miss a regression but can never
  * report one that isn't there.
@@ -154,7 +154,7 @@ async function strandedRuns(fixture) {
     })
 }
 
-describe('POST /api/production-runs vs deactivation — deactivate wins the lock (Group 4 #8)', () => {
+describe('POST /api/production-runs vs deactivation — deactivate wins the lock', () => {
     for (const entity of ENTITIES) {
         it(`rejects the run with 400 when its ${entity.key} is deactivated while the request is in flight`, async () => {
             const fixture = await createFixture()
@@ -188,7 +188,7 @@ describe('POST /api/production-runs vs deactivation — deactivate wins the lock
     }
 })
 
-describe('POST /api/production-runs vs deactivation — the run wins the lock (Group 4 #8)', () => {
+describe('POST /api/production-runs vs deactivation — the run wins the lock', () => {
     for (const entity of ENTITIES) {
         it(`rejects deactivating the ${entity.key} with 409 when a run is created while the request is in flight`, async () => {
             const fixture = await createFixture()
@@ -231,7 +231,7 @@ describe('POST /api/production-runs vs deactivation — the run wins the lock (G
     }
 })
 
-describe('POST /api/production-runs vs deactivation — simultaneous requests (Group 4 #8)', () => {
+describe('POST /api/production-runs vs deactivation — simultaneous requests', () => {
     for (const entity of ENTITIES) {
         it(`never lets both a run creation and a ${entity.key} deactivation succeed`, async () => {
             const fixture = await createFixture()

@@ -64,7 +64,7 @@ const loadRun = useCallback(async () => {
         // completion form will render — completed runs skip these requests.
         if (fetchedRun.status === 'in_progress') {
         // Only the machine's parameters: the completion form no longer picks a
-        // product (the run's own is the only possible answer since Group 5 #11),
+        // product (the run's own is the only possible answer),
         // so the machine-products request it used to feed is gone.
         const paramsRes = await getMachineParameters(fetchedRun.machineId)
         setMachineParameters(paramsRes.data)
@@ -406,7 +406,7 @@ function handleRecalculate() {
  * Updates the produced quantity. Does not touch material amounts — see
  * handleRecalculate.
  *
- * Before Group 5 #11 this fed only the calculator, and a SEPARATE output row
+ * This used to feed only the calculator, while a SEPARATE output row
  * held the quantity that was actually submitted — so the material math and the
  * recorded output could disagree with nothing to catch it. There is one field
  * now, and this is it.
@@ -600,7 +600,7 @@ return (
     )}
 
     {/* Outside the calculator card on purpose: this is the run's produced
-        quantity (Group 5 #11), required for every completion, and the
+        quantity, required for every completion, and the
         calculator only borrows it. A recipe with no items hides the card, and
         the field must not disappear with it. */}
     <div style={styles.section}>
@@ -932,7 +932,7 @@ return (
     {/* Always rendered for a completed run: the DB's
         ProductionRun_quantityProduced_valid CHECK guarantees a completed run
         has a positive quantity, so a missing one means data older than
-        Group 5 #11's migration — worth showing as "—" rather than hiding. */}
+        the single-output migration — worth showing as "—" rather than hiding. */}
     <div style={styles.section}>
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Output</p>
         <div style={styles.infoCard}>

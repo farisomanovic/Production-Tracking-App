@@ -4,7 +4,7 @@
  * points at: an operator/machine/recipe must not be deactivated while an
  * in_progress run still references it.
  *
- * Why this is a lock and not just a query (todo.md Group 4 #8): the guard and
+ * Why this is a lock and not just a query: the guard and
  * POST /production-runs' own `active` check used to be plain check-then-write
  * against tables the other one writes, so an interleaving let BOTH pass and
  * produced an in_progress run referencing an inactive parent — a state neither

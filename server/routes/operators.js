@@ -100,7 +100,7 @@ router.put('/:id', async (req, res) => {
     return res.status(400).json({ error: 'active must be a boolean' })
   }
   // The guard and the update share one transaction so the row stays locked
-  // between them (todo.md Group 4 #8 — see lib/deactivationGuards.js). A plain
+  // between them (see lib/deactivationGuards.js). A plain
   // rename has nothing to guard and could skip the transaction, but branching
   // on that would mean two copies of the update; one code path is worth more
   // than the round trip it saves at this scale.

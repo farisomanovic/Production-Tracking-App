@@ -1,11 +1,11 @@
 /**
  * @file productionRuns.complete.test.js
  * @description Tests for POST /api/production-runs/:id/complete — the
- * relational validation added for todo.md Group 3 #6: parameterValues and
+ * relational validation: parameterValues and
  * materialUsages ids must belong to the run's own machine/recipe, not just
  * exist somewhere in the database. Duplicate ids within one payload are also
  * rejected before they can hit a @@unique constraint mid-transaction. Since
- * todo.md Group 5 #11 this file also covers the scalar `quantityProduced`
+ * the single-output migration this file also covers the scalar `quantityProduced`
  * that replaced the outputs array, including the DB CHECK standing behind it.
  * The rest of /complete's behavior (races, stock floor, cascade delete,
  * endTime guards) is covered by productionRuns.stockRace.test.js, not here.
@@ -13,7 +13,7 @@
  * Fixtures created directly via prisma with the VT-COMPLETE prefix: a second
  * machine + parameter (for a machineParameterId foreign to the baseline
  * machine), a material outside the baseline recipe, and a third machine with
- * zero linked parameters (its own product/recipe) for Group 3 #19. A fresh
+ * zero linked parameters (its own product/recipe). A fresh
  * in_progress run on the baseline machine is created before each test and
  * cleaned up through the DELETE route after, so a rejected /complete (which
  * leaves the run in_progress) never leaks into the next test.
@@ -62,7 +62,7 @@ beforeAll(async () => {
     })
     rogueMaterial = await prisma.material.create({ data: { name: `${PREFIX} rogue material`, unit: 'kg', stockQty: 1000 } })
 
-    // Group 3 #19: a machine with zero MachineParameter links — no parameter
+    // A machine with zero MachineParameter links — no parameter
     // row is created for it, unlike every other machine in this file.
     zeroParamMachine = await prisma.machine.create({ data: { name: `${PREFIX} zero-param machine`, code: `${PREFIX}-M3` } })
     zeroParamProduct = await prisma.product.create({ data: { name: `${PREFIX} zero-param product`, code: `${PREFIX}-P3`, unit: 'kg' } })
@@ -113,7 +113,7 @@ function validPayload() {
 
 const complete = (payload) => request(app).post(`/api/production-runs/${runId}/complete`).send(payload)
 
-describe('POST /api/production-runs/:id/complete — notes validation (Group 3 #18)', () => {
+describe('POST /api/production-runs/:id/complete — notes validation', () => {
     it('rejects a numeric notes with 400', async () => {
         const res = await complete({ ...validPayload(), notes: 123 })
         expect(res.status).toBe(400)
@@ -121,7 +121,7 @@ describe('POST /api/production-runs/:id/complete — notes validation (Group 3 #
     })
 })
 
-describe('POST /api/production-runs/:id/complete — endTime type validation (Group 3 #20)', () => {
+describe('POST /api/production-runs/:id/complete — endTime type validation', () => {
     it('rejects a numeric endTime with 400 instead of completing the run', async () => {
         const res = await complete({ ...validPayload(), endTime: 1789000000000 })
         expect(res.status).toBe(400)
@@ -136,7 +136,7 @@ describe('POST /api/production-runs/:id/complete — endTime type validation (Gr
         expect(res.body.error).toBe('endTime is required to complete a run')
     })
 
-    it('rejects a naive (no timezone) endTime with 400 (Group 6 #3)', async () => {
+    it('rejects a naive (no timezone) endTime with 400', async () => {
         const res = await complete({ ...validPayload(), endTime: '2026-07-04T09:00:00.000' })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('endTime must include a timezone (e.g. end in "Z")')
@@ -145,7 +145,7 @@ describe('POST /api/production-runs/:id/complete — endTime type validation (Gr
     })
 })
 
-describe('POST /api/production-runs/:id/complete — relational validation (Group 3 #6)', () => {
+describe('POST /api/production-runs/:id/complete — relational validation', () => {
     it('rejects a machineParameterId belonging to another machine', async () => {
         const res = await complete({
             ...validPayload(),
@@ -188,7 +188,8 @@ describe('POST /api/production-runs/:id/complete — relational validation (Grou
         expect(res.body.error).toBe('materialUsages contains a duplicate materialId')
     })
 
-    // Re-anchored to a foreign machineParameterId when Group 5 #11 removed the
+    // Re-anchored to a foreign machineParameterId when the single-output work
+    // removed the
     // outputs array this used to be rejected by: the point of the test is that
     // ANY rejection leaves nothing half-written, not which rule did the
     // rejecting. The parameter values are the last thing validated before the
@@ -215,7 +216,7 @@ describe('POST /api/production-runs/:id/complete — relational validation (Grou
     })
 })
 
-describe('POST /api/production-runs/:id/complete — zero-parameter machine (Group 3 #19)', () => {
+describe('POST /api/production-runs/:id/complete — zero-parameter machine', () => {
     it('completes with an empty parameterValues array when the machine has no linked parameters', async () => {
         const run = await prisma.productionRun.create({
             data: {
@@ -245,7 +246,7 @@ describe('POST /api/production-runs/:id/complete — zero-parameter machine (Gro
     })
 })
 
-describe('POST /api/production-runs/:id/complete — energyEnd type validation (Group 3 #12)', () => {
+describe('POST /api/production-runs/:id/complete — energyEnd type validation', () => {
     it('rejects a non-numeric energyEnd with 400 instead of aborting the transaction', async () => {
         const res = await complete({ ...validPayload(), energyEnd: 'broken' })
         expect(res.status).toBe(400)
@@ -296,7 +297,7 @@ describe('POST /api/production-runs/:id/complete — recipe deactivated after th
     })
 })
 
-describe('POST /api/production-runs/:id/complete — quantityProduced (Group 5 #11)', () => {
+describe('POST /api/production-runs/:id/complete — quantityProduced', () => {
     // Every rejection also asserts the run is still in_progress: the quantity
     // check runs before the transaction, so a bad value must not consume the
     // run's one chance to be completed.
@@ -332,7 +333,7 @@ describe('POST /api/production-runs/:id/complete — quantityProduced (Group 5 #
 // it. Prisma cannot express a CHECK constraint, so without these two cases
 // nothing in the suite would notice the constraint silently disappearing from
 // the database (todo.md Group 8 #16 is the broader version of this worry).
-describe('ProductionRun_quantityProduced_valid CHECK constraint (Group 5 #11)', () => {
+describe('ProductionRun_quantityProduced_valid CHECK constraint', () => {
     it('refuses a completed run with no quantity, bypassing the route entirely', async () => {
         await expect(
             prisma.productionRun.update({

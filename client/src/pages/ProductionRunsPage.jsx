@@ -19,7 +19,7 @@ import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
 
 // Mirrors the server's MAX_TAKE clamp (server/routes/productionRuns.js) — this
-// is the "near-term" fix for todo.md Group 7 #18: the list/export used to
+// is the "near-term" fix for silent truncation: the list/export used to
 // silently cap at the server's 200-row DEFAULT_TAKE with no signal to the
 // user. The real fix (an unbounded/paginated export endpoint) is Group 7 #4.
 const RUNS_FETCH_LIMIT = 1000
@@ -57,7 +57,7 @@ export default function ProductionRunsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   // True when the fetch hit RUNS_FETCH_LIMIT — the list/export may be missing
-  // older runs. See todo.md Group 7 #18.
+  // older runs.
   const [runsTruncated, setRunsTruncated] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
@@ -87,7 +87,7 @@ export default function ProductionRunsPage() {
 
   useEffect(() => {
     // `cancelled` guards against a slow older response landing after a newer
-    // one and overwriting the list with stale results — see todo.md Group 7 #1.
+    // one and overwriting the list with stale results.
     let cancelled = false
     async function loadRuns() {
       setLoading(true)
@@ -108,7 +108,7 @@ export default function ProductionRunsPage() {
         setCompletedRuns(allRuns.filter(r => r.status === 'completed'))
         // Heuristic, not a certainty: a true result count of exactly
         // RUNS_FETCH_LIMIT reads as truncated too. The server doesn't return a
-        // total count to disambiguate — see todo.md Group 7 #18.
+        // total count to disambiguate.
         setRunsTruncated(allRuns.length === RUNS_FETCH_LIMIT)
       } catch (err) {
         if (cancelled) return
@@ -500,7 +500,7 @@ export default function ProductionRunsPage() {
                   return match ? Number(match.quantityUsed) : ''
               })
 
-              // One run, one quantity since Group 5 #11 — no summing left to do.
+              // One run, one quantity — no summing left to do.
               // null (not '') for a run without one, so the two total columns
               // below can tell "no quantity" from a real number instead of
               // multiplying '' into a misleading 0.

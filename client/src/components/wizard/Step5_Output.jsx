@@ -3,7 +3,7 @@
  * @description Wizard step 5: confirm what was produced, record the end time
  * and closing details — then submit the whole completion payload (including
  * steps 3–4 data held in wizard state) in one call. The produced quantity is
- * entered back on step 4, where the calculator needs it (Group 5 #11); this
+ * entered back on step 4, where the calculator needs it; this
  * step only shows it back for confirmation.
  */
 import { useState, useEffect } from 'react'

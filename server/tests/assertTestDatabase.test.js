@@ -1,6 +1,6 @@
 /**
  * @file assertTestDatabase.test.js
- * @description Proves the DATABASE_URL guard (todo.md Group 8 #20) refuses
+ * @description Proves the DATABASE_URL guard refuses
  * the production database name, refuses any other non-"_test" database name
  * (the fail-open bug this fix closes), refuses a malformed URL with a clean
  * message instead of an unhandled crash, and accepts a real "_test" URL.

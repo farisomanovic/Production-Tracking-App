@@ -19,7 +19,7 @@ export function isFiniteNumber(v) {
 
 // Required-string check: rejects non-strings and blank/whitespace-only values
 // alike, so a numeric field crashing Prisma and an empty field both land on
-// the same "X is required" message a caller already expects (Group 3 #18).
+// the same "X is required" message a caller already expects.
 export function isNonEmptyString(v) {
     return typeof v === 'string' && v.trim().length > 0
 }
@@ -34,8 +34,8 @@ export function normalizeCode(code) {
 
 // name is required (unlike code), so callers keep their own presence/blank
 // guard — this only normalizes whitespace. Non-string input passes through
-// unchanged: making non-strings a hard error is Group 3 #18's job, not this
-// one's.
+// unchanged: making non-strings a hard error is the callers' type-guard job,
+// not this one's.
 export function normalizeName(name) {
     if (typeof name !== 'string') return name
     return name.trim().replace(/\s+/g, ' ')
@@ -43,7 +43,7 @@ export function normalizeName(name) {
 
 // Product.unit and Material.unit are meant to be a closed vocabulary, not
 // free text — callers already type-check unit before this runs, so exact
-// case-sensitive membership is the only thing left to enforce (Group 3 #14).
+// case-sensitive membership is the only thing left to enforce.
 export const VALID_UNITS = ['kg', 'm', 'roll', 'pcs']
 
 export function isValidUnit(v) {

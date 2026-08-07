@@ -1,9 +1,9 @@
 /**
  * @file productionRuns.list.test.js
- * @description Tests for GET /api/production-runs — todo.md Group 4 #6 and #2:
+ * @description Tests for GET /api/production-runs query-param validation:
  * dateFrom/dateTo and array-shaped query params (repeated keys, e.g.
  * ?machineId=a&machineId=b) reached Prisma unvalidated and threw a 500, and
- * so did a non-numeric limit. The third describe covers Group 3 #23: `status`
+ * so did a non-numeric limit. The third describe covers `status`, which
  * was the one filter passed straight to Prisma, so a typo answered 200 [] and
  * the caller could not tell it apart from "nothing matched". Fixtures follow
  * productionRuns.update.test.js's conventions.
@@ -55,31 +55,31 @@ describe('GET /api/production-runs', () => {
         expect(res.body.length).toBeLessThanOrEqual(1)
     })
 
-    it('rejects a malformed dateFrom with 400 (Group 4 #6)', async () => {
+    it('rejects a malformed dateFrom with 400', async () => {
         const res = await get({ dateFrom: 'banana' })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('dateFrom must be a valid YYYY-MM-DD date')
     })
 
-    it('rejects an array-shaped query param with 400 (Group 4 #6)', async () => {
+    it('rejects an array-shaped query param with 400', async () => {
         const res = await request(app).get('/api/production-runs?machineId=a&machineId=b')
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('machineId must be a single value')
     })
 
-    it('rejects a non-integer limit with 400 (Group 4 #2)', async () => {
+    it('rejects a non-integer limit with 400', async () => {
         const res = await get({ limit: 'abc' })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('limit must be a positive integer')
     })
 
-    it('clamps an oversized limit instead of erroring (Group 4 #4)', async () => {
+    it('clamps an oversized limit instead of erroring', async () => {
         const res = await get({ limit: 5000 })
         expect(res.status).toBe(200)
     })
 })
 
-describe('GET /api/production-runs — stable order & select shape (Group 4 #4)', () => {
+describe('GET /api/production-runs — stable order & select shape', () => {
     let earlyRunId, lateRunId
 
     beforeAll(async () => {
@@ -91,7 +91,7 @@ describe('GET /api/production-runs — stable order & select shape (Group 4 #4)'
                 date: new Date('2026-06-16T00:00:00.000Z'),
                 startTime: new Date('2026-06-16T08:00:00.000Z'),
                 status: 'completed',
-                // Required by ProductionRun_quantityProduced_valid (Group 5 #11).
+                // Required by ProductionRun_quantityProduced_valid.
                 quantityProduced: 1,
                 operatorId: baseline.operator.id,
                 machineId: baseline.machine.id,
@@ -143,7 +143,7 @@ describe('GET /api/production-runs — stable order & select shape (Group 4 #4)'
     })
 })
 
-describe('GET /api/production-runs — status filter validation (Group 3 #23)', () => {
+describe('GET /api/production-runs — status filter validation', () => {
     let completedRunId
 
     beforeAll(async () => {
@@ -155,7 +155,7 @@ describe('GET /api/production-runs — status filter validation (Group 3 #23)', 
                 date: new Date('2026-06-17T00:00:00.000Z'),
                 startTime: new Date('2026-06-17T08:00:00.000Z'),
                 status: 'completed',
-                // Required by ProductionRun_quantityProduced_valid (Group 5 #11).
+                // Required by ProductionRun_quantityProduced_valid.
                 quantityProduced: 1,
                 operatorId: baseline.operator.id,
                 machineId: baseline.machine.id,

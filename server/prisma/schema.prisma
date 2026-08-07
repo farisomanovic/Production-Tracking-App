@@ -116,7 +116,7 @@ model MachineProduct {
 // instead of the old required 1:1 Recipe.productId. A Recipe must always keep
 // at least one linked Product; the route layer enforces that, not the schema.
 // isDefault marks which linked recipe the wizard preselects FOR THIS PRODUCT
-// (moved here from the old Recipe.isDefault, todo.md Group 5 #6 — a single
+// (moved here from the old Recipe.isDefault — a single
 // flag on Recipe couldn't express "default for product A but not product B"
 // once a recipe became reusable across products). At most one isDefault:true
 // row per productId is enforced by a partial unique index that Prisma's

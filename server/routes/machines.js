@@ -100,7 +100,7 @@ router.put('/:id', async (req, res) => {
     return res.status(400).json({ error: 'active must be a boolean' })
   }
   // The guard and the update share one transaction so the row stays locked
-  // between them (todo.md Group 4 #8 — see lib/deactivationGuards.js). This is
+  // between them (see lib/deactivationGuards.js). This is
   // why the check no longer goes through machineHasRunInProgress: that helper
   // reads outside any transaction, which is exactly the race being closed. It
   // still serves the MachineParameter/MachineProduct unlink routes, whose own
