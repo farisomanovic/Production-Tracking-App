@@ -14,7 +14,7 @@ import {
     UnknownMaterialError,
     InsufficientStockError
 } from '../lib/errors.js'
-import { hasDuplicates, allBelongTo, isFiniteNumber } from '../lib/validation.js'
+import { hasDuplicates, allBelongTo, isFiniteNumber, isValidStatus, VALID_STATUSES } from '../lib/validation.js'
 
 const router = Router()
 
@@ -72,8 +72,8 @@ const MAX_TAKE = 1000
  * `status` ("in_progress" | "completed"), `dateFrom`/`dateTo` (YYYY-MM-DD), `limit` (positive int,
  * defaults to 200, clamped to a max of 1000).
  * @param {import('express').Response} res - 200 → ProductionRun[] newest-first (date, then startTime as a
- * tiebreaker); 400 on a malformed/array-shaped query param, an invalid dateFrom/dateTo, or a
- * non-positive-integer limit; 500 on DB failure.
+ * tiebreaker); 400 on a malformed/array-shaped query param, a status outside the allow-list
+ * (including ""), an invalid dateFrom/dateTo, or a non-positive-integer limit; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -90,6 +90,14 @@ router.get('/', async (req, res) => {
         if (value !== undefined && typeof value !== 'string') {
             return res.status(400).json({ error: `${name} must be a single value` })
         }
+    }
+
+    // Below the loop above, never above it: there, a repeated ?status= key would
+    // reach isValidStatus as an array and be reported as a bad vocabulary value
+    // rather than a bad shape. Rejects "" as well as a typo — an empty status is
+    // a caller whose variable never got set, not a request for every run.
+    if (status !== undefined && !isValidStatus(status)) {
+        return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` })
     }
 
     if (dateFrom && !isValidDateOnlyString(dateFrom)) {
