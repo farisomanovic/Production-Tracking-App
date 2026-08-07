@@ -42,6 +42,11 @@ function NewRunPage() {
     operatorId: '',
     machineId: '',
     productId: '',
+    // The product's unit (kg | m | roll | pcs), filled from the created run in
+    // handleCreateRun — not from step 1's dropdown. quantityProduced is recorded
+    // in it, so steps 4-5 need it to label the field with something other than a
+    // guess. Empty until the run exists, which is before step 4 can be reached.
+    productUnit: '',
     date: '',
     startTime: '',
     warmupStartTime: '',
@@ -252,6 +257,12 @@ function NewRunPage() {
 
       const response = await createRun(payload)
       setRunId(response.data.id)
+
+      // Read the unit off the created run rather than off step 1's product
+      // dropdown: this is the row that now exists server-side, so the label
+      // steps 4-5 show can never describe a different product than the one
+      // stored. (POST returns the run with its full product included.)
+      setFormData(prev => ({ ...prev, productUnit: response.data.product.unit }))
 
       // Prefill fetch is inside its own try/catch: it's a convenience, and a
       // failure here must not block the operator from continuing the wizard.

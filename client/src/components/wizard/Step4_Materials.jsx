@@ -19,7 +19,8 @@ import { getErrorMessage } from '../../lib/errorMessage'
  * @param {Object} props
  * @param {Object} props.data - Accumulated wizard formData; `recipeId` drives the fetch,
  * `materialUsages` and the calculator fields restore previous answers (or the
- * last-run prefill seeded by NewRunPage).
+ * last-run prefill seeded by NewRunPage), and `productUnit` labels the quantity
+ * field with the unit the product is actually sold in.
  * @param {string} props.runId - The created run's UUID (unused here, passed for step API symmetry).
  * @param {Function} props.onNext - Called with `{ materialUsages: [{ materialId, quantityUsed }],
  * quantityProduced, netWeightPerUnit, grossWeightPerUnit, scrapKg }` (weights are null when left blank;
@@ -83,8 +84,8 @@ useEffect(() => {
  * share. Scrap counts because wasted material still came off the shelf.
  * Bruto is deliberately NOT a parameter — packaging isn't raw material.
  *
- * @param {string|number} qty - Produced quantity (pieces).
- * @param {string|number} nw - Neto weight of one piece in kg.
+ * @param {string|number} qty - Produced quantity, in the product's own unit.
+ * @param {string|number} nw - Neto weight of one unit in kg.
  * @param {string|number} scrap - Total scrap for the run in kg.
  * @returns {void} No-op while every input is empty/zero.
  *
@@ -278,6 +279,8 @@ return (
     <div style={common.field}>
         <label style={common.label}>Quantity Produced *</label>
         <div style={common.inputRow}>
+        {/* step='any', not '1': the quantity is in the product's own unit, and
+            a foil run measured in kg legitimately produces 1234.5. */}
         <input
             style={styles.input}
             type='number'
@@ -286,9 +289,9 @@ return (
             onWheel={e => e.target.blur()}
             placeholder='e.g. 500'
             min='0'
-            step='1'
+            step='any'
         />
-        <span style={common.unit}>pcs</span>
+        <span style={common.unit}>{data.productUnit}</span>
         </div>
     </div>
 

@@ -464,6 +464,11 @@ export default function ProductionRunsPage() {
               ...paramNames.map(sanitizeCellText),
               ...materialNames.map(n => sanitizeCellText(`${n} Used (kg)`)),
               'Quantity Produced',
+              // Its own column rather than a suffix on the header or in the cell:
+              // one machine makes several products, so the sheet can carry more
+              // than one unit, and 'Quantity Produced' is SUM'd in the summary row
+              // below — text in that cell would silently zero the total.
+              'Unit',
               'Neto per Unit (kg)',
               'Total Neto (kg)',
               'Bruto per Unit (kg)',
@@ -517,6 +522,7 @@ export default function ProductionRunsPage() {
                   ...paramValues,
                   ...materialValues,
                   quantity != null ? quantity : '',
+                  sanitizeCellText(run.product.unit),
                   // The run stores per-unit neto/bruto; totals multiply back by
                   // the produced quantity. Per-unit values go in raw (rounding
                   // would lose precision on light products), totals are rounded
