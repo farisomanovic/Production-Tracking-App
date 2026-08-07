@@ -134,7 +134,7 @@ router.put('/:id', async (req, res) => {
     // Mirrors the wizard's own active-only filter (GET /recipes/by-product) —
     // an inactive recipe can never actually be offered to an operator, so
     // letting it become "the default" here would just recreate the exact
-    // dead-flag situation todo.md Group 5 #6 flagged in the first place.
+    // dead-flag situation that made isDefault a per-link flag in the first place.
     if (!link.recipe.active) {
         return res.status(400).json({ error: 'Cannot set an inactive recipe as the default' })
     }

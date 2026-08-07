@@ -59,7 +59,7 @@ function NewRunPage() {
     materialUsages: [],
     // Step 4's slice: null (not '') marks "never entered", which both the
     // last-run prefill and step 5's payload spreads rely on. quantityProduced
-    // is the run's produced quantity, not just a calculator input (Group 5 #11).
+    // is the run's produced quantity, not just a calculator input.
     quantityProduced: null,
     netWeightPerUnit: null,
     grossWeightPerUnit: null,
@@ -228,7 +228,7 @@ function NewRunPage() {
       const payload = {
         // Every timestamp in this payload is real UTC now — date and the
         // wall-clock fields alike both go through the browser's own
-        // local-to-UTC conversion (todo.md Group 6 #3).
+        // local-to-UTC conversion.
         date: new Date(data.date).toISOString(),
         startTime: localToUTCISOString(data.date, data.startTime),
         operatorId: data.operatorId,
@@ -237,7 +237,7 @@ function NewRunPage() {
         recipeId: data.recipeId,
         ...(data.warmupStartTime && {
           // No rollover: warmup legitimately precedes startTime on the same
-          // calendar day (todo.md Group 6 #7), unlike stableStartTime below.
+          // calendar day, unlike stableStartTime below.
           warmupStartTime: localToUTCISOString(data.date, data.warmupStartTime)
         }),
         ...(data.stableStartTime && {

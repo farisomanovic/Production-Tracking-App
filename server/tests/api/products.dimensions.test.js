@@ -1,7 +1,7 @@
 /**
  * @file products.dimensions.test.js
  * @description Tests for widthMm/thicknessMm/lengthM type validation on
- * POST/PUT /api/products (todo.md Group 3 #12) — a product dimension of
+ * POST/PUT /api/products — a product dimension of
  * exactly 0 is physically impossible, so unlike some optional numeric fields
  * elsewhere in the app, 0 is rejected here alongside negatives/strings.
  */

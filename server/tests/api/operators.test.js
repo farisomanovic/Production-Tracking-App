@@ -1,9 +1,9 @@
 /**
  * @file operators.test.js
  * @description Tests for /api/operators — "happy path + main failure case"
- * tier per CLAUDE.md. Covers the `name` string-type validation added by
- * todo.md Group 3 #18 (a non-string name used to reach Prisma and crash as
- * an unclassifiable 500 instead of a clean 400).
+ * tier per CLAUDE.md. Covers the `name` string-type validation (a non-string
+ * name used to reach Prisma and crash as an unclassifiable 500 instead of a
+ * clean 400).
  *
  * Every row this file creates is named with the VT-OP prefix; beforeAll
  * deletes leftovers from a previously crashed run, afterAll deletes this
@@ -31,7 +31,7 @@ describe('POST /api/operators — name validation', () => {
         expect(res.body.error).toBe('name is required')
     })
 
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const res = await request(app).post('/api/operators').send({ name: 123 })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('name is required')
@@ -46,7 +46,7 @@ describe('POST /api/operators — name validation', () => {
 })
 
 describe('PUT /api/operators/:id — name validation', () => {
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const operator = await prisma.operator.create({ data: { name: `${PREFIX} put target` } })
         const res = await request(app).put(`/api/operators/${operator.id}`).send({ name: 123 })
         expect(res.status).toBe(400)

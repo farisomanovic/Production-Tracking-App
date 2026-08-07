@@ -49,7 +49,7 @@ async function createLink(name) {
     })
 }
 
-describe('POST /api/machine-parameters — displayOrder type validation (Group 3 #12)', () => {
+describe('POST /api/machine-parameters — displayOrder type validation', () => {
     it('rejects a non-integer displayOrder with 400', async () => {
         counter += 1
         const parameter = await prisma.parameter.create({ data: { name: `${PREFIX} post noninteger`, unit: 'C' } })
@@ -82,7 +82,7 @@ describe('POST /api/machine-parameters — displayOrder type validation (Group 3
     })
 })
 
-describe('POST /api/machine-parameters — machineId/parameterId type validation (Group 3 #15)', () => {
+describe('POST /api/machine-parameters — machineId/parameterId type validation', () => {
     it('rejects a non-string machineId with 400', async () => {
         counter += 1
         const parameter = await prisma.parameter.create({ data: { name: `${PREFIX} post numeric machineId`, unit: 'C' } })
@@ -103,7 +103,7 @@ describe('POST /api/machine-parameters — machineId/parameterId type validation
     })
 })
 
-describe('PUT /api/machine-parameters/:id — displayOrder type validation (Group 3 #12)', () => {
+describe('PUT /api/machine-parameters/:id — displayOrder type validation', () => {
     it('rejects a non-integer displayOrder with 400', async () => {
         const link = await createLink('put noninteger')
         const res = await request(app).put(`/api/machine-parameters/${link.id}`).send({ displayOrder: 1.5 })

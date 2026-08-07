@@ -1,7 +1,7 @@
 /**
  * @file products.unitValidation.test.js
  * @description Tests for the unit allow-list on POST/PUT /api/products
- * (todo.md Group 3 #14) — unit is a correctly-typed string but must also be
+ * — unit is a correctly-typed string but must also be
  * one of a closed vocabulary; parallel to products.stringValidation.test.js,
  * which covers the type-only guard on the same routes.
  */

@@ -49,13 +49,13 @@ describe('POST /api/materials', () => {
         expect(res.body.error).toBe('name and unit are required')
     })
 
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const res = await request(app).post('/api/materials').send({ name: 123, unit: 'kg' })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('name and unit are required')
     })
 
-    it('rejects a numeric unit with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric unit with 400', async () => {
         const res = await request(app)
             .post('/api/materials')
             .send({ name: `${PREFIX} numeric unit`, unit: 42 })
@@ -63,7 +63,7 @@ describe('POST /api/materials', () => {
         expect(res.body.error).toBe('name and unit are required')
     })
 
-    it('rejects a numeric supplier with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric supplier with 400', async () => {
         const res = await request(app)
             .post('/api/materials')
             .send({ name: `${PREFIX} numeric supplier`, unit: 'kg', supplier: 42 })
@@ -241,7 +241,7 @@ describe('PUT /api/materials/:id — non-stock paths', () => {
         expect(res.body.error).toBe('Material not found')
     })
 
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const material = await createMaterial()
         const res = await request(app)
             .put(`/api/materials/${material.id}`)
@@ -250,7 +250,7 @@ describe('PUT /api/materials/:id — non-stock paths', () => {
         expect(res.body.error).toBe('name must be a string')
     })
 
-    it('rejects a numeric unit with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric unit with 400', async () => {
         const material = await createMaterial()
         const res = await request(app)
             .put(`/api/materials/${material.id}`)
@@ -259,7 +259,7 @@ describe('PUT /api/materials/:id — non-stock paths', () => {
         expect(res.body.error).toBe('unit must be a string')
     })
 
-    it('rejects a numeric supplier with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric supplier with 400', async () => {
         const material = await createMaterial()
         const res = await request(app)
             .put(`/api/materials/${material.id}`)
@@ -320,7 +320,7 @@ describe('PUT /api/materials/:id — non-stock paths', () => {
     })
 })
 
-describe('unit allow-list validation (Group 3 #14)', () => {
+describe('unit allow-list validation', () => {
     it.each(VALID_UNITS)('POST accepts unit %s with 201', async (unit) => {
         const res = await request(app)
             .post('/api/materials')

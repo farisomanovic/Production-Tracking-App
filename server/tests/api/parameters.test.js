@@ -40,13 +40,13 @@ describe('POST /api/parameters', () => {
         expect(res.body.error).toBe('name is required')
     })
 
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const res = await request(app).post('/api/parameters').send({ name: 123, unit: '°C' })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('name is required')
     })
 
-    it('rejects a numeric unit with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric unit with 400', async () => {
         const res = await request(app)
             .post('/api/parameters')
             .send({ name: `${PREFIX} numeric unit`, unit: 42 })
@@ -54,7 +54,7 @@ describe('POST /api/parameters', () => {
         expect(res.body.error).toBe('unit must be a string')
     })
 
-    it('rejects a numeric description with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric description with 400', async () => {
         const res = await request(app)
             .post('/api/parameters')
             .send({ name: `${PREFIX} numeric description`, description: 42 })
@@ -124,7 +124,7 @@ describe('PUT /api/parameters/:id', () => {
         expect(res.status).toBe(404)
     })
 
-    it('rejects a numeric name with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric name with 400', async () => {
         const parameter = await createParameter()
         const res = await request(app)
             .put(`/api/parameters/${parameter.id}`)
@@ -133,7 +133,7 @@ describe('PUT /api/parameters/:id', () => {
         expect(res.body.error).toBe('name must be a string')
     })
 
-    it('rejects a numeric unit with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric unit with 400', async () => {
         const parameter = await createParameter()
         const res = await request(app)
             .put(`/api/parameters/${parameter.id}`)
@@ -142,7 +142,7 @@ describe('PUT /api/parameters/:id', () => {
         expect(res.body.error).toBe('unit must be a string')
     })
 
-    it('rejects a numeric description with 400 (Group 3 #18)', async () => {
+    it('rejects a numeric description with 400', async () => {
         const parameter = await createParameter()
         const res = await request(app)
             .put(`/api/parameters/${parameter.id}`)

@@ -1,8 +1,8 @@
 /**
  * @file machines.codeNormalize.test.js
  * @description Tests for POST and PUT /api/machines normalizing blank/whitespace
- * `code` to null instead of writing literal "" (todo.md Group 3 #11, extended to
- * POST and to explicit null by #16/#17) — an unguarded "" would occupy the
+ * `code` to null instead of writing literal "", on both POST and PUT and for an
+ * explicit null — an unguarded "" would occupy the
  * Machine.code unique constraint's single empty-string slot and P2002 the next
  * machine saved the same way, and an unguarded null would throw on `.trim()`.
  */

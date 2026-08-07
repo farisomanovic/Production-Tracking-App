@@ -59,8 +59,8 @@ export async function seedTestDatabase() {
             endTime: now,
             status: 'completed',
             // Required by ProductionRun_quantityProduced_valid: a completed run
-            // must record what it produced. Before Group 5 #11 this fixture had
-            // no output row at all, which the old schema quietly allowed.
+            // must record what it produced. This fixture used to have no output
+            // row at all, which the old schema quietly allowed.
             quantityProduced: 1,
             operatorId: operator.id,
             machineId: machine.id,

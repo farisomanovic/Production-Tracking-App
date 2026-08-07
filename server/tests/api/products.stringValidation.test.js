@@ -1,7 +1,7 @@
 /**
  * @file products.stringValidation.test.js
  * @description Tests for name/unit/code/description string-type validation
- * on POST/PUT /api/products (todo.md Group 3 #18) — parallel to
+ * on POST/PUT /api/products — parallel to
  * products.dimensions.test.js, which covers the numeric fields on the same
  * routes.
  */

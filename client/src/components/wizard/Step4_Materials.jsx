@@ -189,7 +189,7 @@ function handleChange(materialId, newValue) {
  * (null when blank, so step 5 can skip them cleanly and a revisit restores
  * them as empty inputs via String(null ?? '')).
  *
- * Since Group 5 #11 the quantity here IS the run's produced quantity, not just
+ * The quantity here IS the run's produced quantity, not just
  * a calculator input — step 5 only displays it back — so it is required here
  * rather than being re-asked for later.
  *
@@ -256,7 +256,7 @@ return (
     {error && <div style={common.errorBox}>{error}</div>}
 
     {/* Outside the recipe-items branch below on purpose: this is the run's own
-        produced quantity (Group 5 #11), required for every run, and the
+        produced quantity, required for every run, and the
         calculator merely borrows it. Inside that branch, a recipe with no
         materials would leave the field unrendered but still required, and the
         wizard would refuse to advance with no way to fix it. */}

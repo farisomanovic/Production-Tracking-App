@@ -1,7 +1,7 @@
 /**
  * @file operators.deactivate.test.js
  * @description Tests for the in-progress-run guard on PUT /api/operators/:id's
- * active:false path (todo.md Group 3 #5) — deactivation must be blocked while
+ * active:false path — deactivation must be blocked while
  * an open run still references the operator.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -34,7 +34,7 @@ beforeAll(async () => {
 
 afterAll(cleanup)
 
-describe('PUT /api/operators/:id — active type validation (Group 3 #12)', () => {
+describe('PUT /api/operators/:id — active type validation', () => {
     it('rejects a non-boolean active with 400 and leaves the row unchanged', async () => {
         const res = await request(app).put(`/api/operators/${operator.id}`).send({ active: 'no' })
         expect(res.status).toBe(400)

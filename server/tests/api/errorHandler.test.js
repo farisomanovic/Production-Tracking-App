@@ -22,8 +22,8 @@ import errorHandler from '../../middleware/errorHandler.js'
 // still a real HTTP request through the real middleware (supertest), just not
 // through a production route, so this test stops depending on whichever real
 // bug happens to be unfixed at the moment (this fixture has already had to be
-// re-pointed once: ?limit=abc, closed by todo.md Group 4 #2, then
-// machineParameters.js's numeric machineId, closed by Group 3 #15).
+// re-pointed once: ?limit=abc, since fixed, then machineParameters.js's
+// numeric machineId, also since fixed).
 const throwingApp = express()
 throwingApp.get('/boom', () => {
     throw new Error('deliberately unrecognized error for test coverage')

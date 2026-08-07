@@ -1,7 +1,7 @@
 /**
  * @file recipeProducts.test.js
- * @description Tests for the Recipe<->Product many-to-many link (todo.md
- * Group 5 #10). Happy path + main failure case tier per CLAUDE.md for the
+ * @description Tests for the Recipe<->Product many-to-many link.
+ * Happy path + main failure case tier per CLAUDE.md for the
  * link/unlink routes themselves; plus the two spots elsewhere that had to
  * change their query shape when Recipe.productId became a join table:
  * GET /recipes/by-product/:productId and POST /production-runs' recipe/product
@@ -187,7 +187,7 @@ describe('DELETE /api/recipe-products/:id', () => {
     })
 
     /*
-     * ── Group 4 #12: the last-product guard must be atomic ───────────────────
+     * ── The last-product guard must be atomic ────────────────────────────────
      *
      * The two tests below cover the same race at different strengths. The
      * held-lock one is the actual regression proof: it forces the interleaving
@@ -195,7 +195,7 @@ describe('DELETE /api/recipe-products/:id', () => {
      * simply never have interleaved, so it can miss a regression, but it can
      * never report one that isn't there.
      */
-    it('rejects the unlink with 409 when the recipe\'s other last link is deleted while the request is in flight (Group 4 #12)', async () => {
+    it('rejects the unlink with 409 when the recipe\'s other last link is deleted while the request is in flight', async () => {
         const { recipe } = await createRecipeLinkedToTwoProducts()
         const [linkA, linkB] = recipe.products
 
@@ -227,7 +227,7 @@ describe('DELETE /api/recipe-products/:id', () => {
         expect(remaining[0].id).toBe(linkA.id)
     })
 
-    it('lets exactly one of two simultaneous unlinks of the last two links win (Group 4 #12)', async () => {
+    it('lets exactly one of two simultaneous unlinks of the last two links win', async () => {
         const { recipe } = await createRecipeLinkedToTwoProducts()
         const [linkA, linkB] = recipe.products
 
@@ -327,7 +327,7 @@ describe('PUT /api/recipe-products/:id — default flag', () => {
     })
 
     /*
-     * ── Group 4 #13: two concurrent "set as default" calls must not deadlock ─
+     * ── Two concurrent "set as default" calls must not deadlock ──────────────
      *
      * Same two-strength pairing as the DELETE race above. The held-lock one is
      * the regression proof: it pins both requests behind one lock so they are
@@ -336,7 +336,7 @@ describe('PUT /api/recipe-products/:id — default flag', () => {
      * here before, and it reported this bug as a 3-in-5 flake precisely
      * because it can also pass by never interleaving at all.
      */
-    it('queues two concurrent "set as default" requests instead of deadlocking (Group 4 #13)', async () => {
+    it('queues two concurrent "set as default" requests instead of deadlocking', async () => {
         const { product, linkX, linkY } = await createTwoRecipesLinkedToSameProduct()
 
         // Hold BOTH of the product's link rows, so neither request can take a

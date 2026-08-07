@@ -21,7 +21,7 @@ const router = Router()
 // Requires an explicit `Z` or numeric offset (`+HH:MM`/`-HH:MM`) so a naive,
 // timezone-less string is rejected loudly instead of being silently parsed
 // as the server process's own local time — which is ambiguous the moment
-// the server's timezone differs from the operator's (todo.md Group 6 #3).
+// the server's timezone differs from the operator's.
 // Every caller of parseDateOr400 sends real UTC (the client converts local
 // wall-clock input via localToUTCISOString before it ever leaves the
 // browser), so this is enforcement, not a new constraint on legitimate input.
@@ -338,7 +338,7 @@ router.post('/', async (req, res, next) => {
     try {
         const run = await prisma.$transaction(async (tx) => {
             // Lock the three parents BEFORE re-reading their `active` flags
-            // (todo.md Group 4 #8). Without this the flags read above and the
+            //. Without this the flags read above and the
             // create below are a check-then-write straddling the deactivate
             // routes' own check-then-write, and both guards can pass: the run
             // lands referencing a just-deactivated entity, which for a recipe

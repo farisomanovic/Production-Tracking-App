@@ -254,7 +254,7 @@ router.put('/:id', async (req, res) => {
         return res.status(400).json({ error: 'active must be a boolean' })
     }
     // The guard and the update share one transaction so the row stays locked
-    // between them (todo.md Group 4 #8 — see lib/deactivationGuards.js). The
+    // between them (see lib/deactivationGuards.js). The
     // recipe is the case that did real damage: a run created in the old race
     // window could never be completed, because /complete re-checks
     // recipe.active and refuses.

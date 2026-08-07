@@ -1,7 +1,7 @@
 /**
  * @file machines.deactivate.test.js
  * @description Tests for the in-progress-run guard on PUT /api/machines/:id's
- * active:false path (todo.md Group 3 #5), backed by the existing
+ * active:false path, backed by the existing
  * machineHasRunInProgress helper (lib/machineGuards.js) already used by the
  * MachineParameter/MachineProduct unlink routes for the identical check.
  */
@@ -32,7 +32,7 @@ beforeAll(async () => {
 
 afterAll(cleanup)
 
-describe('PUT /api/machines/:id — active type validation (Group 3 #12)', () => {
+describe('PUT /api/machines/:id — active type validation', () => {
     it('rejects a non-boolean active with 400 and leaves the row unchanged', async () => {
         const res = await request(app).put(`/api/machines/${machine.id}`).send({ active: 'no' })
         expect(res.status).toBe(400)
