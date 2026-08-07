@@ -14,6 +14,7 @@ import Step4_Materials from '../components/wizard/Step4_Materials'
 import Step5_Output from '../components/wizard/Step5_Output'
 import { createRun, getAllRuns, getRunById, deleteRun } from '../api/productionRuns'
 import { rollToNextDayIfBefore, localToUTCISOString } from '../lib/dates'
+import { canGoBack } from '../lib/wizardNav'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
 
@@ -324,11 +325,11 @@ function NewRunPage() {
   }
 
   /**
-   * Steps back through the wizard. Step 1 is the start (no-op). Step 2 only
-   * allows going back to step 1 before the run exists and is not mid-submit —
-   * once the run is created (steps 3+, or a step-2 revisit after one), its
-   * header is already persisted, so editing step 1 from here would
-   * desynchronize wizard state from the stored row.
+   * Steps back through the wizard, when canGoBack says the move cannot lead
+   * back into run creation — see lib/wizardNav.js for the rule itself.
+   *
+   * The same predicate gates the button's rendering below, so this guard only
+   * fires if a click's handler was already in flight when the step changed.
    *
    * @returns {void}
    *
@@ -336,8 +337,7 @@ function NewRunPage() {
    * <button onClick={handleBack}>Back</button>
    */
   function handleBack() {
-    if (currentStep === 1) return
-    if (currentStep === 2 && (isSubmitting || runId != null)) return
+    if (!canGoBack(currentStep, runId, isSubmitting)) return
 
     setCurrentStep(prev => prev - 1)
   }
@@ -428,13 +428,16 @@ function NewRunPage() {
 
       {currentStep >= 2 && (
         <div style={styles.stepActions}>
-          <button
-            onClick={handleBack}
-            style={styles.backButton}
-            disabled={currentStep === 2 && (isSubmitting || runId != null)}
-          >
-            Back
-          </button>
+          {/* Absent rather than disabled on step 3: a permanently dead control
+              invites clicking, and there is nothing here to re-enable later. */}
+          {canGoBack(currentStep, runId, isSubmitting) && (
+            <button
+              onClick={handleBack}
+              style={styles.backButton}
+            >
+              Back
+            </button>
+          )}
           {currentStep > 2 && (
             <button
               onClick={handleCancelRun}
