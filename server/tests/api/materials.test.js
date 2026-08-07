@@ -219,6 +219,28 @@ describe('PUT /api/materials/:id — non-stock paths', () => {
         expect(res.body.error).toBe('Material not found')
     })
 
+    // A body with nothing updatable in it writes no fields, and Prisma's
+    // updateMany reports count: 0 for an empty `data` even when the row matched.
+    // Without a guard the route reads that 0 as "the below-zero stock guard
+    // blocked me" and answers 409 "tried to remove NaN" — a stock conflict
+    // invented for a request that never mentioned stock.
+    it('treats a PUT with no updatable fields as a no-op 200', async () => {
+        const material = await createMaterial(100)
+        const res = await request(app).put(`/api/materials/${material.id}`).send({})
+        expect(res.status).toBe(200)
+        expect(res.body.name).toBe(material.name)
+        expect(res.body.unit).toBe(material.unit)
+        expect(res.body.stockQty).toBe(100)
+    })
+
+    it('returns 404 for an unknown id even when the body has no updatable fields', async () => {
+        const res = await request(app)
+            .put(`/api/materials/${crypto.randomUUID()}`)
+            .send({})
+        expect(res.status).toBe(404)
+        expect(res.body.error).toBe('Material not found')
+    })
+
     it('rejects a numeric name with 400 (Group 3 #18)', async () => {
         const material = await createMaterial()
         const res = await request(app)
