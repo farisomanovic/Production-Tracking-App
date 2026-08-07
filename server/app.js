@@ -63,6 +63,17 @@ app.get('/ping', (req, res) => {
   res.json({ message: 'Server is alive!' })
 })
 
+// Express enters errorHandler (4 args) only when something threw or called
+// next(err). A request that matched no route never throws, so without this it
+// falls through to Express's own finalhandler and gets an HTML body — the one
+// response in this API that client/src/lib/errorMessage.js cannot read, which
+// turns a mistyped path into the same generic message as a network failure.
+// Position is load-bearing: above the routers it would swallow every real
+// request, below errorHandler Express would never reach it.
+app.use((req, res) => {
+  res.status(404).json({ error: `Cannot ${req.method} ${req.originalUrl}` })
+})
+
 // Registered LAST: Express only treats 4-arg functions as error handlers, and
 // routing only reaches here for errors thrown/rejected anywhere above.
 app.use(errorHandler)
