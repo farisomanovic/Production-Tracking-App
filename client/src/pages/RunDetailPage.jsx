@@ -12,6 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productionRuns'
 import { getMachineParameters } from '../api/machineParameters'
 import { rollToNextDayIfAtOrBefore, formatDisplayDate, formatDisplayTime } from '../lib/dates'
+import { formatQuantity } from '../lib/quantity'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
@@ -379,8 +380,8 @@ function handleMaterialChange(materialId, value) {
  * came off the shelf). Bruto is deliberately NOT a parameter: packaging weight
  * isn't raw material.
  *
- * @param {string|number} qty - Produced quantity (pieces).
- * @param {string|number} nw - Neto weight of one piece in kg.
+ * @param {string|number} qty - Produced quantity, in the product's own unit.
+ * @param {string|number} nw - Neto weight of one unit in kg.
  * @param {string|number} scrap - Total scrap for the run in kg.
  * @returns {void} No-op while every input is empty/zero.
  *
@@ -624,6 +625,8 @@ return (
         <div style={common.field}>
         <label style={common.label}>Quantity Produced * ({run.product.name})</label>
         <div style={common.inputRow}>
+            {/* step='any', not '1': the quantity is in the product's own unit, and
+                a foil run measured in kg legitimately produces 1234.5. */}
             <input
             style={styles.input}
             type='number'
@@ -632,9 +635,9 @@ return (
             onWheel={e => e.target.blur()}
             placeholder='e.g. 500'
             min='0'
-            step='1'
+            step='any'
             />
-            <span style={common.unit}>pcs</span>
+            <span style={common.unit}>{run.product.unit}</span>
         </div>
         </div>
     </div>
@@ -938,7 +941,10 @@ return (
         <p style={{ ...common.sectionLabel, marginBottom: '0.5rem' }}>Output</p>
         <div style={styles.infoCard}>
         <InfoRow label='Product' value={run.product.name} />
-        <InfoRow label='Quantity Produced' value={run.quantityProduced} />
+        <InfoRow
+            label='Quantity Produced'
+            value={formatQuantity(run.quantityProduced, run.product.unit)}
+        />
         </div>
     </div>
 

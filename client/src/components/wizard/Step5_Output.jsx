@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { completeRun } from '../../api/productionRuns'
 import { rollToNextDayIfAtOrBefore } from '../../lib/dates'
+import { formatQuantity } from '../../lib/quantity'
 import { common } from '../../styles/common'
 import { getErrorMessage } from '../../lib/errorMessage'
 import TimeInput24 from '../TimeInput24'
@@ -21,7 +22,8 @@ import TimeInput24 from '../TimeInput24'
  * @param {Object} props
  * @param {Object} props.data - Accumulated wizard formData: parameterValues, materialUsages,
  * quantityProduced and the run-level weights (netWeightPerUnit/grossWeightPerUnit/scrapKg)
- * from steps 3–4 all ride along in the final payload.
+ * from steps 3–4 all ride along in the final payload. `productUnit` is display-only —
+ * the server reads the unit off the run's own product, so it is never sent.
  * @param {string} props.runId - UUID of the run created after step 2 — the completion target.
  * @param {Function} props.onDraftChange - Reports endTime/energyEnd/notes up to
  * formData on every change, since this step has no "Next" click to flush on Back like steps 1-4.
@@ -142,7 +144,7 @@ return (
         <div style={styles.outputCardHeader}>
         <span style={styles.outputCardTitle}>Quantity Produced</span>
         <span style={styles.outputCardValue}>
-            {data.quantityProduced != null ? `${data.quantityProduced} pcs` : '—'}
+            {formatQuantity(data.quantityProduced, data.productUnit)}
         </span>
         </div>
         <p style={styles.outputCardHint}>
