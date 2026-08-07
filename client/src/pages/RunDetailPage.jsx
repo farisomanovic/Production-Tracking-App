@@ -13,6 +13,7 @@ import { getRunById, completeRun, getAllRuns, deleteRun } from '../api/productio
 import { getMachineParameters } from '../api/machineParameters'
 import { rollToNextDayIfAtOrBefore, formatDisplayDate, formatDisplayTime } from '../lib/dates'
 import { formatQuantity } from '../lib/quantity'
+import { calculateMaterialAmounts, formulaLabel, isWeightUnit } from '../lib/materialSplit'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
@@ -375,40 +376,14 @@ function handleMaterialChange(materialId, value) {
 }
 
 /**
- * Fills every material input from total weight × recipe percentage
- * (total kg = quantity × neto weight per unit + scrap — wasted material still
- * came off the shelf). Bruto is deliberately NOT a parameter: packaging weight
- * isn't raw material.
+ * Re-derives all material amounts from the current calculator fields.
  *
- * @param {string|number} qty - Produced quantity, in the product's own unit.
- * @param {string|number} nw - Neto weight of one unit in kg.
- * @param {string|number} scrap - Total scrap for the run in kg.
- * @returns {void} No-op while every input is empty/zero.
- *
- * @example
- * recalculateMaterials('500', '1.5', '10')
- */
-function recalculateMaterials(qty, nw, scrap) {
-    const q = Number(qty) || 0
-    const n = Number(nw) || 0
-    const s = Number(scrap) || 0
-    const totalKg = q * n + s
-    if (!totalKg || run.recipe.recipeItems.length === 0) return
-    const computed = {}
-    run.recipe.recipeItems.forEach(item => {
-    // toFixed(2)+parseFloat: 2-decimal kg without trailing zeros.
-    computed[item.materialId] = String(
-        parseFloat((totalKg * item.percentage / 100).toFixed(2))
-    )
-    })
-    setMaterialValues(computed)
-}
-
-/**
- * Re-derives all material amounts from the current calculator fields. The
- * only call site for recalculateMaterials — operators trigger this
- * explicitly via the "Recalculate" button so a hand-corrected material
- * quantity is never overwritten by a calculator keystroke.
+ * Whether the run's total weight is the quantity itself or the quantity times
+ * neto depends on the product's unit; that rule lives in lib/materialSplit.js so
+ * this form and the wizard's step 4 cannot drift apart on it. Operators trigger
+ * this explicitly via the "Recalculate" button so a hand-corrected material
+ * quantity is never overwritten by a keystroke, and a null result leaves those
+ * corrections alone rather than wiping them to zero.
  *
  * @returns {void}
  *
@@ -416,7 +391,15 @@ function recalculateMaterials(qty, nw, scrap) {
  * <button onClick={handleRecalculate}>Recalculate</button>
  */
 function handleRecalculate() {
-    recalculateMaterials(quantityProduced, netWeightPerUnit, scrapKg)
+    const computed = calculateMaterialAmounts({
+    quantityProduced,
+    netWeightPerUnit,
+    scrapKg,
+    unit: run.product.unit,
+    recipeItems: run.recipe.recipeItems
+    })
+    if (!computed) return
+    setMaterialValues(computed)
 }
 
 /**
@@ -646,9 +629,17 @@ return (
     {run.recipe.recipeItems.length > 0 && (
         <div style={styles.calculator}>
         <p style={styles.calcLabel}>Quick Calculator</p>
+        {/* The formula on screen, because it changes with the product's unit
+            and nothing else on this card would reveal which branch ran. */}
+        <p style={styles.formulaLine}>{formulaLabel(run.product.unit)}</p>
         <div style={styles.calcGrid}>
             <div style={styles.calcField}>
-            <label style={common.label}>Neto Weight per Unit</label>
+            <label style={common.label}>
+                Neto Weight per Unit
+                {isWeightUnit(run.product.unit) && (
+                <span style={styles.recordedHint}> (recorded only)</span>
+                )}
+            </label>
             <div style={common.inputRow}>
                 <input
                 style={styles.calcInput}
@@ -664,7 +655,12 @@ return (
             </div>
             </div>
             <div style={styles.calcField}>
-            <label style={common.label}>Bruto Weight per Unit</label>
+            {/* Unconditional: bruto has never fed the calculation under any
+                unit, and until now only a source comment said so. */}
+            <label style={common.label}>
+                Bruto Weight per Unit
+                <span style={styles.recordedHint}> (recorded only)</span>
+            </label>
             <div style={common.inputRow}>
                 <input
                 style={styles.calcInput}
@@ -1167,6 +1163,16 @@ calcLabel: {
     marginBottom: '0.75rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
+},
+formulaLine: {
+    color: 'var(--color-text-secondary)',
+    fontSize: '0.85rem',
+    marginBottom: '0.75rem',
+},
+recordedHint: {
+    color: 'var(--color-text-muted)',
+    fontSize: '0.75rem',
+    fontWeight: 'normal',
 },
 calcGrid: {
     display: 'grid',
