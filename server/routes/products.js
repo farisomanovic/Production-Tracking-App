@@ -7,7 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { isFiniteNumber, isNonEmptyString, isValidUnit, VALID_UNITS } from '../lib/validation.js'
+import { isFiniteNumber, isNonEmptyString, isValidUnit, normalizeCode, VALID_UNITS } from '../lib/validation.js'
 
 const router = Router()
 
@@ -88,7 +88,12 @@ router.post('/', async (req, res) => {
         return
     }
     const product = await prisma.product.create({
-        data: { name, code,
+        // code is trimmed, never nulled: unlike Machine.code this column is
+        // required and unique, so "  PP-12  " and "PP-12" would otherwise be
+        // two distinct unique keys for one physical product. The blank guard
+        // above runs first, which is what keeps normalizeCode's null branch
+        // unreachable here — a null would violate NOT NULL.
+        data: { name, code: normalizeCode(code),
             ...(widthMm !== undefined && { widthMm }),
             ...(thicknessMm !== undefined && { thicknessMm }),
             ...(lengthM !== undefined && { lengthM }),
@@ -102,7 +107,8 @@ router.post('/', async (req, res) => {
  * Partially updates a product.
  *
  * @param {import('express').Request} req - `params.id` UUID; any subset of name/code/dimensions/description/unit.
- * @param {import('express').Response} res - 200 → updated Product; 404 unknown id; 409 duplicate code; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → updated Product; 400 blank/non-string code or bad unit;
+ * 404 unknown id; 409 duplicate code; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -116,6 +122,12 @@ router.put('/:id', async (req, res) => {
             return res.status(400).json({ error: `${field} must be a string` })
         }
     }
+    // Must stay after the typeof loop and before normalizeCode below: the loop
+    // owns the non-string message, and normalizeCode turns a blank into null,
+    // which this required column cannot hold.
+    if (code !== undefined && !isNonEmptyString(code)) {
+        return res.status(400).json({ error: 'code cannot be blank' })
+    }
     if (unit !== undefined && !isValidUnit(unit)) {
         return res.status(400).json({ error: `unit must be one of: ${VALID_UNITS.join(', ')}` })
     }
@@ -127,7 +139,7 @@ router.put('/:id', async (req, res) => {
         data: {
             // Spread-if-defined keeps omitted fields untouched (partial update).
             ...(name !== undefined && { name }),
-            ...(code !== undefined && { code }),
+            ...(code !== undefined && { code: normalizeCode(code) }),
             ...(widthMm !== undefined && { widthMm }),
             ...(thicknessMm !== undefined && { thicknessMm }),
             ...(lengthM !== undefined && { lengthM }),
