@@ -13,6 +13,7 @@ import { getRecipeProducts, linkProductToRecipe, unlinkProductFromRecipe } from 
 import { getAllProducts } from '../api/products'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
+import { missingFieldsMessage } from '../lib/requiredFields'
 
 /**
  * Renders one recipe's ingredients (read-only) and linked products (with
@@ -74,9 +75,13 @@ function RecipeDetailPage() {
    * <button onClick={handleLinkProduct}>Link</button>
    */
   async function handleLinkProduct() {
-    if (!selectedProductId) return
+    setActionError(null)
+    const missing = missingFieldsMessage([['Product', selectedProductId]])
+    if (missing) {
+      setActionError(missing)
+      return
+    }
     try {
-      setActionError(null)
       await linkProductToRecipe({ recipeId, productId: selectedProductId })
       setSelectedProductId('')
       const res = await getRecipeProducts(recipeId)

@@ -11,6 +11,7 @@ import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
+import { missingFieldsMessage } from '../lib/requiredFields'
 
 /**
  * Renders the machine list with add form, inline code editing, and active toggles.
@@ -40,7 +41,12 @@ function MachinesPage() {
    * <button onClick={handleSubmit}>Add Machine</button>
    */
   async function handleSubmit() {
-    if (!name.trim()) return
+    setActionError(null)
+    const missing = missingFieldsMessage([['Name', name]])
+    if (missing) {
+      setActionError(missing)
+      return
+    }
     try {
       await createMachine({
         name,

@@ -11,6 +11,7 @@ import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
+import { missingFieldsMessage } from '../lib/requiredFields'
 import { UNITS } from '../lib/units'
 
 /**
@@ -44,7 +45,12 @@ function ProductsPage() {
    * <button onClick={handleSubmit}>Add Product</button>
    */
   async function handleSubmit() {
-    if (!name.trim() || !code.trim() || !unit.trim()) return
+    setActionError(null)
+    const missing = missingFieldsMessage([['Name', name], ['Code', code], ['Unit', unit]])
+    if (missing) {
+      setActionError(missing)
+      return
+    }
     try {
       await createProduct({
         name,

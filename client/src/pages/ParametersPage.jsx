@@ -10,6 +10,7 @@ import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
+import { missingFieldsMessage } from '../lib/requiredFields'
 
 /**
  * Renders the parameter list with an add form.
@@ -36,7 +37,12 @@ function ParametersPage() {
    * <button onClick={handleSubmit}>Add Parameter</button>
    */
   async function handleSubmit() {
-    if (!name.trim()) return
+    setActionError(null)
+    const missing = missingFieldsMessage([['Name', name]])
+    if (missing) {
+      setActionError(missing)
+      return
+    }
     try {
       await createParameter({
         name,
