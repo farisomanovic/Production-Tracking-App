@@ -55,11 +55,11 @@ useEffect(() => {
 // ─── VALIDATION & SUBMIT ─────────────────────────────────────────────────────
 
 /**
- * Checks completion requirements before submit: end time present, and a
- * positive produced quantity carried over from step 4. The quantity check is
- * a backstop, not a form rule — step 4 already refuses to advance without
- * one, so failing here means wizard state was lost, not that the operator
- * left a field blank.
+ * Checks completion requirements before submit: end time present, a positive
+ * produced quantity carried over from step 4, and an end meter reading at or
+ * above step 1's start reading. The quantity check is a backstop, not a form
+ * rule — step 4 already refuses to advance without one, so failing here means
+ * wizard state was lost, not that the operator left a field blank.
  *
  * @returns {boolean} true when the payload is safe to send; false after setting an error.
  *
@@ -74,6 +74,16 @@ function validate() {
 
     if (!(Number(data.quantityProduced) > 0)) {
     setError('Quantity produced is missing — go back to step 4 and enter it.')
+    return false
+    }
+
+    // The kWh counter only climbs, so an end reading below step 1's start
+    // reading is a typo — almost always the two transposed. The server rejects
+    // it as well; catching it here means the operator fixes one field instead
+    // of losing a submitted form to a 400.
+    if (energyEnd !== '' && data.energyStart !== '' && data.energyStart != null
+        && Number(energyEnd) < Number(data.energyStart)) {
+    setError(`End meter reading can't be below the start reading (${data.energyStart} kWh).`)
     return false
     }
 

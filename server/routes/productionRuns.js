@@ -437,7 +437,8 @@ router.post('/', async (req, res, next) => {
  * `warmupStartTime`, `stableStartTime`, `energyStart`, `energyEnd`, `endTime`.
  * @param {import('express').Response} res - 200 → updated run with relations; 400 an unparseable
  * warmupStartTime/stableStartTime/endTime, an endTime at/before startTime, a warmupStartTime
- * after startTime, or a stableStartTime before startTime; 404 unknown id;
+ * after startTime, a stableStartTime before startTime, or a resulting energyEnd below the
+ * resulting energyStart; 404 unknown id;
  * 409 run is already completed (immutable once completed).
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -489,13 +490,16 @@ router.put('/:id', async (req, res) => {
 
     // Reads startTime for the three ordering checks below — it is immutable
     // (POST sets it once, this route never accepts it), so it cannot go stale.
+    // The stored energy readings come along for the pair check: either field can
+    // be updated in isolation here, so the rule has to be evaluated against the
+    // pair the row would END UP with, not just against what the body carries.
     // The status check here is only a fast path that skips pointless work on an
     // already-completed run; the guarantee that a completed run is an immutable
     // log of what happened on the floor is enforced by the compare-and-swap
     // further down, not by this read.
     const existing = await prisma.productionRun.findUnique({
         where: { id: req.params.id },
-        select: { startTime: true, status: true }
+        select: { startTime: true, status: true, energyStart: true, energyEnd: true }
     })
     if (!existing) {
         throw new RunNotFoundError()
@@ -513,6 +517,21 @@ router.put('/:id', async (req, res) => {
     }
     if (parsedStableStartTime !== undefined && parsedStableStartTime < existing.startTime) {
         return res.status(400).json({ error: 'stableStartTime must be at or after the run start time' })
+    }
+    // A kWh totalizer only climbs, so an end reading below the start one
+    // describes something that did not happen on the floor — and the only
+    // consumer of the pair is the subtraction behind the export's "Energy
+    // Consumed" column, which would carry the wrong SIGN, not merely the wrong
+    // size. Compared on the effective pair because either field can arrive
+    // alone: a body setting only energyEnd still has to clear the stored
+    // energyStart, and vice versa.
+    const effectiveEnergyStart = energyStart !== undefined ? energyStart : existing.energyStart
+    const effectiveEnergyEnd = energyEnd !== undefined ? energyEnd : existing.energyEnd
+    // Both halves of the null check are load-bearing. Skipping either lets the
+    // absent side coerce to 0, which would reject a perfectly ordinary
+    // { energyStart: 100 } on a run whose end reading has not been taken yet.
+    if (effectiveEnergyStart != null && effectiveEnergyEnd != null && effectiveEnergyEnd < effectiveEnergyStart) {
+        return res.status(400).json({ error: 'energyEnd must be at or above energyStart' })
     }
 
     // TODO: no UI calls this endpoint yet (the client's updateRun helper is
@@ -597,9 +616,9 @@ router.put('/:id', async (req, res) => {
  * `netWeightPerUnit`/`grossWeightPerUnit`/`scrapKg` optional (numbers ≥ 0).
  * @param {import('express').Response} res - 200 → completed run aggregate; 400 invalid payload
  * (including an unparseable endTime, one at/before the run's startTime, a missing or
- * non-positive quantityProduced, a duplicate id within `parameterValues`/`materialUsages`,
- * any id that doesn't belong to this run's machine/recipe, or the run's recipe having been
- * deactivated since the run started);
+ * non-positive quantityProduced, an energyEnd below the run's stored energyStart, a duplicate id
+ * within `parameterValues`/`materialUsages`, any id that doesn't belong to this run's
+ * machine/recipe, or the run's recipe having been deactivated since the run started);
  * 404 unknown run; 409 already completed or insufficient stock; 500 on transaction failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -636,6 +655,10 @@ router.post('/:id/complete', async (req, res) => {
         where: { id: req.params.id },
         select: {
             startTime: true,
+            // The start reading was recorded at creation; this route only ever
+            // receives the end one, so the pair check below has no other source
+            // for its left-hand side.
+            energyStart: true,
             machine: {
                 select: {
                     machineParameters: { select: { id: true } }
@@ -690,6 +713,12 @@ router.post('/:id/complete', async (req, res) => {
     // a real reading (a meter replaced mid-run starts there), negatives aren't.
     if (energyEnd !== undefined && (!isFiniteNumber(energyEnd) || energyEnd < 0)) {
         return res.status(400).json({ error: 'energyEnd must be a number of at least 0 when provided' })
+    }
+    // The counter climbs, so the end reading cannot sit below the start one —
+    // same rule PUT /:id enforces, see the longer note there. A run with no
+    // start reading has nothing to compare against and is left alone.
+    if (energyEnd !== undefined && existing.energyStart != null && energyEnd < existing.energyStart) {
+        return res.status(400).json({ error: 'energyEnd must be at or above energyStart' })
     }
     if (notes !== undefined && typeof notes !== 'string') {
         return res.status(400).json({ error: 'notes must be a string' })

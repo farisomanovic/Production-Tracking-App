@@ -15,6 +15,7 @@ import { getAllOperators } from '../api/operators'
 import { getAllProducts } from '../api/products'
 import { formatDisplayDate, formatExportDate, formatFileDate, formatDisplayTime } from '../lib/dates'
 import { totalNetKg, totalGrossKg } from '../lib/runWeights'
+import { energyConsumed } from '../lib/energy'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
@@ -484,9 +485,12 @@ export default function ProductionRunsPage() {
           }
 
           const rows = fullRuns.map(run => {
-              const energyConsumed = run.energyStart != null && run.energyEnd != null
-                  ? Number((run.energyEnd - run.energyStart).toFixed(1))
-                  : ''
+              // Blank rather than a number when the pair is unusable. The two
+              // raw reading columns beside it still carry what was recorded, so
+              // a backwards pair reads as start=12500, end=12400, consumed=blank
+              // — visibly broken data instead of a negative that sums quietly
+              // into the totals. See lib/energy.js.
+              const consumed = energyConsumed(run.energyStart, run.energyEnd) ?? ''
 
               const paramValues = paramNames.map(name => {
                   const match = run.runParameterValues.find(pv => {
@@ -529,7 +533,7 @@ export default function ProductionRunsPage() {
                   formatExportTime(run.endTime),
                   run.energyStart != null ? run.energyStart : '',
                   run.energyEnd != null ? run.energyEnd : '',
-                  energyConsumed,
+                  consumed,
                   ...paramValues,
                   ...materialValues,
                   quantity != null ? quantity : '',
