@@ -14,6 +14,7 @@ import { getAllProducts } from '../api/products'
 import { common } from '../styles/common'
 import ErrorBanner from '../components/ErrorBanner'
 import { getErrorMessage } from '../lib/errorMessage'
+import { missingFieldsMessage } from '../lib/requiredFields'
 
 /**
  * Renders the machine's linked parameters and products with link/unlink controls.
@@ -94,7 +95,12 @@ function MachineDetailPage() {
    * <button onClick={handleLinkParameter}>Link</button>
    */
   async function handleLinkParameter() {
-    if (!selectedParameterId) return
+    setActionError(null)
+    const missing = missingFieldsMessage([['Parameter', selectedParameterId]])
+    if (missing) {
+      setActionError(missing)
+      return
+    }
     try {
       await linkParameterToMachine({ machineId, parameterId: selectedParameterId })
       setSelectedParameterId('')
@@ -137,7 +143,12 @@ function MachineDetailPage() {
    * <button onClick={handleLinkProduct}>Link</button>
    */
   async function handleLinkProduct() {
-    if (!selectedProductId) return
+    setActionError(null)
+    const missing = missingFieldsMessage([['Product', selectedProductId]])
+    if (missing) {
+      setActionError(missing)
+      return
+    }
     try {
       await linkProductToMachine({ machineId, productId: selectedProductId })
       setSelectedProductId('')

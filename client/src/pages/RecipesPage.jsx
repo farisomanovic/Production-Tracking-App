@@ -14,6 +14,7 @@ import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
+import { missingFieldsMessage } from '../lib/requiredFields'
 
 /**
  * Renders the recipe list and the collapsible recipe-builder form.
@@ -88,7 +89,15 @@ function RecipesPage() {
    * <button onClick={handleAddItem}>Add</button>
    */
   function handleAddItem() {
-    if (!selectedMaterialId || !percentage) return
+    setActionError(null)
+    const missing = missingFieldsMessage([
+      ['Material', selectedMaterialId],
+      ['Percentage', percentage]
+    ])
+    if (missing) {
+      setActionError(missing)
+      return
+    }
 
     const material = materials.find((m) => m.id === selectedMaterialId)
     const alreadyAdded = items.some((i) => i.materialId === selectedMaterialId)
@@ -150,8 +159,24 @@ function RecipesPage() {
    * <button onClick={handleSubmit}>Save Recipe</button>
    */
   async function handleSubmit() {
-    if (!name.trim() || selectedProductIds.length === 0 || items.length === 0) return
-    if (!isTotalValid(getTotalPercentage())) return
+    setActionError(null)
+    const missing = missingFieldsMessage([
+      ['Name', name],
+      ['Products', selectedProductIds],
+      ['Materials', items]
+    ])
+    if (missing) {
+      setActionError(missing)
+      return
+    }
+
+    // Reported with the running total, not as a bare "invalid": the user has to
+    // know how far off they are to know which percentage to change.
+    const total = getTotalPercentage()
+    if (!isTotalValid(total)) {
+      setActionError(`Materials must total 100% — currently ${total}%`)
+      return
+    }
 
     try {
       await createRecipe({
