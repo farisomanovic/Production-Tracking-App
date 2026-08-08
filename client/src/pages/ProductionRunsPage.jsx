@@ -14,6 +14,7 @@ import { getAllMachines } from '../api/machines'
 import { getAllOperators } from '../api/operators'
 import { getAllProducts } from '../api/products'
 import { formatDisplayDate, formatExportDate, formatFileDate, formatDisplayTime } from '../lib/dates'
+import { totalNetKg, totalGrossKg } from '../lib/runWeights'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
@@ -506,6 +507,16 @@ export default function ProductionRunsPage() {
               // multiplying '' into a misleading 0.
               const quantity = run.quantityProduced != null ? Number(run.quantityProduced) : null
 
+              // Both totals depend on the product's unit, not just the numbers:
+              // a kg quantity is already the net total, a count has to be
+              // multiplied up. See lib/runWeights.js.
+              const weights = {
+                  quantityProduced: quantity,
+                  netWeightPerUnit: run.netWeightPerUnit,
+                  grossWeightPerUnit: run.grossWeightPerUnit,
+                  unit: run.product.unit
+              }
+
               return [
                   formatExportDate(run.date),
                   sanitizeCellText(run.machine.name),
@@ -523,19 +534,14 @@ export default function ProductionRunsPage() {
                   ...materialValues,
                   quantity != null ? quantity : '',
                   sanitizeCellText(run.product.unit),
-                  // The run stores per-unit neto/bruto; totals multiply back by
-                  // the produced quantity. Per-unit values go in raw (rounding
-                  // would lose precision on light products), totals are rounded
-                  // to hide float-multiplication noise. Blank ('') for runs
-                  // missing either factor — Excel's SUM skips blanks.
+                  // Per-unit values go in raw — rounding would lose precision on
+                  // light products. Totals come from runWeights.js, which owns
+                  // the unit branch and the rounding. Blank ('') when a total
+                  // can't be derived — Excel's SUM skips blanks.
                   run.netWeightPerUnit != null ? run.netWeightPerUnit : '',
-                  quantity != null && run.netWeightPerUnit != null
-                      ? Number((quantity * run.netWeightPerUnit).toFixed(1))
-                      : '',
+                  totalNetKg(weights) ?? '',
                   run.grossWeightPerUnit != null ? run.grossWeightPerUnit : '',
-                  quantity != null && run.grossWeightPerUnit != null
-                      ? Number((quantity * run.grossWeightPerUnit).toFixed(1))
-                      : '',
+                  totalGrossKg(weights) ?? '',
                   run.scrapKg != null ? run.scrapKg : '',
                   sanitizeCellText(run.notes)
               ]
