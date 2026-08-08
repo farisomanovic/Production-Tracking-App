@@ -9,6 +9,7 @@ import { getAllOperators } from '../../api/operators'
 import { getAllMachines } from '../../api/machines'
 import { getMachineProducts } from '../../api/machineProducts'
 import { getLocalDateString } from '../../lib/dates'
+import { buildStep1Data } from '../../lib/newRunPayload'
 import { common } from '../../styles/common'
 import { getErrorMessage } from '../../lib/errorMessage'
 import TimeInput24 from '../TimeInput24'
@@ -120,23 +121,22 @@ function handleNext() {
 
     setError(null)
 
-    const stepData = {
+    // Every field goes up, blank optionals included — the wizard merges this
+    // over formData, where an omitted key means "keep the old value" rather
+    // than "blank". Omitting them is how a cleared field used to come back.
+    // What is worth sending is buildCreateRunPayload's decision, not this
+    // step's.
+    onNext(buildStep1Data({
     operatorId,
     machineId,
     productId,
     date,
     startTime,
-    // Optionals are only forwarded once the operator has actually filled them
-    // in, so the payload builder never has to distinguish "" (untouched input)
-    // from a real value. energyStart tests !== '' rather than truthiness
-    // because 0 is a real meter reading, not an empty field.
-    ...(warmupStartTime && { warmupStartTime }),
-    ...(stableStartTime && { stableStartTime }),
-    ...(energyStart !== '' && { energyStart }),
-    ...(potentialBuyer && { potentialBuyer }),
-    }
-
-    onNext(stepData)
+    warmupStartTime,
+    stableStartTime,
+    energyStart,
+    potentialBuyer,
+    }))
 }
 
 if (loadingInitial) return <p style={common.loadingText}>Loading...</p>
