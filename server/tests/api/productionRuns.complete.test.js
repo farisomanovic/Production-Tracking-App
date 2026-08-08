@@ -278,6 +278,41 @@ describe('POST /api/production-runs/:id/complete — energyEnd type validation',
     })
 })
 
+/*
+ * The reading this route receives is only half the pair. The other half was
+ * recorded at creation and lives on the row, so completing is the moment the
+ * counter's climb can finally be checked — and it has to be checked here,
+ * because completion is what makes the run visible to the export that
+ * subtracts them.
+ */
+describe('POST /api/production-runs/:id/complete — energyEnd vs the run\'s energyStart', () => {
+    it('rejects an energyEnd below the run\'s stored energyStart', async () => {
+        await prisma.productionRun.update({ where: { id: runId }, data: { energyStart: 100 } })
+        const materialBefore = await prisma.material.findUniqueOrThrow({ where: { id: baseline.material.id } })
+
+        const res = await complete({ ...validPayload(), energyEnd: 50 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyEnd must be at or above energyStart')
+
+        // The guard runs before the transaction, so nothing downstream of it
+        // may have happened: no status flip, and no stock consumed.
+        const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
+        expect(run.status).toBe('in_progress')
+        expect(run.energyEnd).toBeNull()
+        const materialAfter = await prisma.material.findUniqueOrThrow({ where: { id: baseline.material.id } })
+        expect(materialAfter.stockQty).toBe(materialBefore.stockQty)
+    })
+
+    it('accepts an energyEnd equal to the run\'s stored energyStart', async () => {
+        await prisma.productionRun.update({ where: { id: runId }, data: { energyStart: 100 } })
+
+        const res = await complete({ ...validPayload(), energyEnd: 100 })
+        expect(res.status).toBe(200)
+        expect(res.body.status).toBe('completed')
+        expect(res.body.energyEnd).toBe(100)
+    })
+})
+
 describe('POST /api/production-runs/:id/complete — recipe deactivated after the run started', () => {
     it('rejects completion once the run\'s recipe has been deactivated', async () => {
         // The run was created (via beforeEach, above) while the recipe was

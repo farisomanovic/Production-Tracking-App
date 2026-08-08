@@ -14,6 +14,7 @@ import { getMachineParameters } from '../api/machineParameters'
 import { rollToNextDayIfAtOrBefore, formatDisplayDate, formatDisplayTime } from '../lib/dates'
 import { formatQuantity } from '../lib/quantity'
 import { calculateMaterialAmounts, formulaLabel, isWeightUnit } from '../lib/materialSplit'
+import { energyConsumed } from '../lib/energy'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
@@ -465,7 +466,8 @@ function handleGrossWeightChange(value) {
 
 /**
  * Checks completion requirements: end time set, a positive produced quantity,
- * and every parameter and material filled in.
+ * every parameter and material filled in, and an end meter reading at or above
+ * the run's start reading.
  *
  * @returns {boolean} true when the payload is safe to send; false after setting an error.
  *
@@ -498,6 +500,14 @@ function validate() {
     })
     if (!allMaterialsFilled) {
     setError('Please fill in all material quantities.')
+    return false
+    }
+
+    // The server rejects this pair too — this is here so a transposed reading
+    // is caught before the operator submits a completed form, the same way
+    // step 1 checks the warmup/start ordering the server also enforces.
+    if (energyEnd !== '' && run.energyStart != null && Number(energyEnd) < run.energyStart) {
+    setError(`End meter reading can't be below the start reading (${run.energyStart} kWh).`)
     return false
     }
 
@@ -814,6 +824,12 @@ return (
  *   formatTimeWithDayMarker={formatTimeWithDayMarker} formatDuration={formatDuration} onDelete={handleDelete} />
  */
 function RunDetailView({ run, formatDate, formatTime, formatTimeWithDayMarker, formatDuration, onDelete }) {
+
+// Null when the pair runs backwards, which the Consumed row renders as a dash.
+// Both readings still show above it, so the operator can see WHICH one is wrong
+// rather than just being told the total is unavailable. See lib/energy.js.
+const consumed = energyConsumed(run.energyStart, run.energyEnd)
+
 return (
     <div>
     <button
@@ -861,7 +877,7 @@ return (
             {run.energyStart != null && run.energyEnd != null && (
             <InfoRow
                 label='Consumed'
-                value={`${(run.energyEnd - run.energyStart).toFixed(1)} kWh`}
+                value={consumed != null ? `${consumed.toFixed(1)} kWh` : '—'}
             />
             )}
         </div>

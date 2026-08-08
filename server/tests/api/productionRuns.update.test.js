@@ -285,3 +285,62 @@ describe('PUT /api/production-runs/:id', () => {
         expect(res.status).toBe(404)
     })
 })
+
+/*
+ * ── The energy pair, not each reading on its own ─────────────────────────────
+ *
+ * The two guards above only ever asked whether each reading was a number ≥ 0.
+ * A kWh totalizer climbs, so the pair carries a rule neither field can state
+ * alone — and because this route accepts either field in isolation, the rule
+ * has to hold against the pair the row ENDS UP with, not just against whatever
+ * the body happened to carry. Hence the stored-side cases below.
+ */
+describe('PUT /api/production-runs/:id — energy pair ordering', () => {
+    it('rejects a body carrying an energyEnd below its own energyStart', async () => {
+        const res = await put({ energyStart: 100, energyEnd: 50 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyEnd must be at or above energyStart')
+    })
+
+    it('rejects an energyEnd below the run\'s stored energyStart', async () => {
+        await prisma.productionRun.update({ where: { id: runId }, data: { energyStart: 100 } })
+
+        const res = await put({ energyEnd: 50 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyEnd must be at or above energyStart')
+
+        const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
+        expect(run.energyEnd).toBeNull()
+    })
+
+    it('rejects an energyStart above the run\'s stored energyEnd', async () => {
+        await prisma.productionRun.update({ where: { id: runId }, data: { energyEnd: 200 } })
+
+        const res = await put({ energyStart: 300 })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('energyEnd must be at or above energyStart')
+
+        const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
+        expect(run.energyStart).toBeNull()
+    })
+
+    // The meter did not move — a short run, or one on a counter whose resolution
+    // is coarser than what it consumed. Zero consumption is a real measurement,
+    // so the rule is >=, not >.
+    it('accepts an equal pair', async () => {
+        const res = await put({ energyStart: 100, energyEnd: 100 })
+        expect(res.status).toBe(200)
+        expect(res.body.energyStart).toBe(100)
+        expect(res.body.energyEnd).toBe(100)
+    })
+
+    // The regression this pins: comparing against a missing end reading coerces
+    // null to 0, which turns an ordinary "record the start reading" edit into a
+    // 400 on every run that has not been completed yet — i.e. all of them.
+    it('accepts an energyStart on a run with no energyEnd yet', async () => {
+        const res = await put({ energyStart: 100 })
+        expect(res.status).toBe(200)
+        expect(res.body.energyStart).toBe(100)
+        expect(res.body.energyEnd).toBeNull()
+    })
+})
