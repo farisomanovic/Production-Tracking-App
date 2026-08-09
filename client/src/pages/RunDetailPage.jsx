@@ -832,10 +832,19 @@ const consumed = energyConsumed(run.energyStart, run.energyEnd)
 
 return (
     <div>
+    {/* The only place the immutability rule is visible to the operator. The
+        absence of edit controls says "you can't", but not "you're not meant
+        to" — and without the second half, a mistyped quantity gets left alone
+        rather than corrected, which is the worse outcome of the two. */}
+    <p style={styles.finalNote}>
+        This run is complete and its record is final — quantities, measurements and
+        material usage can no longer be edited. To correct a mistake, delete the run
+        and enter it again; the materials it used are returned to stock automatically.
+    </p>
     <button
         style={styles.deleteButton}
         onClick={() => {
-            const confirmed = window.confirm('Are you sure you want to delete this run? This cannot be undone.')
+            const confirmed = window.confirm('Delete this run? Its record will be removed permanently and the materials it consumed will be returned to stock. This cannot be undone.')
             if (confirmed) onDelete()
         }}
     >
@@ -1109,6 +1118,12 @@ notesText: {
 hint: {
     color: 'var(--color-text-muted)',
     fontSize: '0.8rem',
+},
+finalNote: {
+    color: 'var(--color-text-secondary)',
+    fontSize: '0.85rem',
+    lineHeight: '1.5',
+    marginBottom: '1rem',
 },
 input: {
     padding: '0.6rem 0.75rem',
