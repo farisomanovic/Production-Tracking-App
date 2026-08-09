@@ -290,4 +290,24 @@ describe('PUT /api/recipes/:id — string field type validation', () => {
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('notes must be a string')
     })
+
+    // Only `name` gets a blank guard: Recipe.notes is nullable, so clearing it
+    // to "" is a legitimate edit, not a corrupted required field.
+    it('rejects an empty-string name with 400 and leaves the row unchanged', async () => {
+        const recipe = await post(validPayload()).then((res) => res.body)
+        const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ name: '' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.recipe.findUnique({ where: { id: recipe.id } })
+        expect(after.name).toBe(recipe.name)
+    })
+
+    it('rejects a whitespace-only name with 400 and leaves the row unchanged', async () => {
+        const recipe = await post(validPayload()).then((res) => res.body)
+        const res = await request(app).put(`/api/recipes/${recipe.id}`).send({ name: '   ' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.recipe.findUnique({ where: { id: recipe.id } })
+        expect(after.name).toBe(recipe.name)
+    })
 })

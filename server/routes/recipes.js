@@ -235,7 +235,7 @@ router.post('/', async (req, res) => {
  * flag per linked product), so use PUT /recipe-products/:id instead.
  *
  * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.notes`, `body.active`.
- * @param {import('express').Response} res - 200 → updated Recipe aggregate; 404 unknown id; 409 blocked by in-progress run; 500 on failure.
+ * @param {import('express').Response} res - 200 → updated Recipe aggregate; 400 blank or non-string name; 404 unknown id; 409 blocked by in-progress run; 500 on failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -252,6 +252,12 @@ router.put('/:id', async (req, res) => {
     }
     if (active !== undefined && typeof active !== 'boolean') {
         return res.status(400).json({ error: 'active must be a boolean' })
+    }
+    // NOT NULL does not mean "has a name" to Postgres — "" satisfies the column
+    // and leaves a row no list or dropdown can render. Same check POST makes.
+    // `notes` is nullable, so blanking it is a legitimate edit and stays allowed.
+    if (name !== undefined && !isNonEmptyString(name)) {
+        return res.status(400).json({ error: 'name cannot be blank' })
     }
     // The guard and the update share one transaction so the row stays locked
     // between them (see lib/deactivationGuards.js). The

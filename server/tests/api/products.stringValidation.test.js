@@ -91,3 +91,25 @@ describe('PUT /api/products/:id — string field type validation', () => {
         expect(res.body.error).toBe('description must be a string')
     })
 })
+
+// The `code` twin of these two lives in products.codeNormalize.test.js; `name`
+// belongs here because, unlike code, it is never normalized on write.
+describe('PUT /api/products/:id — blank name', () => {
+    it('rejects an empty-string name with 400 and leaves the row unchanged', async () => {
+        const product = await createProduct()
+        const res = await request(app).put(`/api/products/${product.id}`).send({ name: '' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.product.findUnique({ where: { id: product.id } })
+        expect(after.name).toBe(product.name)
+    })
+
+    it('rejects a whitespace-only name with 400 and leaves the row unchanged', async () => {
+        const product = await createProduct()
+        const res = await request(app).put(`/api/products/${product.id}`).send({ name: '   ' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.product.findUnique({ where: { id: product.id } })
+        expect(after.name).toBe(product.name)
+    })
+})
