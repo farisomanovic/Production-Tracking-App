@@ -1,7 +1,13 @@
 /**
  * @file machineProducts.test.js
- * @description Tests for DELETE /api/machine-products/:id — happy path +
- * main failure case tier per CLAUDE.md. The main failure case is the new
+ * @description Tests for POST /api/machine-products and DELETE
+ * /api/machine-products/:id — happy path + main failure case tier per
+ * CLAUDE.md. POST's covered failure is a non-string link id, which used to pass
+ * the route's truthiness-only guard and die inside Prisma as an unclassifiable
+ * 500; its 409 (duplicate) and 400 (bad foreign key) paths live in
+ * errorHandler.test.js and are not duplicated here. POST's 201 has no test
+ * anywhere — a pre-existing gap, filed as todo.md Group 8 #43 rather than
+ * fixed here. DELETE's main failure case is the
  * guard blocking an unlink while the machine has an in_progress run — before
  * this guard, unlinking a product mid-run would leave the run referencing a
  * product its machine is no longer configured to make — with no RESTRICT
@@ -49,6 +55,28 @@ async function createLink() {
         data: { machineId: baseline.machine.id, productId: product.id }
     })
 }
+
+describe('POST /api/machine-products — machineId/productId type validation', () => {
+    // Both cases send a valid id on the other side of the pair, so the only
+    // thing under test is the type of the field named in the title. Neither
+    // creates a fixture: the guard rejects before Prisma is reached, so there
+    // is nothing to clean up.
+    it('rejects a non-string machineId with 400', async () => {
+        const res = await request(app).post('/api/machine-products').send({
+            machineId: 12345, productId: baseline.product.id
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('machineId and productId are required')
+    })
+
+    it('rejects a non-string productId with 400', async () => {
+        const res = await request(app).post('/api/machine-products').send({
+            machineId: baseline.machine.id, productId: 12345
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('machineId and productId are required')
+    })
+})
 
 describe('DELETE /api/machine-products/:id', () => {
     it('rejects the unlink with 409 while the machine has a run in progress', async () => {

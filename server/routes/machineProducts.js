@@ -7,6 +7,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { machineHasRunInProgress } from '../lib/machineGuards.js'
+import { isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -45,7 +46,7 @@ router.get('/machine/:machineId', async (req, res) => {
 router.post('/', async (req, res, next) => {
     try {
         const { machineId, productId } = req.body
-        if (!machineId || !productId) {
+        if (!isNonEmptyString(machineId) || !isNonEmptyString(productId)) {
             return res.status(400).json({ error: 'machineId and productId are required' })
         }
         const link = await prisma.machineProduct.create({

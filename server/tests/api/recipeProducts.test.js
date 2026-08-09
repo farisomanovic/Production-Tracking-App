@@ -148,6 +148,27 @@ describe('POST /api/recipe-products', () => {
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('recipeId and productId are required')
     })
+
+    // Absent and non-string are separate cases: a missing id is falsy and was
+    // always caught, a numeric one is truthy and used to reach Prisma, where a
+    // PrismaClientValidationError carries no .code for errorHandler.js to
+    // classify and became a 500. Both send a valid id on the other side of the
+    // pair, and neither creates a fixture — the guard rejects before Prisma.
+    it('rejects a non-string recipeId with 400', async () => {
+        const res = await request(app).post('/api/recipe-products').send({
+            recipeId: 12345, productId: baseline.product.id
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('recipeId and productId are required')
+    })
+
+    it('rejects a non-string productId with 400', async () => {
+        const res = await request(app).post('/api/recipe-products').send({
+            recipeId: baseline.recipe.id, productId: 12345
+        })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('recipeId and productId are required')
+    })
 })
 
 describe('DELETE /api/recipe-products/:id', () => {
