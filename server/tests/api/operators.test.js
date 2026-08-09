@@ -3,7 +3,7 @@
  * @description Tests for /api/operators — "happy path + main failure case"
  * tier per CLAUDE.md. Covers the `name` string-type validation (a non-string
  * name used to reach Prisma and crash as an unclassifiable 500 instead of a
- * clean 400).
+ * clean 400) and the whitespace normalization applied on write.
  *
  * Every row this file creates is named with the VT-OP prefix; beforeAll
  * deletes leftovers from a previously crashed run, afterAll deletes this
@@ -43,6 +43,15 @@ describe('POST /api/operators — name validation', () => {
         expect(res.body.name).toBe(`${PREFIX} Emina`)
         expect(res.body.active).toBe(true)
     })
+
+    // Operator.name has no unique index — deliberately, since soft-delete lets
+    // a name be reused — so nothing downstream can catch "  Emina  " and
+    // "Emina" being two people. Normalizing on write is the only guard there is.
+    it('trims and collapses inner whitespace in name', async () => {
+        const res = await request(app).post('/api/operators').send({ name: `  ${PREFIX}   spaced   name  ` })
+        expect(res.status).toBe(201)
+        expect(res.body.name).toBe(`${PREFIX} spaced name`)
+    })
 })
 
 describe('PUT /api/operators/:id — name validation', () => {
@@ -78,15 +87,15 @@ describe('PUT /api/operators/:id — name validation', () => {
         expect(after.name).toBe(operator.name)
     })
 
-    // Pins the chosen semantics: this guard rejects blank, it does not reject
-    // padding. Asserts only the status, never the stored value — trimming on
-    // write is a separate, still-open change, and asserting the untrimmed
-    // string here would cement the very wart that change removes.
-    // Padded on the right only: a leading-space name would not match the
-    // `startsWith(PREFIX)` cleanup and would leak a row into the test database.
-    it('accepts a padded name — the guard rejects blank, not padding', async () => {
+    // Pins the chosen semantics: the blank guard rejects blank, it does not
+    // reject padding — padding is accepted and then normalized away. Padding
+    // on the left is safe to send precisely because the route trims it: the
+    // stored row still starts with PREFIX, so `afterAll`'s
+    // `startsWith(PREFIX)` cleanup still finds it.
+    it('accepts a padded name and stores it trimmed and collapsed', async () => {
         const operator = await prisma.operator.create({ data: { name: `${PREFIX} padded target` } })
-        const res = await request(app).put(`/api/operators/${operator.id}`).send({ name: `${PREFIX} padded   ` })
+        const res = await request(app).put(`/api/operators/${operator.id}`).send({ name: `  ${PREFIX}   padded   ` })
         expect(res.status).toBe(200)
+        expect(res.body.name).toBe(`${PREFIX} padded`)
     })
 })

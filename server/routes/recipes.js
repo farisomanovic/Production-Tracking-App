@@ -6,7 +6,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { isNonEmptyString } from '../lib/validation.js'
+import { isNonEmptyString, normalizeName } from '../lib/validation.js'
 import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
 
 const router = Router()
@@ -195,7 +195,7 @@ router.post('/', async (req, res) => {
 
     const recipe = await prisma.recipe.create({
         data: {
-            name,
+            name: normalizeName(name),
             ...(notes !== undefined && { notes }),
             products: {
                 // Nested create instead of separate inserts: Prisma wraps the
@@ -272,7 +272,7 @@ router.put('/:id', async (req, res) => {
         return tx.recipe.update({
             where: { id: req.params.id },
             data: {
-                ...(name !== undefined && { name }),
+                ...(name !== undefined && { name: normalizeName(name) }),
                 ...(notes !== undefined && { notes }),
                 ...(active !== undefined && { active }),
             },

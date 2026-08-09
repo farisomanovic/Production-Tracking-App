@@ -7,7 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { normalizeCode, isNonEmptyString } from '../lib/validation.js'
+import { normalizeCode, normalizeName, isNonEmptyString } from '../lib/validation.js'
 import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
 
 const router = Router()
@@ -73,7 +73,7 @@ router.post('/', async (req, res) => {
     // with a unique constraint, and Postgres treats NULLs as distinct — so
     // omitting it allows many code-less machines, while an explicit duplicate
     // string would violate the constraint.
-    data: { name,
+    data: { name: normalizeName(name),
       ...(code !== undefined && { code: normalizeCode(code) }),
     }
   })
@@ -121,7 +121,7 @@ router.put('/:id', async (req, res) => {
       where: { id: req.params.id },
       data: {
         // Spread-if-defined keeps omitted fields untouched (partial update).
-        ...(name !== undefined && { name }),
+        ...(name !== undefined && { name: normalizeName(name) }),
         // Blank/whitespace normalizes to null so it never occupies the unique
         // constraint's single "" slot.
         ...(code !== undefined && { code: normalizeCode(code) }),

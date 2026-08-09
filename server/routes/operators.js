@@ -7,7 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { isNonEmptyString } from '../lib/validation.js'
+import { isNonEmptyString, normalizeName } from '../lib/validation.js'
 import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
 
 const router = Router()
@@ -69,13 +69,11 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   const { name } = req.body
-  // TODO: a non-blank name with leading/trailing whitespace is still stored
-  // as-is (e.g. "  Emina  ") — trim before saving. todo.md Group 3 #8.
   if (!isNonEmptyString(name)) {
     return res.status(400).json({ error: 'name is required' })
   }
   const operator = await prisma.operator.create({
-    data: { name }
+    data: { name: normalizeName(name) }
   })
   res.status(201).json(operator)
 })
@@ -119,7 +117,7 @@ router.put('/:id', async (req, res) => {
       data: {
         // Spread-if-defined so omitted fields stay untouched — a plain
         // `{ name, active }` would overwrite missing fields with undefined/null.
-        ...(name !== undefined && { name }),
+        ...(name !== undefined && { name: normalizeName(name) }),
         ...(active !== undefined && { active }),
       }
     })
