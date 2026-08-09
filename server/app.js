@@ -27,7 +27,13 @@ const app = express()
 // origin) — a missing env var must crash loudly here, not silently open
 // CORS to every site.
 const clientOrigin = assertClientOriginConfigured(process.env.CLIENT_ORIGIN)
-app.use(cors({ origin: clientOrigin }))
+// exposedHeaders is not optional decoration: a browser hides every response
+// header outside the CORS-safelisted set unless it is named here. GET
+// /api/production-runs answers "are there rows beyond this page?" in X-Has-More,
+// and without this line the client reads undefined and silently believes there
+// are none. Supertest is not a browser and cannot catch that — see
+// productionRuns.list.test.js's expose-header test.
+app.use(cors({ origin: clientOrigin, exposedHeaders: ['X-Has-More'] }))
 // Registered before the routers on purpose: express.json() is what fills req.body,
 // and Express runs middleware strictly in registration order — moved below the
 // routers, every handler would see req.body === undefined.

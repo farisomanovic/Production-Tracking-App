@@ -18,14 +18,16 @@ import { totalNetKg, totalGrossKg } from '../lib/runWeights'
 import { energyConsumed } from '../lib/energy'
 import { quantitySummaryFormula, quantitySummaryMinWidth, dateSummaryFormula } from '../lib/exportSummary'
 import { exportColumnLayout } from '../lib/exportColumns'
+import { truncationNotice } from '../lib/exportNotice'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
 
-// Mirrors the server's MAX_TAKE clamp (server/routes/productionRuns.js) — this
-// is the "near-term" fix for silent truncation: the list/export used to
-// silently cap at the server's 200-row DEFAULT_TAKE with no signal to the
-// user. The real fix (an unbounded/paginated export endpoint) is Group 7 #4.
+// How many runs this page ASKS for — not a copy of the server's cap, and
+// nothing depends on the two matching. If the server clamps lower, it returns
+// fewer rows and says so in X-Has-More, and the banner and the exported note
+// stay correct. That is the whole reason truncation is read off a response
+// header instead of being inferred from this number.
 const RUNS_FETCH_LIMIT = 1000
 
 /**
@@ -60,8 +62,8 @@ export default function ProductionRunsPage() {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  // True when the fetch hit RUNS_FETCH_LIMIT — the list/export may be missing
-  // older runs.
+  // True when the server said rows exist beyond the ones it returned — the list
+  // and the export are both missing older runs.
   const [runsTruncated, setRunsTruncated] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
@@ -110,10 +112,12 @@ export default function ProductionRunsPage() {
 
         setInProgressRuns(allRuns.filter(r => r.status === 'in_progress'))
         setCompletedRuns(allRuns.filter(r => r.status === 'completed'))
-        // Heuristic, not a certainty: a true result count of exactly
-        // RUNS_FETCH_LIMIT reads as truncated too. The server doesn't return a
-        // total count to disambiguate.
-        setRunsTruncated(allRuns.length === RUNS_FETCH_LIMIT)
+        // The server's answer, not a guess off the row count. Axios lowercases
+        // header names; the value is the string "true"/"false". Comparing to
+        // "true" also means an absent header (a server too old to send it, or a
+        // missing CORS exposure) reads as "not truncated" — the page then simply
+        // never warns, rather than warning on every single fetch.
+        setRunsTruncated(response.headers['x-has-more'] === 'true')
       } catch (err) {
         if (cancelled) return
         setError(getErrorMessage(err, 'Failed to load production runs'))
@@ -606,10 +610,23 @@ export default function ProductionRunsPage() {
               }
           }
 
+          // The export is allowed to run on a truncated fetch, so the sheet has
+          // to say it is partial — it is the copy that gets printed and handed
+          // over, and the person reading it never saw the banner on screen.
+          // Written raw rather than through sanitizeCellText: this string is
+          // ours, and exportNotice.test.js pins it against ever starting with a
+          // character Excel would read as a formula.
+          const notice = runsTruncated
+              ? truncationNotice({ summaryRow: summaryRowNumber, rowCount: rows.length })
+              : null
+          if (notice) {
+              worksheet[`A${notice.row}`] = { t: 's', v: notice.text }
+          }
+
           // !ref must be widened by hand: cells assigned directly (like the
-          // summary row above) don't grow the sheet's declared range, and Excel
-          // ignores cells outside it.
-          worksheet['!ref'] = `A1:${getExcelColumnName(headers.length - 1)}${summaryRowNumber}`
+          // summary row and the notice above) don't grow the sheet's declared
+          // range, and Excel ignores cells outside it.
+          worksheet['!ref'] = `A1:${getExcelColumnName(headers.length - 1)}${notice ? notice.row : summaryRowNumber}`
           // Auto-width from longest cell content, clamped 14–60 chars: floor so
           // short columns stay readable, ceiling so one long note can't create
           // a screen-wide column.
@@ -618,8 +635,11 @@ export default function ProductionRunsPage() {
               const maxLength = Math.max(...columnValues.map(value => String(value).length))
               const width = Math.min(Math.max(maxLength + 2, 14), 60)
 
-              // This pass measures the header and the data rows; the summary row is
-              // assigned directly after the sheet is built and is invisible to it.
+              // This pass measures the header and the data rows; the summary row and
+              // the truncation notice are assigned directly after the sheet is built
+              // and are invisible to it. That is what keeps the notice's long sentence
+              // from widening column A — every cell beside it is empty, so Excel just
+              // lets it overflow across them.
               // Only the quantity column's summary can outgrow its column, and a
               // clipped "kg: 903.55 | roll:" is worse than the total it replaced —
               // so it may exceed the 60 ceiling, which exists to contain free-text
@@ -720,11 +740,14 @@ export default function ProductionRunsPage() {
 
           <div style={styles.dateRangeField}>
               <span style={styles.dateLabel}>Export</span>
+              {/* Deliberately NOT disabled on a truncated fetch: the rows on
+                  screen are exportable, and refusing to export them gave the
+                  office nothing for a condition the app had already detected
+                  and could describe. The sheet carries the caveat instead. */}
               <button
-                  style={(runsTruncated || isExporting) ? { ...styles.exportButton, ...styles.exportButtonDisabled } : styles.exportButton}
+                  style={isExporting ? { ...styles.exportButton, ...styles.exportButtonDisabled } : styles.exportButton}
                   onClick={handleExport}
-                  disabled={runsTruncated || isExporting}
-                  title={runsTruncated ? `Narrow your date range to export — showing the newest ${RUNS_FETCH_LIMIT} runs only` : undefined}
+                  disabled={isExporting}
               >
                   {isExporting ? 'Exporting…' : 'Export XLSX'}
               </button>
@@ -732,9 +755,11 @@ export default function ProductionRunsPage() {
 
       </div>
 
+      {/* styles.noticeBox, not common.errorBox: this is a caveat on a request
+          that worked, and this page uses the red box for real load failures. */}
       {runsTruncated && (
-        <div style={common.errorBox}>
-          Showing the newest {RUNS_FETCH_LIMIT} runs for the current filters — narrow your date range to see everything.
+        <div style={styles.noticeBox}>
+          Showing the newest {inProgressRuns.length + completedRuns.length} runs for the current filters — older runs exist. Narrow your date range to see them.
         </div>
       )}
 
@@ -910,6 +935,20 @@ const styles = {
   emptyText: {
     color: 'var(--color-text-secondary)',
     fontSize: '0.9rem',
+  },
+  // The truncation caveat. Built from existing tokens rather than a new
+  // warning colour on purpose: --color-danger-soft is already light-pink in
+  // both themes (see the TODO in index.css), and a second hand-picked surface
+  // would be the same mistake twice. Local rather than in common.js because
+  // this page is the only consumer today.
+  noticeBox: {
+    backgroundColor: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
+    color: 'var(--color-text-secondary)',
+    padding: '0.75rem',
+    borderRadius: '8px',
+    marginBottom: '1rem',
+    fontSize: '0.85rem',
   },
 dateLabel: {
     color: 'var(--color-text-secondary)',
