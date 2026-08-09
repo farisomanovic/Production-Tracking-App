@@ -1,13 +1,14 @@
 /**
  * @file exportSummary.js
- * @description Builds the XLSX export's summary-row cell for the `Quantity
- * Produced` column, which is the one summed column whose rows are not all in the
- * same unit.
+ * @description Builds the XLSX export's summary-row cells that a plain `SUM`
+ * cannot express: the `Quantity Produced` column, whose rows are not all in the
+ * same unit, and the `Date` column, which counts days rather than adding them.
  *
- * The subtlety, and the reason this is not one `SUM`: the export is scoped to a
- * MACHINE, not a product, and one machine makes several products. `quantityProduced`
- * is recorded in the product's own `unit` (schema.prisma), so a single sheet can
- * legitimately hold kilograms, rolls and metres in one column. Summing it produced
+ * The subtlety in the quantity cell, and the reason it is not one `SUM`: the
+ * export is scoped to a MACHINE, not a product, and one machine makes several
+ * products. `quantityProduced` is recorded in the product's own `unit`
+ * (schema.prisma), so a single sheet can legitimately hold kilograms, rolls and
+ * metres in one column. Summing it produced
  * `1 kg + 1234.5 kg + 42 roll` → `Sum: 1277.5`, an unlabelled number that means
  * nothing — and worse, one that looks like every other total on the row. The three
  * other summed columns (`Total Neto (kg)`, `Total Bruto (kg)`, `Scrap (kg)`) are kg
@@ -28,7 +29,11 @@
 /** Row 1 is the header, so data always starts at row 2. */
 const FIRST_DATA_ROW = 2
 
-/** Between per-unit subtotals in the mixed-unit cell. */
+/**
+ * Between the parts of a summary cell that carries more than one figure: the
+ * per-unit subtotals in the mixed-unit quantity cell, and the two counts in the
+ * date cell. Shared so the summary row reads consistently across both.
+ */
 const SEPARATOR = ' | '
 
 /**
@@ -137,4 +142,48 @@ export function quantitySummaryMinWidth(units) {
         0
     )
     return labelsAndNumbers + (present.length - 1) * SEPARATOR.length
+}
+
+/**
+ * The formula for the `Date` column's summary cell.
+ *
+ * Reports two different figures because they answer two different questions and
+ * used to be conflated: `Broj radnih dana` is how many DAYS the machine worked,
+ * `Broj unosa` is how many runs were recorded. This cell counted rows and called
+ * the result working days, which is only true while every run sits on its own
+ * date — two completed runs on one day is ordinary (the one-in-progress-per-machine
+ * index constrains `in_progress` only), and it silently over-counted whenever that
+ * happened.
+ *
+ * The distinct count is the `SUMPRODUCT(1/COUNTIF(range,range))` idiom: each cell
+ * contributes one divided by how many times its own value appears, so a date
+ * present twice contributes a half twice. One live formula, no helper column.
+ *
+ * Two defensive pieces that are not decoration:
+ * - `(range<>"")` and the `&""` on the criteria make it blank-proof. The bare idiom
+ *   returns `#DIV/0!` the moment any cell in the range is empty, which cannot happen
+ *   at write time (`formatExportDate` always writes something) but very much can
+ *   afterwards — the whole summary row is formula-based with `fullCalcOnLoad`
+ *   precisely so the sheet stays live and recalculates when a user deletes a row.
+ * - `COUNTIF` matching is safe on these values: it treats `*` and `?` as wildcards,
+ *   and a formatted date contains neither. Identical strings also coerce identically
+ *   whichever way Excel reads them, so the count cannot drift.
+ *
+ * No empty-range branch: the caller returns early on zero runs, so `lastDataRow`
+ * is always at least 2 and a guard here would be unreachable.
+ *
+ * @param {Object} input
+ * @param {string} input.dateColumn - Excel letter of the `Date` column.
+ * @param {number} input.lastDataRow - 1-based row number of the final data row.
+ * @returns {string} The formula, label and value fused into one cell.
+ *
+ * @example
+ * dateSummaryFormula({ dateColumn: 'A', lastDataRow: 9 })
+ * // '"Broj radnih dana: "&SUMPRODUCT((A2:A9<>"")/COUNTIF(A2:A9,A2:A9&""))&" | Broj unosa: "&COUNTA(A2:A9)'
+ */
+export function dateSummaryFormula({ dateColumn, lastDataRow }) {
+    const range = `${dateColumn}${FIRST_DATA_ROW}:${dateColumn}${lastDataRow}`
+
+    return `"Broj radnih dana: "&SUMPRODUCT((${range}<>"")/COUNTIF(${range},${range}&""))`
+        + `&"${SEPARATOR}Broj unosa: "&COUNTA(${range})`
 }

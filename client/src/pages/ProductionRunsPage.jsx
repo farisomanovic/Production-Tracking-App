@@ -16,7 +16,7 @@ import { getAllProducts } from '../api/products'
 import { formatDisplayDate, formatExportDate, formatFileDate, formatDisplayTime } from '../lib/dates'
 import { totalNetKg, totalGrossKg } from '../lib/runWeights'
 import { energyConsumed } from '../lib/energy'
-import { quantitySummaryFormula, quantitySummaryMinWidth } from '../lib/exportSummary'
+import { quantitySummaryFormula, quantitySummaryMinWidth, dateSummaryFormula } from '../lib/exportSummary'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
@@ -591,12 +591,16 @@ export default function ProductionRunsPage() {
           // unit and gets its own treatment below.
           const kgColumnHeaders = ['Total Neto (kg)', 'Total Bruto (kg)', 'Scrap (kg)']
 
-          // Label and value fused into one formula cell ("Broj radnih dana: 22")
-          // because the label column doubles as the count column — a separate
-          // label cell would land under the Date data.
+          // Labels and values fused into one formula cell ("Broj radnih dana: 21 |
+          // Broj unosa: 22") because the label column doubles as the count column —
+          // a separate label cell would land under the Date data. The two counts
+          // differ whenever a machine ran twice in one day; see lib/exportSummary.js.
           worksheet[`A${summaryRowNumber}`] = {
               t: 's',
-              f: `"Broj radnih dana: "&(COUNTA(A1:A${lastDataRowNumber})-1)`,
+              f: dateSummaryFormula({
+                  dateColumn: getExcelColumnName(headers.findIndex(header => header === 'Date')),
+                  lastDataRow: lastDataRowNumber
+              }),
           }
 
           materialNames.forEach((_, index) => {
