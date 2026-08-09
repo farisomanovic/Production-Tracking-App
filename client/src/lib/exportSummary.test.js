@@ -15,7 +15,7 @@
  * parameters or materials, and the four units are VALID_UNITS.
  */
 import { describe, it, expect } from 'vitest'
-import { quantitySummaryFormula, quantitySummaryMinWidth } from './exportSummary'
+import { quantitySummaryFormula, quantitySummaryMinWidth, dateSummaryFormula } from './exportSummary'
 
 describe('quantitySummaryFormula', () => {
     // The single-product case, and the common one. It was already correct before
@@ -108,5 +108,38 @@ describe('quantitySummaryMinWidth', () => {
 
     it('reserves nothing when no cell will be written', () => {
         expect(quantitySummaryMinWidth([])).toBe(0)
+    })
+})
+
+describe('dateSummaryFormula', () => {
+    // The bug this half exists for: the cell used to be COUNTA(A1:A9)-1, which is
+    // the number of run ROWS under a label promising working days. The two agree
+    // only while no machine runs twice in a day. Both figures now appear, each
+    // under its own name — so a sheet with 9 runs across 8 dates says so.
+    it('counts distinct dates and reports the row count separately', () => {
+        expect(dateSummaryFormula({ dateColumn: 'A', lastDataRow: 9 })).toBe(
+            '"Broj radnih dana: "&SUMPRODUCT((A2:A9<>"")/COUNTIF(A2:A9,A2:A9&""))'
+            + '&" | Broj unosa: "&COUNTA(A2:A9)'
+        )
+    })
+
+    // A one-run export makes the first and last data row the same. The range must
+    // collapse to a single cell rather than inverting into A2:A1, which Excel
+    // silently reinterprets rather than rejecting.
+    it('collapses to a single-cell range on a one-run export', () => {
+        expect(dateSummaryFormula({ dateColumn: 'A', lastDataRow: 2 })).toBe(
+            '"Broj radnih dana: "&SUMPRODUCT((A2:A2<>"")/COUNTIF(A2:A2,A2:A2&""))'
+            + '&" | Broj unosa: "&COUNTA(A2:A2)'
+        )
+    })
+
+    // Date is column A in every export the app builds today, so a hardcoded 'A'
+    // would pass every other test here and the sheet would still be right. This is
+    // the only test that can tell the caller's findIndex is actually wired up.
+    it('uses the caller-supplied date column rather than assuming A', () => {
+        expect(dateSummaryFormula({ dateColumn: 'C', lastDataRow: 9 })).toBe(
+            '"Broj radnih dana: "&SUMPRODUCT((C2:C9<>"")/COUNTIF(C2:C9,C2:C9&""))'
+            + '&" | Broj unosa: "&COUNTA(C2:C9)'
+        )
     })
 })
