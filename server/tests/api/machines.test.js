@@ -3,8 +3,8 @@
  * @description Tests for /api/machines — "happy path + main failure case"
  * tier per CLAUDE.md. Covers the `name` string-type validation (a non-string
  * name used to reach Prisma and crash as an unclassifiable 500 instead of a
- * clean 400). `code` normalization has
- * its own dedicated file, machines.codeNormalize.test.js.
+ * clean 400) and the whitespace normalization applied on write. `code`
+ * normalization has its own dedicated file, machines.codeNormalize.test.js.
  *
  * Every row this file creates is named with the VT-MACH prefix; beforeAll
  * deletes leftovers from a previously crashed run, afterAll deletes this
@@ -43,6 +43,15 @@ describe('POST /api/machines — name validation', () => {
         expect(res.status).toBe(201)
         expect(res.body.name).toBe(`${PREFIX} Extruder`)
     })
+
+    // `code` has been trimmed since PR #65 (machines.codeNormalize.test.js);
+    // `name` was left raw, so one machine could carry a clean code and a
+    // padded name. This pins the two identifiers to the same rule.
+    it('trims and collapses inner whitespace in name', async () => {
+        const res = await request(app).post('/api/machines').send({ name: `  ${PREFIX}   spaced   name  ` })
+        expect(res.status).toBe(201)
+        expect(res.body.name).toBe(`${PREFIX} spaced name`)
+    })
 })
 
 describe('PUT /api/machines/:id — name validation', () => {
@@ -76,5 +85,12 @@ describe('PUT /api/machines/:id — name validation', () => {
         expect(res.body.error).toBe('name cannot be blank')
         const after = await prisma.machine.findUnique({ where: { id: machine.id } })
         expect(after.name).toBe(machine.name)
+    })
+
+    it('trims and collapses inner whitespace in a renamed name', async () => {
+        const machine = await prisma.machine.create({ data: { name: `${PREFIX} rename target` } })
+        const res = await request(app).put(`/api/machines/${machine.id}`).send({ name: `  ${PREFIX}   renamed   spaced  ` })
+        expect(res.status).toBe(200)
+        expect(res.body.name).toBe(`${PREFIX} renamed spaced`)
     })
 })

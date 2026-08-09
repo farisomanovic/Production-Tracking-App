@@ -7,7 +7,7 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { isFiniteNumber, isNonEmptyString, isValidUnit, normalizeCode, VALID_UNITS } from '../lib/validation.js'
+import { isFiniteNumber, isNonEmptyString, isValidUnit, normalizeCode, normalizeName, VALID_UNITS } from '../lib/validation.js'
 
 const router = Router()
 
@@ -93,7 +93,7 @@ router.post('/', async (req, res) => {
         // two distinct unique keys for one physical product. The blank guard
         // above runs first, which is what keeps normalizeCode's null branch
         // unreachable here — a null would violate NOT NULL.
-        data: { name, code: normalizeCode(code),
+        data: { name: normalizeName(name), code: normalizeCode(code),
             ...(widthMm !== undefined && { widthMm }),
             ...(thicknessMm !== undefined && { thicknessMm }),
             ...(lengthM !== undefined && { lengthM }),
@@ -142,7 +142,7 @@ router.put('/:id', async (req, res) => {
         where: { id: req.params.id },
         data: {
             // Spread-if-defined keeps omitted fields untouched (partial update).
-            ...(name !== undefined && { name }),
+            ...(name !== undefined && { name: normalizeName(name) }),
             ...(code !== undefined && { code: normalizeCode(code) }),
             ...(widthMm !== undefined && { widthMm }),
             ...(thicknessMm !== undefined && { thicknessMm }),
