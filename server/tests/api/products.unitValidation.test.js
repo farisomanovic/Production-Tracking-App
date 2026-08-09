@@ -59,3 +59,35 @@ describe('PUT /api/products/:id — unit allow-list validation', () => {
         expect(res.body.unit).toBe('roll')
     })
 })
+
+/**
+ * The unit is a physical property of the product, and ProductionRun stores no
+ * unit of its own — quantityProduced is a bare number read through
+ * product.unit — so a unit that moves silently reinterprets every past run of
+ * that product. These pin the column as write-once.
+ */
+describe('PUT /api/products/:id — unit is write-once', () => {
+    it('rejects a change to a different valid unit with 409', async () => {
+        const product = await createProduct({ unit: 'kg' })
+        const res = await request(app).put(`/api/products/${product.id}`).send({ unit: 'roll' })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('unit cannot be changed after a product is created')
+    })
+
+    it('accepts a PUT that resends the current unit unchanged', async () => {
+        const product = await createProduct({ unit: 'roll' })
+        const res = await request(app)
+            .put(`/api/products/${product.id}`)
+            .send({ unit: 'roll', description: 'unchanged unit is not a change' })
+        expect(res.status).toBe(200)
+        expect(res.body.unit).toBe('roll')
+        expect(res.body.description).toBe('unchanged unit is not a change')
+    })
+
+    it('returns 404 rather than 409 when the id is unknown', async () => {
+        const res = await request(app)
+            .put(`/api/products/${crypto.randomUUID()}`)
+            .send({ unit: 'roll' })
+        expect(res.status).toBe(404)
+    })
+})
