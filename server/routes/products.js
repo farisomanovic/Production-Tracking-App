@@ -104,11 +104,12 @@ router.post('/', async (req, res) => {
 })
 
 /**
- * Partially updates a product.
+ * Partially updates a product. `unit` is write-once — it may be resent with its
+ * current value, but never changed; see the guard below for why.
  *
  * @param {import('express').Request} req - `params.id` UUID; any subset of name/code/dimensions/description/unit.
  * @param {import('express').Response} res - 200 → updated Product; 400 blank/non-string name or code, or bad unit;
- * 404 unknown id; 409 duplicate code; 500 on DB failure.
+ * 404 unknown id; 409 duplicate code or an attempt to change unit; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -137,6 +138,27 @@ router.put('/:id', async (req, res) => {
     }
     if (dimensionError(res, 'widthMm', widthMm) || dimensionError(res, 'thicknessMm', thicknessMm) || dimensionError(res, 'lengthM', lengthM)) {
         return
+    }
+    // 409, not 400: the value is well-formed and in the allow-list, it just
+    // conflicts with a column that is write-once. ProductionRun stores
+    // quantityProduced as a bare number whose meaning is read off product.unit
+    // at display time (client/src/lib/materialSplit.js isWeightUnit decides
+    // whether it is kilograms or a piece count), so moving the unit rewrites
+    // what every past run of this product is understood to have produced.
+    // Compared against the stored value rather than rejected on sight, so a
+    // full-object PUT that resends an unchanged unit still works. A missing row
+    // falls through to the update below, keeping the 404 in one place. Unlike
+    // the read-then-act in machineProducts.js this needs no transaction: the
+    // only write that could invalidate the read is another unit change, which
+    // this guard now rejects.
+    if (unit !== undefined) {
+        const existing = await prisma.product.findUnique({
+            where: { id: req.params.id },
+            select: { unit: true }
+        })
+        if (existing && unit !== existing.unit) {
+            return res.status(409).json({ error: 'unit cannot be changed after a product is created' })
+        }
     }
     const product = await prisma.product.update({
         where: { id: req.params.id },
