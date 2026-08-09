@@ -5,7 +5,10 @@
  * ?machineId=a&machineId=b) reached Prisma unvalidated and threw a 500, and
  * so did a non-numeric limit. The third describe covers `status`, which
  * was the one filter passed straight to Prisma, so a typo answered 200 [] and
- * the caller could not tell it apart from "nothing matched". Fixtures follow
+ * the caller could not tell it apart from "nothing matched". The fourth covers
+ * X-Has-More, which exists because the client used to infer truncation from
+ * `rows.length === <hand-copied limit>` — wrong at the boundary, and dead
+ * silently if the two constants ever drifted. Fixtures follow
  * productionRuns.update.test.js's conventions.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -223,5 +226,85 @@ describe('GET /api/production-runs — status filter validation', () => {
         const res = await request(app).get('/api/production-runs?status=a&status=b')
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('status must be a single value')
+    })
+})
+
+describe('GET /api/production-runs — X-Has-More', () => {
+    // Its own date, matched by no other fixture in this file or the seed: every
+    // test below reasons about an EXACT row count, so a stray run landing in the
+    // range would not fail loudly — it would quietly turn "3 rows, limit 3" into
+    // "4 rows, limit 3" and make the boundary test pass for the wrong reason.
+    const DAY = '2026-06-18'
+    const RUNS_ON_DAY = 3
+    let runIds = []
+
+    beforeAll(async () => {
+        for (let hour = 8; hour < 8 + RUNS_ON_DAY; hour++) {
+            const run = await prisma.productionRun.create({
+                data: {
+                    date: new Date(`${DAY}T00:00:00.000Z`),
+                    startTime: new Date(`${DAY}T${String(hour).padStart(2, '0')}:00:00.000Z`),
+                    status: 'completed',
+                    quantityProduced: 1,
+                    operatorId: baseline.operator.id,
+                    machineId: baseline.machine.id,
+                    productId: baseline.product.id,
+                    recipeId: baseline.recipe.id,
+                    notes: `${PREFIX} hasmore ${hour}`
+                }
+            })
+            runIds.push(run.id)
+        }
+    })
+
+    afterAll(async () => {
+        await prisma.productionRun.deleteMany({ where: { id: { in: runIds } } })
+    })
+
+    const getDay = (query) => get({ dateFrom: DAY, dateTo: DAY, ...query })
+
+    it('reports false when the whole result fits inside the limit', async () => {
+        // No limit at all, so DEFAULT_TAKE (200) applies against 3 rows.
+        const res = await getDay()
+        expect(res.status).toBe(200)
+        expect(res.headers['x-has-more']).toBe('false')
+    })
+
+    it('reports true when rows exist beyond the limit', async () => {
+        const res = await getDay({ limit: RUNS_ON_DAY - 1 })
+        expect(res.status).toBe(200)
+        expect(res.headers['x-has-more']).toBe('true')
+    })
+
+    // The off-by-one the client's old `length === LIMIT` heuristic could not
+    // avoid: a result that exactly fills the limit is COMPLETE, not truncated.
+    it('reports false when the result exactly fills the limit', async () => {
+        const res = await getDay({ limit: RUNS_ON_DAY })
+        expect(res.status).toBe(200)
+        expect(res.body.length).toBe(RUNS_ON_DAY)
+        expect(res.headers['x-has-more']).toBe('false')
+    })
+
+    // The probe row is an implementation detail of the header; it must never
+    // reach the caller, or every consumer silently renders one row too many.
+    it('never returns more rows than the requested limit', async () => {
+        const res = await getDay({ limit: RUNS_ON_DAY - 1 })
+        expect(res.status).toBe(200)
+        expect(res.body.length).toBe(RUNS_ON_DAY - 1)
+    })
+
+    // Supertest reads every header regardless of CORS, so the four tests above
+    // would all stay green with the header unreadable in an actual browser.
+    // This is the only assertion standing between that and a client that
+    // silently never detects truncation again.
+    it('exposes X-Has-More to a cross-origin browser', async () => {
+        const res = await request(app)
+            .get('/api/production-runs')
+            .set('Origin', process.env.CLIENT_ORIGIN)
+        expect(res.status).toBe(200)
+        // `?? ''` so an absent header fails as "expected '' to contain
+        // 'X-Has-More'" rather than as an invalid-argument error about
+        // undefined, which describes the assertion instead of the defect.
+        expect(res.headers['access-control-expose-headers'] ?? '').toContain('X-Has-More')
     })
 })

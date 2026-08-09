@@ -72,14 +72,16 @@ const MAX_TAKE = 1000
  * `status` ("in_progress" | "completed"), `dateFrom`/`dateTo` (YYYY-MM-DD), `limit` (positive int,
  * defaults to 200, clamped to a max of 1000).
  * @param {import('express').Response} res - 200 → ProductionRun[] newest-first (date, then startTime as a
- * tiebreaker); 400 on a malformed/array-shaped query param, a status outside the allow-list
+ * tiebreaker), plus an `X-Has-More` header ("true"/"false") saying whether rows exist beyond this page;
+ * 400 on a malformed/array-shaped query param, a status outside the allow-list
  * (including ""), an invalid dateFrom/dateTo, or a non-positive-integer limit; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
  * // GET /api/production-runs?machineId=7cd0…&status=completed&limit=1
- * // → 200 [{ id: "ab12…", date: "2026-07-01T00:00:00.000Z", status: "completed",
- * //          machine: { name: "Extruder 1" }, operator: { name: "Amar" }, … }]
+ * // → 200 X-Has-More: true
+ * //   [{ id: "ab12…", date: "2026-07-01T00:00:00.000Z", status: "completed",
+ * //     machine: { name: "Extruder 1" }, operator: { name: "Amar" }, … }]
  */
 router.get('/', async (req, res) => {
     const { machineId, operatorId, productId, dateFrom, dateTo, limit, status } = req.query
@@ -131,13 +133,19 @@ router.get('/', async (req, res) => {
             ...(dateTo && { lte: new Date(`${dateTo}T23:59:59.999Z`) })
         }
     }
-    const runs = await prisma.productionRun.findMany({
+    // take + 1, not take: the extra row is a PROBE, never returned. Asking for
+    // one more than the caller wants is the only way to distinguish "exactly
+    // `take` rows exist" from "`take` rows plus more beyond them" — a result of
+    // length `take` cannot tell those apart on its own. The client used to guess
+    // at this by comparing the row count to a hand-copied constant, which was
+    // wrong at the boundary and silently dead if the constant ever drifted.
+    const page = await prisma.productionRun.findMany({
         where,
         // `date` alone is date-only and ties same-day runs; startTime breaks
         // the tie so "prefill from last run" (limit: 1) always gets the
         // actual most recent run, not an arbitrary one from the latest day.
         orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
-        take,
+        take: take + 1,
         select: {
             id: true,
             date: true,
@@ -149,6 +157,16 @@ router.get('/', async (req, res) => {
             product: { select: { name: true } }
         }
     })
+
+    // Strict `>`, not `>=`: `take` rows back from a `take + 1` request means the
+    // probe found nothing, so this page is the whole result.
+    const hasMore = page.length > take
+    const runs = hasMore ? page.slice(0, take) : page
+
+    // A header rather than an envelope, so the body stays a bare array for the
+    // four pages that consume it. Requires exposedHeaders in app.js — without
+    // that the browser strips this and the client reads undefined.
+    res.setHeader('X-Has-More', String(hasMore))
     res.json(runs)
 })
 
