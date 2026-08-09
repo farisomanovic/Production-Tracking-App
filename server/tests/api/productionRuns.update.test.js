@@ -218,6 +218,26 @@ describe('PUT /api/production-runs/:id', () => {
         expect(res.body.error).toBe('Production run is already completed')
     })
 
+    // Sharper than the test above, and it guards a DIFFERENT line. That one
+    // sends `notes`, so `data` is non-empty and the compare-and-swap refuses it.
+    // A body of nothing but completion-written fields leaves `data` EMPTY, which
+    // skips the compare-and-swap altogether — so the route's pre-read status
+    // check is the only guard on this path, and deleting it would turn a
+    // correction attempt into a 200 that silently changed nothing. This is the
+    // shape a future edit screen would send if it wired the quantity field to
+    // the client's updateRun helper.
+    it('rejects a completed-run edit whose only field is quantityProduced', async () => {
+        const completeRes = await request(app).post(`/api/production-runs/${runId}/complete`).send(completePayload())
+        expect(completeRes.status).toBe(200)
+
+        const res = await put({ quantityProduced: 999 })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('Production run is already completed')
+
+        const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
+        expect(run.quantityProduced).toBe(1)
+    })
+
     // A body with nothing updatable in it writes no fields, and Prisma's
     // updateMany reports count: 0 for an empty `data` even when the row matched
     // — this pins the route's long-standing no-op 200 so the compare-and-swap
@@ -227,6 +247,21 @@ describe('PUT /api/production-runs/:id', () => {
         expect(res.status).toBe(200)
         expect(res.body.id).toBe(runId)
         expect(res.body.status).toBe('in_progress')
+    })
+
+    // quantityProduced is written exactly once, by /complete. Pinning the
+    // silence here makes it a decision rather than an accident of the
+    // destructure: the field is a known column of this model, so "the route
+    // happens not to read it" and "the route refuses to write it" look identical
+    // from the outside until something asserts the difference. Note the DB would
+    // ALLOW this write (the CHECK only bars a null quantity on a completed run),
+    // so nothing but the route stops it.
+    it('ignores a quantityProduced sent to an in_progress run', async () => {
+        const res = await put({ quantityProduced: 999 })
+        expect(res.status).toBe(200)
+
+        const run = await prisma.productionRun.findUniqueOrThrow({ where: { id: runId } })
+        expect(run.quantityProduced).toBeNull()
     })
 
     /*

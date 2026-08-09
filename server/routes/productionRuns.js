@@ -447,12 +447,27 @@ router.post('/', async (req, res, next) => {
 })
 
 /**
- * Updates a run's mutable fields. The four foreign keys are deliberately NOT
- * accepted — swapping the machine or recipe after creation would detach the
- * run from the context its measurements were recorded under.
+ * Updates an in-progress run's mutable fields. Two separate rules narrow what
+ * this route will write, and both are deliberate:
+ *
+ * 1. **A completed run is immutable.** Once /complete flips the status, this
+ *    route refuses the run with a 409 and no route ever writes to it again — it
+ *    is a closed record of what happened on the floor, not a document. The
+ *    sanctioned way to correct a mistake (a mistyped quantityProduced, say) is
+ *    DELETE /:id followed by re-entering the run: that path reverses the stock
+ *    movement atomically, whereas an in-place edit would leave the recorded
+ *    quantity and the material usage derived from it disagreeing.
+ * 2. **The completion-written fields are never accepted, on any run.**
+ *    `quantityProduced`, `netWeightPerUnit`, `grossWeightPerUnit`, `scrapKg`,
+ *    `status`, and the RunParameterValue / MaterialUsage child rows are written
+ *    exactly once, by /complete. A body carrying them is ignored rather than
+ *    rejected — the same treatment the four foreign keys get, and for a related
+ *    reason: swapping the machine or recipe after creation would detach the run
+ *    from the context its measurements were recorded under.
  *
  * @param {import('express').Request} req - `params.id` UUID; any subset of `notes`, `potentialBuyer`,
- * `warmupStartTime`, `stableStartTime`, `energyStart`, `energyEnd`, `endTime`.
+ * `warmupStartTime`, `stableStartTime`, `energyStart`, `energyEnd`, `endTime`. Every other key,
+ * including the completion-written fields above, is silently ignored.
  * @param {import('express').Response} res - 200 → updated run with relations; 400 an unparseable
  * warmupStartTime/stableStartTime/endTime, an endTime at/before startTime, a warmupStartTime
  * after startTime, a stableStartTime before startTime, or a resulting energyEnd below the
@@ -463,6 +478,12 @@ router.post('/', async (req, res, next) => {
  * @example
  * // PUT /api/production-runs/ab12…  { "potentialBuyer": "Bingo d.o.o." }
  * // → 200 { id: "ab12…", potentialBuyer: "Bingo d.o.o.", … }
+ *
+ * @example
+ * // A completed run refuses every edit, including one that would only have
+ * // been ignored anyway:
+ * // PUT /api/production-runs/ab12…  { "quantityProduced": 100 }
+ * // → 409 { error: "Production run is already completed" }
  */
 router.put('/:id', async (req, res) => {
     const {
@@ -511,10 +532,17 @@ router.put('/:id', async (req, res) => {
     // The stored energy readings come along for the pair check: either field can
     // be updated in isolation here, so the rule has to be evaluated against the
     // pair the row would END UP with, not just against what the body carries.
-    // The status check here is only a fast path that skips pointless work on an
-    // already-completed run; the guarantee that a completed run is an immutable
-    // log of what happened on the floor is enforced by the compare-and-swap
-    // further down, not by this read.
+    //
+    // The status check below is NOT merely a fast path — do not delete it on the
+    // assumption that the compare-and-swap covers it. The two guards split the
+    // work: for a body carrying at least one mutable field the compare-and-swap
+    // is authoritative (it is the only one that survives a concurrent /complete),
+    // but for a body carrying NONE of them `data` comes out empty and the
+    // `Object.keys(data).length > 0` branch further down skips the compare-and-
+    // swap entirely. On a completed run that leaves this read as the only thing
+    // standing between the request and a 200. A body of nothing but
+    // `quantityProduced` is exactly that shape, which is why it has its own test
+    // in productionRuns.update.test.js.
     const existing = await prisma.productionRun.findUnique({
         where: { id: req.params.id },
         select: { startTime: true, status: true, energyStart: true, energyEnd: true }
@@ -626,6 +654,10 @@ router.put('/:id', async (req, res) => {
  * What was produced needs no productId: the run already carries one, validated
  * against the machine's product whitelist at creation and immutable afterwards
  * (PUT accepts none of the four foreign keys).
+ *
+ * This is a one-way door. After the status flip no route writes to this run or
+ * its child rows again — see PUT /:id for the immutability contract and for why
+ * DELETE + re-entry is the correction path for a mistyped quantity.
  *
  * @param {import('express').Request} req - `params.id` UUID. Body: `endTime` (required),
  * `quantityProduced` (required, number > 0), `parameterValues[]` ({ machineParameterId, value };
@@ -908,6 +940,11 @@ router.post('/:id/complete', async (req, res) => {
 /**
  * Deletes a run and its child rows atomically, restoring material stock for
  * completed runs so the inventory movement recorded at completion is reversed.
+ *
+ * Deliberately has no status guard, unlike the two write paths: because a
+ * completed run is immutable, this is the only way to correct one, and the stock
+ * restoration below is what makes re-entering the run safe. Immutability is a
+ * rule about editing a record, not about retracting it.
  *
  * @param {import('express').Request} req - `params.id` is the run UUID.
  * @param {import('express').Response} res - 200 → confirmation; 404 unknown run; 500 on transaction failure.
