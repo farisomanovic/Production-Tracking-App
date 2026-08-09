@@ -107,7 +107,7 @@ router.post('/', async (req, res) => {
  * Partially updates a product.
  *
  * @param {import('express').Request} req - `params.id` UUID; any subset of name/code/dimensions/description/unit.
- * @param {import('express').Response} res - 200 → updated Product; 400 blank/non-string code or bad unit;
+ * @param {import('express').Response} res - 200 → updated Product; 400 blank/non-string name or code, or bad unit;
  * 404 unknown id; 409 duplicate code; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
@@ -122,9 +122,13 @@ router.put('/:id', async (req, res) => {
             return res.status(400).json({ error: `${field} must be a string` })
         }
     }
-    // Must stay after the typeof loop and before normalizeCode below: the loop
-    // owns the non-string message, and normalizeCode turns a blank into null,
-    // which this required column cannot hold.
+    // Both must stay after the typeof loop and before normalizeCode below: the
+    // loop owns the non-string message, and normalizeCode turns a blank into
+    // null, which these required columns cannot hold. NOT NULL does not mean
+    // "has a value" to Postgres — "" satisfies both columns.
+    if (name !== undefined && !isNonEmptyString(name)) {
+        return res.status(400).json({ error: 'name cannot be blank' })
+    }
     if (code !== undefined && !isNonEmptyString(code)) {
         return res.status(400).json({ error: 'code cannot be blank' })
     }

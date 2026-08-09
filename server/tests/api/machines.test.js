@@ -59,4 +59,22 @@ describe('PUT /api/machines/:id — name validation', () => {
         expect(res.status).toBe(200)
         expect(res.body.name).toBe(`${PREFIX} renamed`)
     })
+
+    it('rejects an empty-string name with 400 and leaves the row unchanged', async () => {
+        const machine = await prisma.machine.create({ data: { name: `${PREFIX} blank target` } })
+        const res = await request(app).put(`/api/machines/${machine.id}`).send({ name: '' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.machine.findUnique({ where: { id: machine.id } })
+        expect(after.name).toBe(machine.name)
+    })
+
+    it('rejects a whitespace-only name with 400 and leaves the row unchanged', async () => {
+        const machine = await prisma.machine.create({ data: { name: `${PREFIX} whitespace target` } })
+        const res = await request(app).put(`/api/machines/${machine.id}`).send({ name: '   ' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.machine.findUnique({ where: { id: machine.id } })
+        expect(after.name).toBe(machine.name)
+    })
 })

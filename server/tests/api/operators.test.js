@@ -59,4 +59,34 @@ describe('PUT /api/operators/:id — name validation', () => {
         expect(res.status).toBe(200)
         expect(res.body.name).toBe(`${PREFIX} renamed`)
     })
+
+    it('rejects an empty-string name with 400 and leaves the row unchanged', async () => {
+        const operator = await prisma.operator.create({ data: { name: `${PREFIX} blank target` } })
+        const res = await request(app).put(`/api/operators/${operator.id}`).send({ name: '' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.operator.findUnique({ where: { id: operator.id } })
+        expect(after.name).toBe(operator.name)
+    })
+
+    it('rejects a whitespace-only name with 400 and leaves the row unchanged', async () => {
+        const operator = await prisma.operator.create({ data: { name: `${PREFIX} whitespace target` } })
+        const res = await request(app).put(`/api/operators/${operator.id}`).send({ name: '   ' })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('name cannot be blank')
+        const after = await prisma.operator.findUnique({ where: { id: operator.id } })
+        expect(after.name).toBe(operator.name)
+    })
+
+    // Pins the chosen semantics: this guard rejects blank, it does not reject
+    // padding. Asserts only the status, never the stored value — trimming on
+    // write is a separate, still-open change, and asserting the untrimmed
+    // string here would cement the very wart that change removes.
+    // Padded on the right only: a leading-space name would not match the
+    // `startsWith(PREFIX)` cleanup and would leak a row into the test database.
+    it('accepts a padded name — the guard rejects blank, not padding', async () => {
+        const operator = await prisma.operator.create({ data: { name: `${PREFIX} padded target` } })
+        const res = await request(app).put(`/api/operators/${operator.id}`).send({ name: `${PREFIX} padded   ` })
+        expect(res.status).toBe(200)
+    })
 })

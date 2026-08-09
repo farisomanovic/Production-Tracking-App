@@ -84,7 +84,7 @@ router.post('/', async (req, res) => {
  * Partially updates a machine; `active: false` is the soft-delete path.
  *
  * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.code`, `body.active`.
- * @param {import('express').Response} res - 200 → updated Machine; 404 unknown id; 409 duplicate code or blocked by in-progress run; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → updated Machine; 400 blank or non-string name; 404 unknown id; 409 duplicate code or blocked by in-progress run; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -98,6 +98,13 @@ router.put('/:id', async (req, res) => {
   }
   if (active !== undefined && typeof active !== 'boolean') {
     return res.status(400).json({ error: 'active must be a boolean' })
+  }
+  // NOT NULL does not mean "has a name" to Postgres — "" satisfies the column
+  // and leaves a row no list or dropdown can render. Same check POST makes.
+  // Unlike `code` below, a blank cannot normalize to null here: the column is
+  // required, so it has to be rejected outright.
+  if (name !== undefined && !isNonEmptyString(name)) {
+    return res.status(400).json({ error: 'name cannot be blank' })
   }
   // The guard and the update share one transaction so the row stays locked
   // between them (see lib/deactivationGuards.js). This is
