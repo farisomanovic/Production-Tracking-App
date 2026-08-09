@@ -56,7 +56,7 @@ router.get('/:id', async (req, res) => {
  * Creates a machine with an optional unique code.
  *
  * @param {import('express').Request} req - `body.name` (required); `body.code` (optional, unique when present).
- * @param {import('express').Response} res - 201 → created Machine; 400 missing name; 409 duplicate code; 500 on DB failure.
+ * @param {import('express').Response} res - 201 → created Machine; 400 missing name or non-string code; 409 duplicate code; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -67,6 +67,13 @@ router.post('/', async (req, res) => {
   const { name, code } = req.body
   if (!isNonEmptyString(name)) {
     return res.status(400).json({ error: 'name is required' })
+  }
+  // null stays legal — the column is nullable, so it is how a caller says "no
+  // code". Any other non-string would reach normalizeCode's unconditional
+  // .trim() and throw a TypeError, which carries no Prisma code for
+  // errorHandler.js to classify and so can only ever become a raw 500.
+  if (code !== undefined && code !== null && typeof code !== 'string') {
+    return res.status(400).json({ error: 'code must be a string' })
   }
   const machine = await prisma.machine.create({
     // code is only included when the client sent it: the column is nullable
@@ -84,7 +91,7 @@ router.post('/', async (req, res) => {
  * Partially updates a machine; `active: false` is the soft-delete path.
  *
  * @param {import('express').Request} req - `params.id` UUID; optional `body.name`, `body.code`, `body.active`.
- * @param {import('express').Response} res - 200 → updated Machine; 400 blank or non-string name; 404 unknown id; 409 duplicate code or blocked by in-progress run; 500 on DB failure.
+ * @param {import('express').Response} res - 200 → updated Machine; 400 blank or non-string name, or non-string code; 404 unknown id; 409 duplicate code or blocked by in-progress run; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -105,6 +112,14 @@ router.put('/:id', async (req, res) => {
   // required, so it has to be rejected outright.
   if (name !== undefined && !isNonEmptyString(name)) {
     return res.status(400).json({ error: 'name cannot be blank' })
+  }
+  // Same rule as POST, and it has to sit above the $transaction below: inside
+  // it, normalizeCode's TypeError would abort a transaction that had already
+  // locked the row via lockAndAssertNoOpenRun, all to reject a malformed body.
+  // Unlike name, a blank code needs no guard — it normalizes to null, which
+  // this nullable column accepts.
+  if (code !== undefined && code !== null && typeof code !== 'string') {
+    return res.status(400).json({ error: 'code must be a string' })
   }
   // The guard and the update share one transaction so the row stays locked
   // between them (see lib/deactivationGuards.js). This is
