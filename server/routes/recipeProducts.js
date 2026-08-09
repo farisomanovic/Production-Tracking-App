@@ -7,6 +7,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { AppError } from '../lib/errors.js'
+import { isNonEmptyString } from '../lib/validation.js'
 
 const router = Router()
 
@@ -67,7 +68,7 @@ router.get('/product/:productId', async (req, res) => {
 router.post('/', async (req, res, next) => {
     try {
         const { recipeId, productId } = req.body
-        if (!recipeId || !productId) {
+        if (!isNonEmptyString(recipeId) || !isNonEmptyString(productId)) {
             return res.status(400).json({ error: 'recipeId and productId are required' })
         }
         const link = await prisma.recipeProduct.create({
