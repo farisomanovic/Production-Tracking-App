@@ -17,6 +17,7 @@ import { formatDisplayDate, formatExportDate, formatFileDate, formatDisplayTime 
 import { totalNetKg, totalGrossKg } from '../lib/runWeights'
 import { energyConsumed } from '../lib/energy'
 import { quantitySummaryFormula, quantitySummaryMinWidth, dateSummaryFormula } from '../lib/exportSummary'
+import { exportColumnLayout } from '../lib/exportColumns'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
@@ -323,7 +324,7 @@ export default function ProductionRunsPage() {
    * @returns {Promise<Blob>} The finished .xlsx as a Blob ready for download.
    *
    * @example
-   * const blob = await applyPrintLayout(workbook, headers.indexOf('Notes'))
+   * const blob = await applyPrintLayout(workbook, layout.notesIndex)
    */
   async function applyPrintLayout(workbook, notesColumnIndex) {
       const xlsxData = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
@@ -459,36 +460,15 @@ export default function ProductionRunsPage() {
               if (!units.includes(run.product.unit)) units.push(run.product.unit)
           })
 
-          const headers = [
-              'Date',
-              'Machine',
-              'Operator',
-              'Product',
-              'Recipe',
-              'Warmup Start',
-              'Start Time',
-              'Stable Start',
-              'End Time',
-              'Energy Start (kWh)',
-              'Energy End (kWh)',
-              'Energy Consumed (kWh)',
-              ...paramNames.map(sanitizeCellText),
-              ...materialNames.map(n => sanitizeCellText(`${n} Used (kg)`)),
-              'Quantity Produced',
-              // Its own column rather than a suffix on the header or in the cell:
-              // one machine makes several products, so the sheet can carry more
-              // than one unit, and the quantity cell must stay numeric — text in
-              // it would silently zero the summary row's total. The column is now
-              // load-bearing rather than merely informative: the per-unit subtotals
-              // below are SUMIFs keyed on it, so moving or renaming it breaks them.
-              'Unit',
-              'Neto per Unit (kg)',
-              'Total Neto (kg)',
-              'Bruto per Unit (kg)',
-              'Total Bruto (kg)',
-              'Scrap (kg)',
-              'Notes'
-          ]
+          // The layout knows where every fixed column lands once the discovered ones
+          // are spliced in. It is asked rather than searched for, because a parameter
+          // name is operator-typed and can duplicate a fixed header. See
+          // lib/exportColumns.js.
+          const layout = exportColumnLayout({
+              parameterHeaders: paramNames.map(sanitizeCellText),
+              materialHeaders: materialNames.map(n => sanitizeCellText(`${n} Used (kg)`))
+          })
+          const { headers } = layout
 
           const formatExportTime = (dateStr) => {
               if (!dateStr) return ''
@@ -580,16 +560,6 @@ export default function ProductionRunsPage() {
           // +1 offsets: spreadsheet rows are 1-based and row 1 is the header.
           const lastDataRowNumber = rows.length + 1
           const summaryRowNumber = lastDataRowNumber + 1
-          const materialStartIndex = headers.findIndex(header => header === sanitizeCellText(`${materialNames[0]} Used (kg)`))
-          // Per-unit columns get no SUM on purpose: adding per-unit weights
-          // across different runs is a meaningless number on the report.
-          //
-          // 'Quantity Produced' is NOT in this list: these three are kg on every
-          // row by construction (runWeights.js returns kg whatever the product's
-          // unit, and scrap is kg by definition), so a plain SUM is sound and only
-          // needs the unit stating. The quantity column is in the product's own
-          // unit and gets its own treatment below.
-          const kgColumnHeaders = ['Total Neto (kg)', 'Total Bruto (kg)', 'Scrap (kg)']
 
           // Labels and values fused into one formula cell ("Broj radnih dana: 21 |
           // Broj unosa: 22") because the label column doubles as the count column —
@@ -598,21 +568,20 @@ export default function ProductionRunsPage() {
           worksheet[`A${summaryRowNumber}`] = {
               t: 's',
               f: dateSummaryFormula({
-                  dateColumn: getExcelColumnName(headers.findIndex(header => header === 'Date')),
+                  dateColumn: getExcelColumnName(layout.dateIndex),
                   lastDataRow: lastDataRowNumber
               }),
           }
 
           materialNames.forEach((_, index) => {
-              const columnName = getExcelColumnName(materialStartIndex + index)
+              const columnName = getExcelColumnName(layout.materialStartIndex + index)
               worksheet[`${columnName}${summaryRowNumber}`] = {
                   t: 's',
                   f: `"Sum: "&SUM(${columnName}2:${columnName}${lastDataRowNumber})`,
               }
           })
 
-          kgColumnHeaders.forEach(header => {
-              const columnIndex = headers.findIndex(columnHeader => columnHeader === header)
+          layout.kgSumIndexes.forEach(columnIndex => {
               const columnName = getExcelColumnName(columnIndex)
               worksheet[`${columnName}${summaryRowNumber}`] = {
                   t: 's',
@@ -624,15 +593,14 @@ export default function ProductionRunsPage() {
           // one, because the export is machine-scoped and one machine makes
           // products measured differently — a plain SUM here added kilograms to
           // rolls. See lib/exportSummary.js.
-          const quantityColumnIndex = headers.findIndex(header => header === 'Quantity Produced')
           const quantityFormula = quantitySummaryFormula({
               units,
-              quantityColumn: getExcelColumnName(quantityColumnIndex),
-              unitColumn: getExcelColumnName(headers.findIndex(header => header === 'Unit')),
+              quantityColumn: getExcelColumnName(layout.quantityIndex),
+              unitColumn: getExcelColumnName(layout.unitIndex),
               lastDataRow: lastDataRowNumber
           })
           if (quantityFormula) {
-              worksheet[`${getExcelColumnName(quantityColumnIndex)}${summaryRowNumber}`] = {
+              worksheet[`${getExcelColumnName(layout.quantityIndex)}${summaryRowNumber}`] = {
                   t: 's',
                   f: quantityFormula,
               }
@@ -656,7 +624,7 @@ export default function ProductionRunsPage() {
               // clipped "kg: 903.55 | roll:" is worse than the total it replaced —
               // so it may exceed the 60 ceiling, which exists to contain free-text
               // notes rather than a cell bounded by the unit vocabulary.
-              if (columnIndex === quantityColumnIndex) {
+              if (columnIndex === layout.quantityIndex) {
                   return { wch: Math.max(width, quantitySummaryMinWidth(units)) }
               }
 
@@ -664,7 +632,7 @@ export default function ProductionRunsPage() {
           })
 
           XLSX.utils.book_append_sheet(workbook, worksheet, 'Production Runs')
-          const workbookBlob = await applyPrintLayout(workbook, headers.findIndex(header => header === 'Notes'))
+          const workbookBlob = await applyPrintLayout(workbook, layout.notesIndex)
           downloadBlob(workbookBlob, fileName)
 
       } catch (err) {
