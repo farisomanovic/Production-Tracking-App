@@ -87,19 +87,30 @@ router.post('/', async (req, res) => {
     if (dimensionError(res, 'widthMm', widthMm) || dimensionError(res, 'thicknessMm', thicknessMm) || dimensionError(res, 'lengthM', lengthM)) {
         return
     }
-    const product = await prisma.product.create({
-        // code is trimmed, never nulled: unlike Machine.code this column is
-        // required and unique, so "  PP-12  " and "PP-12" would otherwise be
-        // two distinct unique keys for one physical product. The blank guard
-        // above runs first, which is what keeps normalizeCode's null branch
-        // unreachable here — a null would violate NOT NULL.
-        data: { name: normalizeName(name), code: normalizeCode(code),
-            ...(widthMm !== undefined && { widthMm }),
-            ...(thicknessMm !== undefined && { thicknessMm }),
-            ...(lengthM !== undefined && { lengthM }),
-            ...(description !== undefined && { description }),
-            unit }
-    })
+    let product
+    try {
+        product = await prisma.product.create({
+            // code is trimmed, never nulled: unlike Machine.code this column is
+            // required and unique, so "  PP-12  " and "PP-12" would otherwise be
+            // two distinct unique keys for one physical product. The blank guard
+            // above runs first, which is what keeps normalizeCode's null branch
+            // unreachable here — a null would violate NOT NULL.
+            data: { name: normalizeName(name), code: normalizeCode(code),
+                ...(widthMm !== undefined && { widthMm }),
+                ...(thicknessMm !== undefined && { thicknessMm }),
+                ...(lengthM !== undefined && { lengthM }),
+                ...(description !== undefined && { description }),
+                unit }
+        })
+    } catch (error) {
+        // Product_code_key is the model's only unique constraint, so naming the
+        // field here is unambiguous. Status (409) is the central error
+        // middleware's call, not this route's.
+        if (error.code === 'P2002') {
+            error.clientMessage = 'A product with this code already exists'
+        }
+        throw error
+    }
     res.status(201).json(product)
 })
 
@@ -160,19 +171,27 @@ router.put('/:id', async (req, res) => {
             return res.status(409).json({ error: 'unit cannot be changed after a product is created' })
         }
     }
-    const product = await prisma.product.update({
-        where: { id: req.params.id },
-        data: {
-            // Spread-if-defined keeps omitted fields untouched (partial update).
-            ...(name !== undefined && { name: normalizeName(name) }),
-            ...(code !== undefined && { code: normalizeCode(code) }),
-            ...(widthMm !== undefined && { widthMm }),
-            ...(thicknessMm !== undefined && { thicknessMm }),
-            ...(lengthM !== undefined && { lengthM }),
-            ...(description !== undefined && { description }),
-            ...(unit !== undefined && { unit })
+    let product
+    try {
+        product = await prisma.product.update({
+            where: { id: req.params.id },
+            data: {
+                // Spread-if-defined keeps omitted fields untouched (partial update).
+                ...(name !== undefined && { name: normalizeName(name) }),
+                ...(code !== undefined && { code: normalizeCode(code) }),
+                ...(widthMm !== undefined && { widthMm }),
+                ...(thicknessMm !== undefined && { thicknessMm }),
+                ...(lengthM !== undefined && { lengthM }),
+                ...(description !== undefined && { description }),
+                ...(unit !== undefined && { unit })
+            }
+        })
+    } catch (error) {
+        if (error.code === 'P2002') {
+            error.clientMessage = 'A product with this code already exists'
         }
-    })
+        throw error
+    }
     res.json(product)
 })
 

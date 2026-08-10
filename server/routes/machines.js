@@ -75,15 +75,26 @@ router.post('/', async (req, res) => {
   if (code !== undefined && code !== null && typeof code !== 'string') {
     return res.status(400).json({ error: 'code must be a string' })
   }
-  const machine = await prisma.machine.create({
-    // code is only included when the client sent it: the column is nullable
-    // with a unique constraint, and Postgres treats NULLs as distinct — so
-    // omitting it allows many code-less machines, while an explicit duplicate
-    // string would violate the constraint.
-    data: { name: normalizeName(name),
-      ...(code !== undefined && { code: normalizeCode(code) }),
+  let machine
+  try {
+    machine = await prisma.machine.create({
+      // code is only included when the client sent it: the column is nullable
+      // with a unique constraint, and Postgres treats NULLs as distinct — so
+      // omitting it allows many code-less machines, while an explicit duplicate
+      // string would violate the constraint.
+      data: { name: normalizeName(name),
+        ...(code !== undefined && { code: normalizeCode(code) }),
+      }
+    })
+  } catch (error) {
+    // Machine_code_key is the model's only unique constraint, so naming the
+    // field here is unambiguous. Status (409) is the central error middleware's
+    // call, not this route's.
+    if (error.code === 'P2002') {
+      error.clientMessage = 'A machine with this code already exists'
     }
-  })
+    throw error
+  }
   res.status(201).json(machine)
 })
 
@@ -127,23 +138,35 @@ router.put('/:id', async (req, res) => {
   // reads outside any transaction, which is exactly the race being closed. It
   // still serves the MachineParameter/MachineProduct unlink routes, whose own
   // races are separately documented as accepted.
-  const machine = await prisma.$transaction(async (tx) => {
-    if (active === false) {
-      await lockAndAssertNoOpenRun(tx, 'machine', req.params.id,
-        'Cannot deactivate this machine while a run is in progress')
-    }
-    return tx.machine.update({
-      where: { id: req.params.id },
-      data: {
-        // Spread-if-defined keeps omitted fields untouched (partial update).
-        ...(name !== undefined && { name: normalizeName(name) }),
-        // Blank/whitespace normalizes to null so it never occupies the unique
-        // constraint's single "" slot.
-        ...(code !== undefined && { code: normalizeCode(code) }),
-        ...(active !== undefined && { active }),
+  let machine
+  try {
+    machine = await prisma.$transaction(async (tx) => {
+      if (active === false) {
+        await lockAndAssertNoOpenRun(tx, 'machine', req.params.id,
+          'Cannot deactivate this machine while a run is in progress')
       }
+      return tx.machine.update({
+        where: { id: req.params.id },
+        data: {
+          // Spread-if-defined keeps omitted fields untouched (partial update).
+          ...(name !== undefined && { name: normalizeName(name) }),
+          // Blank/whitespace normalizes to null so it never occupies the unique
+          // constraint's single "" slot.
+          ...(code !== undefined && { code: normalizeCode(code) }),
+          ...(active !== undefined && { active }),
+        }
+      })
     })
-  })
+  } catch (error) {
+    // Reads as though it could swallow lockAndAssertNoOpenRun's deactivation
+    // conflict, but cannot: that throws an AppError, which carries no `.code`,
+    // so the tag is skipped and the bare re-throw forwards it untouched with
+    // its own message and status intact.
+    if (error.code === 'P2002') {
+      error.clientMessage = 'A machine with this code already exists'
+    }
+    throw error
+  }
   res.json(machine)
 })
 
