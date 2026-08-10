@@ -8,6 +8,11 @@
  * through real routes rather than unit-testing the middleware in isolation, since
  * that's how it's actually reached.
  *
+ * The anonymous `clientMessage` fallback is the one branch that CANNOT be reached
+ * through a real route any more: every unique constraint in the app is now either
+ * tagged by its route or pre-checked into a 400 before Prisma sees it. It gets a
+ * synthetic fixture below rather than being left uncovered.
+ *
  * Rows created here use the VT-ERR prefix; beforeAll/afterAll clean up leftovers.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
@@ -53,14 +58,17 @@ beforeAll(async () => {
 afterAll(cleanup)
 
 describe('central error middleware — Prisma error mapping', () => {
-    it('maps P2002 (unique constraint) to 409', async () => {
+    it('maps P2002 (unique constraint) to 409, carrying the route\'s own message through a $transaction', async () => {
         await request(app).post('/api/machines').send({ name: `${PREFIX} one`, code: `${PREFIX}-1` })
         const second = await request(app).post('/api/machines').send({ name: `${PREFIX} two`, code: `${PREFIX}-2` })
         expect(second.status).toBe(201)
 
+        // machines.js's PUT raises this from inside prisma.$transaction — the
+        // only tagged P2002 in the app that has to survive one — so this is
+        // also the proof that the error identity is not rewritten on the way out.
         const res = await request(app).put(`/api/machines/${second.body.id}`).send({ code: `${PREFIX}-1` })
         expect(res.status).toBe(409)
-        expect(res.body.error).toBe('A record with this value already exists')
+        expect(res.body.error).toBe('A machine with this code already exists')
     })
 
     it('maps P2002 (unique constraint) to 409 on a second route (products), proving the mapping is not route-specific', async () => {
@@ -69,6 +77,24 @@ describe('central error middleware — Prisma error mapping', () => {
         expect(second.status).toBe(201)
 
         const res = await request(app).put(`/api/products/${second.body.id}`).send({ code: `${PREFIX}-P1` })
+        expect(res.status).toBe(409)
+        expect(res.body.error).toBe('A product with this code already exists')
+    })
+
+    it('falls back to the anonymous message when a P2002 carries no clientMessage', async () => {
+        // No real route reaches this branch any more, so it uses the same
+        // throwaway-app fixture as the unrecognized-error case above, for the
+        // same stated reason: a coverage test should not depend on which route
+        // happens to be missing its tag this month. Synthetic error, but the
+        // branch it guards is a literal `err.code === 'P2002'` string compare —
+        // the four route tests above keep the real-Prisma-shape half proven.
+        const untaggedApp = express()
+        untaggedApp.get('/dup', () => {
+            throw Object.assign(new Error('untagged unique violation'), { code: 'P2002' })
+        })
+        untaggedApp.use(errorHandler)
+
+        const res = await request(untaggedApp).get('/dup')
         expect(res.status).toBe(409)
         expect(res.body.error).toBe('A record with this value already exists')
     })
