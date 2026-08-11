@@ -5,6 +5,13 @@
  * (`error` from useApi, or a page's own `actionError`) and passes it down, so
  * the banner has no internal dismissed-state that could go stale (e.g. an
  * identical repeated error string still reappears correctly).
+ *
+ * Rendering nothing on a falsy message is deliberate and stays: at all twelve
+ * inline call sites this banner sits above real page content, and a component
+ * that always rendered would leave a permanent empty red bar on every page.
+ * React gives a component no way to detect that it is an only child, so the
+ * one context where rendering nothing IS wrong — a failed load, where the
+ * banner is the entire page — is handled by LoadErrorState.jsx instead.
  */
 import { common } from '../styles/common'
 
