@@ -18,6 +18,7 @@ import { energyConsumed } from '../lib/energy'
 import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import ErrorBanner from '../components/ErrorBanner'
+import LoadErrorState from '../components/LoadErrorState'
 import TimeInput24 from '../components/TimeInput24'
 
 /**
@@ -232,12 +233,15 @@ if (loading) return <p style={styles.loadingText}>Loading run...</p>
 
 if (!run) {
     // Initial load failed and `run` was never populated — nothing else on
-    // this page can render without it, so show the retry banner in place of
-    // content instead of a blank page.
+    // this page can render without it.
     return (
-    <div style={styles.container}>
-        <ErrorBanner message={error || 'Run not found.'} onDismiss={loadRun} dismissLabel="Retry" />
-    </div>
+    <LoadErrorState
+        message={error}
+        fallback="Run not found."
+        onRetry={loadRun}
+        onBack={() => navigate('/runs')}
+        backLabel="← Back to Runs"
+    />
     )
 }
 

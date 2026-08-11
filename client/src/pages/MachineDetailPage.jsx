@@ -13,6 +13,7 @@ import { getAllParameters } from '../api/parameters'
 import { getAllProducts } from '../api/products'
 import { common } from '../styles/common'
 import ErrorBanner from '../components/ErrorBanner'
+import LoadErrorState from '../components/LoadErrorState'
 import { getErrorMessage } from '../lib/errorMessage'
 import { missingFieldsMessage } from '../lib/requiredFields'
 
@@ -195,12 +196,16 @@ function MachineDetailPage() {
 
   if (!machine) {
     // Initial load failed and `machine` was never populated — nothing else on
-    // this page can render without it (machine.name below would crash), so
-    // show the retry banner in place of content instead of a blank page.
+    // this page can render without it (machine.name below would crash).
+    // `error` is null when the load itself succeeded but returned no machine,
+    // which is why the fallback text is passed rather than assumed.
     return (
-      <div style={common.container}>
-        <ErrorBanner message={error} onDismiss={loadMachineDetails} dismissLabel="Retry" />
-      </div>
+      <LoadErrorState
+        message={error}
+        fallback="Machine not found."
+        onRetry={loadMachineDetails}
+        onBack={() => navigate('/admin')}
+      />
     )
   }
 
