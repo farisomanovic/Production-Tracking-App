@@ -22,6 +22,7 @@ import ProductionRunsPage from './pages/ProductionRunsPage'
 import AdminPage from './pages/AdminPage'
 import NewRunPage from './pages/NewRunPage'
 import NotFoundPage from './pages/NotFoundPage'
+import RouteErrorPage from './pages/RouteErrorPage'
 import RunDetailPage from './pages/RunDetailPage'
 
 /**
@@ -48,6 +49,12 @@ function RootLayout() {
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    // At the root, not per page: an errorElement replaces the element of the route
+    // it sits on, so this one gives up BottomNav on the error screen in exchange for
+    // also catching a crash inside RootLayout or BottomNav themselves. Without it,
+    // any uncaught render error shows React Router's built-in screen — stack trace
+    // included, in production builds too.
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'operators', element: <OperatorsPage /> },
