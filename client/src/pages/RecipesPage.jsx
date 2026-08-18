@@ -16,6 +16,18 @@ import { common } from '../styles/common'
 import { getErrorMessage } from '../lib/errorMessage'
 import { missingFieldsMessage } from '../lib/requiredFields'
 
+// Module scope, NOT inline arrows in the useApi calls below, and this placement
+// is load-bearing: useApi takes its argument as an effect dependency, so an
+// arrow defined inside the component would be a new function on every render
+// and re-fetch forever. Defined once here, the reference is stable for the
+// process's lifetime.
+//
+// Only the builder's two pickers are filtered. The recipe LIST stays unfiltered
+// because this page owns the activate/deactivate toggle and needs to show the
+// inactive ones to offer reactivation.
+const getActiveMaterials = () => getAllMaterials({ active: true })
+const getActiveProducts = () => getAllProducts({ active: true })
+
 /**
  * Renders the recipe list and the collapsible recipe-builder form.
  *
@@ -30,8 +42,8 @@ function RecipesPage() {
   // Three useApi instances instead of one combined fetch: each has its own
   // error message, and only the recipe list ever needs reloading (after create).
   const { data: recipes, loading: loadingRecipes, error: errorRecipes, reload: reloadRecipes } = useApi(getAllRecipes, 'Failed to load recipes')
-  const { data: materials, loading: loadingMaterials, error: errorMaterials, reload: reloadMaterials } = useApi(getAllMaterials, 'Failed to load materials')
-  const { data: products, loading: loadingProducts, error: errorProducts, reload: reloadProducts } = useApi(getAllProducts, 'Failed to load products')
+  const { data: materials, loading: loadingMaterials, error: errorMaterials, reload: reloadMaterials } = useApi(getActiveMaterials, 'Failed to load materials')
+  const { data: products, loading: loadingProducts, error: errorProducts, reload: reloadProducts } = useApi(getActiveProducts, 'Failed to load products')
   const loading = loadingRecipes || loadingMaterials || loadingProducts
   const error = errorRecipes || errorMaterials || errorProducts
 

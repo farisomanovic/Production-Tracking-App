@@ -9,6 +9,7 @@ import prisma from '../lib/prisma.js'
 import { machineHasRunInProgress } from '../lib/machineGuards.js'
 import { isForeignKeyViolation } from '../lib/errors.js'
 import { isNonEmptyString } from '../lib/validation.js'
+import { parseActiveFilter } from '../lib/queryFilters.js'
 
 const router = Router()
 
@@ -16,17 +17,26 @@ const router = Router()
  * Lists a machine's parameter links, parameter metadata included, in the order
  * the run-entry form should render them.
  *
- * @param {import('express').Request} req - `params.machineId` is the machine UUID.
- * @param {import('express').Response} res - 200 → MachineParameter[] (with `parameter`) ordered by displayOrder; 500 on DB failure.
+ * `?active=` filters on the LINKED PARAMETER, not on the link row — same
+ * split-audience reasoning as machineProducts.js's list route.
+ *
+ * @param {import('express').Request} req - `params.machineId` is the machine UUID;
+ * optional query `active` ("true" | "false").
+ * @param {import('express').Response} res - 200 → MachineParameter[] (with `parameter`) ordered by
+ * displayOrder; 400 on a malformed `active`; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // GET /api/machine-parameters/machine/7cd0…
+ * // GET /api/machine-parameters/machine/7cd0…?active=true
  * // → 200 [{ id: "31f0…", displayOrder: 0, parameter: { name: "Melt temp", unit: "°C" } }]
  */
 router.get('/machine/:machineId', async (req, res) => {
+    const activeFilter = parseActiveFilter(req.query.active)
     const links = await prisma.machineParameter.findMany({
-        where: { machineId: req.params.machineId },
+        where: {
+            machineId: req.params.machineId,
+            ...(activeFilter.active !== undefined && { parameter: { active: activeFilter.active } })
+        },
         // displayOrder is the single source of truth for form field order —
         // the wizard, the completion form, and run detail all rely on it so
         // the operator always sees fields in the same sequence.

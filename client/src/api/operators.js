@@ -6,17 +6,24 @@
 import api from './axiosInstance'
 
 /**
- * Fetches every operator, active and inactive (callers filter for dropdowns).
+ * Fetches operators. Unfiltered by default (the admin page needs inactive rows
+ * to offer reactivation); pass `{ active: true }` for a selection dropdown.
  *
+ * The server does the filtering — this used to be a `.filter()` at every call
+ * site, which meant a caller who forgot it silently offered retired operators.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.active] - Omit for all rows; true/false to narrow.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = Operator[].
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example
- * const res = await getAllOperators()
- * const selectable = res.data.filter(op => op.active)
+ * const res = await getAllOperators({ active: true })
  */
-export function getAllOperators() {
-  return api.get('/operators')
+export function getAllOperators({ active } = {}) {
+  return api.get('/operators', {
+    params: { ...(active !== undefined && { active }) }
+  })
 }
 
 /**

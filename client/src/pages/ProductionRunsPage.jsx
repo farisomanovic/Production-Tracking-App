@@ -74,6 +74,10 @@ export default function ProductionRunsPage() {
   useEffect(() => {
     async function loadFilterOptions() {
       try {
+        // Deliberately UNFILTERED, unlike every other dropdown in the app.
+        // These three filter production HISTORY, and a machine retired last
+        // month still has runs in it — asking for active rows only would make
+        // those runs unreachable through the UI that exists to find them.
         const [machinesRes, operatorsRes, productsRes] = await Promise.all([
           getAllMachines(),
           getAllOperators(),

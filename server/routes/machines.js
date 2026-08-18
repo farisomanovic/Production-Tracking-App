@@ -9,23 +9,28 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { normalizeCode, normalizeName, isNonEmptyString } from '../lib/validation.js'
 import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
+import { parseActiveFilter } from '../lib/queryFilters.js'
 
 const router = Router()
 
 /**
- * Lists ALL machines, including inactive ones, for the admin screen's
- * activate/deactivate toggle.
+ * Lists machines, optionally narrowed to active or inactive ones.
  *
- * @param {import('express').Request} req - No params or body used.
- * @param {import('express').Response} res - 200 → Machine[] sorted by name; 500 on DB failure.
+ * Unfiltered by default because the admin screen's activate/deactivate toggle
+ * needs inactive rows; the new-run wizard passes `?active=true`.
+ *
+ * @param {import('express').Request} req - Optional query: `active` ("true" | "false").
+ * @param {import('express').Response} res - 200 → Machine[] sorted by name; 400 on a malformed
+ * `active`; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // GET /api/machines
+ * // GET /api/machines?active=true
  * // → 200 [{ id: "7cd0…", name: "Extruder 1", code: "EXT-01", active: true }]
  */
 router.get('/', async (req, res) => {
   const machines = await prisma.machine.findMany({
+    where: { ...parseActiveFilter(req.query.active) },
     orderBy: { name: 'asc' }
   })
   res.json(machines)

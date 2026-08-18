@@ -6,18 +6,24 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { isNonEmptyString, normalizeName } from '../lib/validation.js'
+import { isNonEmptyString, normalizeName, normalizeOptionalText } from '../lib/validation.js'
 import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
+import { parseActiveFilter } from '../lib/queryFilters.js'
 
 const router = Router()
 
 // ─── READS ───────────────────────────────────────────────────────────────────
 
 /**
- * Lists every recipe with its linked products and full material breakdown.
+ * Lists recipes with their linked products and full material breakdown,
+ * optionally narrowed to active or inactive ones.
  *
- * @param {import('express').Request} req - No params or body used.
- * @param {import('express').Response} res - 200 → Recipe[] (with products.product + recipeItems.material) sorted by name; 500 on DB failure.
+ * Unfiltered by default because the admin page needs inactive rows to offer
+ * reactivation. Note the wizard does NOT use this endpoint — it uses the
+ * purpose-built /by-product/:productId below.
+ *
+ * @param {import('express').Request} req - Optional query: `active` ("true" | "false").
+ * @param {import('express').Response} res - 200 → Recipe[] (with products.product + recipeItems.material) sorted by name; 400 on a malformed `active`; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -28,6 +34,7 @@ const router = Router()
  */
 router.get('/', async (req, res) => {
     const recipes = await prisma.recipe.findMany({
+        where: { ...parseActiveFilter(req.query.active) },
         orderBy: { name: 'asc' },
         include: {
             products: {
@@ -59,9 +66,12 @@ router.get('/', async (req, res) => {
 router.get('/by-product/:productId', async (req, res) => {
     const { productId } = req.params
 
-    // Hardcoded active-only filter, not a ?active= query param — this is a
-    // narrow, purpose-built endpoint (the wizard's only consumer), matching
-    // how this codebase favors that over generic query flags.
+    // Hardcoded active-only, and it stays that way even though GET / above now
+    // accepts ?active=. The two are not the same kind of endpoint: this one is
+    // purpose-built for a single consumer (the wizard) that must never see an
+    // inactive recipe, so "active only" is part of what the route MEANS rather
+    // than something a caller chooses. GET / serves both the wizard-less admin
+    // page and dropdowns, which is what makes the flag worth having there.
     const recipes = await prisma.recipe.findMany({
         where: { products: { some: { productId } }, active: true },
         orderBy: { name: 'asc' },
@@ -196,7 +206,7 @@ router.post('/', async (req, res) => {
     const recipe = await prisma.recipe.create({
         data: {
             name: normalizeName(name),
-            ...(notes !== undefined && { notes }),
+            ...(notes !== undefined && { notes: normalizeOptionalText(notes) }),
             products: {
                 // Nested create instead of separate inserts: Prisma wraps the
                 // header + links + items in one implicit transaction, so a
@@ -273,7 +283,7 @@ router.put('/:id', async (req, res) => {
             where: { id: req.params.id },
             data: {
                 ...(name !== undefined && { name: normalizeName(name) }),
-                ...(notes !== undefined && { notes }),
+                ...(notes !== undefined && { notes: normalizeOptionalText(notes) }),
                 ...(active !== undefined && { active }),
             },
             include: {

@@ -8,14 +8,18 @@ import api from './axiosInstance'
 /**
  * Fetches every parameter definition.
  *
+ * @param {Object} [options]
+ * @param {boolean} [options.active] - Omit for all rows; true/false to narrow.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = Parameter[].
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example
- * const res = await getAllParameters()
+ * const res = await getAllParameters({ active: true })
  */
-export function getAllParameters() {
-  return api.get('/parameters')
+export function getAllParameters({ active } = {}) {
+  return api.get('/parameters', {
+    params: { ...(active !== undefined && { active }) }
+  })
 }
 
 /**

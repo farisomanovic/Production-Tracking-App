@@ -6,23 +6,31 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { normalizeName, isNonEmptyString, isValidUnit, VALID_UNITS } from '../lib/validation.js'
+import { normalizeName, isNonEmptyString, isValidUnit, normalizeOptionalText, VALID_UNITS } from '../lib/validation.js'
+import { parseActiveFilter } from '../lib/queryFilters.js'
+import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
 
 const router = Router()
 
 /**
- * Lists every material with its current stock.
+ * Lists materials with their current stock, optionally narrowed to active or
+ * inactive ones.
  *
- * @param {import('express').Request} req - No params or body used.
- * @param {import('express').Response} res - 200 → Material[] sorted by name; 500 on DB failure.
+ * Unfiltered by default because the admin page needs inactive rows to offer
+ * reactivation; the recipe builder passes `?active=true`.
+ *
+ * @param {import('express').Request} req - Optional query: `active` ("true" | "false").
+ * @param {import('express').Response} res - 200 → Material[] sorted by name; 400 on a malformed
+ * `active`; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // GET /api/materials
- * // → 200 [{ id: "a9d2…", name: "PP granulat", unit: "kg", stockQty: 1250.5 }]
+ * // GET /api/materials?active=true
+ * // → 200 [{ id: "a9d2…", name: "PP granulat", unit: "kg", stockQty: 1250.5, active: true }]
  */
 router.get('/', async (req, res) => {
     const materials = await prisma.material.findMany({
+        where: { ...parseActiveFilter(req.query.active) },
         orderBy: { name: 'asc' }
     })
     res.json(materials)
@@ -51,6 +59,9 @@ router.get('/:id', async (req, res) => {
 
 /**
  * Creates a material master record with optional supplier and opening stock.
+ * `active` is deliberately not accepted — it defaults to true in the schema, and
+ * taking it here would let a client create a pre-deactivated row (same rule as
+ * operators.js POST).
  *
  * @param {import('express').Request} req - `body.name`, `body.unit` (required); `body.supplier`,
  * `body.stockQty` (optional — stock defaults to 0 in the schema).
@@ -81,7 +92,7 @@ router.post('/', async (req, res) => {
     try {
         material = await prisma.material.create({
             data: { name: normalizedName, unit,
-                ...(supplier !== undefined && { supplier }),
+                ...(supplier !== undefined && { supplier: normalizeOptionalText(supplier) }),
                 ...(stockQty !== undefined && { stockQty })
             }
         })
@@ -100,9 +111,13 @@ router.post('/', async (req, res) => {
  * outright (corrections). Send only one — if both are present, stockDelta wins.
  * A body carrying none of these fields is a no-op that returns the row unchanged.
  *
- * @param {import('express').Request} req - `params.id` UUID; any subset of name/unit/supplier/stockDelta/stockQty.
- * @param {import('express').Response} res - 200 → updated Material; 400 invalid numbers; 404 unknown id;
- * 409 when a negative stockDelta would take stock below zero; 500 on DB failure.
+ * `active: false` is the soft-delete path.
+ *
+ * @param {import('express').Request} req - `params.id` UUID; any subset of
+ * name/unit/supplier/stockDelta/stockQty/active.
+ * @param {import('express').Response} res - 200 → updated Material; 400 invalid numbers or a
+ * non-boolean active; 404 unknown id; 409 when a negative stockDelta would take stock below zero,
+ * or when a deactivation is blocked by an in-progress run using this material; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
@@ -110,9 +125,12 @@ router.post('/', async (req, res) => {
  * // → 200 { id: "a9d2…", name: "PP granulat", unit: "kg", stockQty: 1750.5 }
  */
 router.put('/:id', async (req, res) => {
-    const { name, unit, supplier, stockQty, stockDelta } = req.body
+    const { name, unit, supplier, stockQty, stockDelta, active } = req.body
     if (name !== undefined && typeof name !== 'string') {
         return res.status(400).json({ error: 'name must be a string' })
+    }
+    if (active !== undefined && typeof active !== 'boolean') {
+        return res.status(400).json({ error: 'active must be a boolean' })
     }
     if (unit !== undefined && typeof unit !== 'string') {
         return res.status(400).json({ error: 'unit must be a string' })
@@ -140,7 +158,8 @@ router.put('/:id', async (req, res) => {
     const data = {
         ...(normalizedName !== undefined && { name: normalizedName }),
         ...(unit !== undefined && { unit }),
-        ...(supplier !== undefined && { supplier }),
+        ...(supplier !== undefined && { supplier: normalizeOptionalText(supplier) }),
+        ...(active !== undefined && { active }),
         ...(stockDelta !== undefined
             ? { stockQty: { increment: stockDelta } }
             : stockQty !== undefined && { stockQty })
@@ -154,14 +173,27 @@ router.put('/:id', async (req, res) => {
         // updateMany instead of update: a negative delta only applies when enough
         // stock exists (the WHERE condition and the increment are one atomic
         // statement — same pattern as run completion in productionRuns.js).
+        //
+        // The transaction WRAPS that statement, it does not replace it. The
+        // deactivation guard needs the row locked from before it reads
+        // ProductionRun until after the write commits (see operators.js's PUT),
+        // and the stock floor needs its WHERE and its increment to stay one
+        // statement — both hold here, because the single updateMany is still a
+        // single statement, now issued inside the same transaction as the lock.
         let count
         try {
-            ;({ count } = await prisma.material.updateMany({
-                where: {
-                    id: req.params.id,
-                    ...(stockDelta !== undefined && stockDelta < 0 && { stockQty: { gte: -stockDelta } })
-                },
-                data
+            ;({ count } = await prisma.$transaction(async (tx) => {
+                if (active === false) {
+                    await lockAndAssertNoOpenRun(tx, 'material', req.params.id,
+                        'Cannot deactivate this material while a run using it is in progress')
+                }
+                return tx.material.updateMany({
+                    where: {
+                        id: req.params.id,
+                        ...(stockDelta !== undefined && stockDelta < 0 && { stockQty: { gte: -stockDelta } })
+                    },
+                    data
+                })
             }))
         } catch (error) {
             if (error.code === 'P2002') {

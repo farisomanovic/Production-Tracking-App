@@ -44,17 +44,24 @@ model Machine {
 // RunParameterValue, and machine assignment lives in MachineParameter.
 // name is @unique because the XLSX export matches columns by name, not id —
 // a duplicate name would silently merge two parameters' data into one report
-// column. Machine/Operator/Recipe deliberately do NOT get the same treatment:
-// they have `active` soft-delete and legitimately reuse a name after
-// deactivating the old row (see Recipe), which a plain @unique would break.
+// column. Machine/Operator deliberately do NOT get the same treatment: they
+// legitimately reuse a name after deactivating the old row, which a plain
+// @unique would break.
 // A second raw-SQL-only unique index on lower(name) also exists (migration
 // material_parameter_name_ci_unique) — Prisma's schema language can't
 // express it either; see that migration's comment for the full reasoning.
+// Soft-deleted via `active`: RunParameterValue reaches this row through
+// MachineParameter, so a retired measurement type must keep its FK intact.
+// The @unique above and `active` DO interact, here and on Material: a
+// deactivated name stays occupied, so retiring "Melt temp" and then creating a
+// second "Melt temp" is a 409. Reactivating the original row is the intended
+// path — for a type the export keys by name, one row per name is the point.
 model Parameter {
   id          String  @id @default(uuid())
   name        String  @unique
   unit        String?
   description String?
+  active      Boolean @default(true)
 
   machineParameters MachineParameter[]
 }
@@ -82,6 +89,9 @@ model MachineParameter {
 
 // `code` is the human-facing product identifier (labels, Excel reports), which is
 // why it is unique while `name` is not.
+// Soft-deleted via `active`, same reasoning as Operator/Machine/Recipe:
+// ProductionRun.productId is a required FK that every historical run depends on,
+// so a discontinued product is hidden from new-run selection, never deleted.
 model Product {
   id          String @id @default(uuid())
   name        String
@@ -91,6 +101,7 @@ model Product {
   lengthM     Float?
   description String?
   unit        String
+  active      Boolean @default(true)
 
   machineProducts MachineProduct[]
   recipeProducts  RecipeProduct[]
@@ -144,12 +155,18 @@ model RecipeProduct {
 // index on lower(name) also exists (migration
 // material_parameter_name_ci_unique) — same reasoning as the stockQty CHECK
 // above; see that migration's comment for the full reasoning.
+// Soft-deleted via `active`: MaterialUsage.materialId is a required FK carrying
+// every historical consumption row, so a material that is no longer purchased is
+// hidden from the recipe builder rather than deleted. Deactivation does NOT stop
+// an already-open run from consuming it — see the note on /complete in
+// routes/productionRuns.js.
 model Material {
   id       String @id @default(uuid())
   name     String @unique
   unit     String
   supplier String?
   stockQty Float  @default(0)
+  active   Boolean @default(true)
 
   recipeItems    RecipeItem[]
   materialUsages MaterialUsage[]

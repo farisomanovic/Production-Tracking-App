@@ -1,11 +1,12 @@
 /**
  * @file ParametersPage.jsx
- * @description Admin page for parameter definitions (create + list only —
- * editing has no UI yet even though the API supports it). Assigning parameters
- * to machines happens on MachineDetailPage, not here.
+ * @description Admin page for parameter definitions (create, list, and
+ * activate/deactivate — editing name/unit/description has no UI yet even though
+ * the API supports it). Assigning parameters to machines happens on
+ * MachineDetailPage, not here.
  */
 import { useState } from 'react'
-import { getAllParameters, createParameter } from '../api/parameters'
+import { getAllParameters, createParameter, updateParameter } from '../api/parameters'
 import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
@@ -59,6 +60,47 @@ function ParametersPage() {
     }
   }
 
+  /**
+   * Soft-deletes a parameter (active: false) — stops it being offered for new
+   * machine links while every recorded RunParameterValue keeps its foreign key.
+   *
+   * @param {string} id - Parameter UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleDeactivate('e01b…')
+   */
+  async function handleDeactivate(id) {
+    try {
+        await updateParameter(id, { active: false })
+        reload()
+    } catch (err) {
+        // The server refuses with a 409 while a machine that collects this
+        // parameter has a run in progress; getErrorMessage shows that reason.
+        setActionError(getErrorMessage(err, 'Failed to deactivate parameter'))
+        console.error(err)
+    }
+  }
+
+  /**
+   * Reactivates a soft-deleted parameter so machines can collect it again.
+   *
+   * @param {string} id - Parameter UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleActivate('e01b…')
+   */
+  async function handleActivate(id) {
+    try {
+        await updateParameter(id, { active: true })
+        reload()
+    } catch (err) {
+        setActionError(getErrorMessage(err, 'Failed to activate parameter'))
+        console.error(err)
+    }
+  }
+
   if (loading) return <p style={common.loadingText}>Loading...</p>
 
   return (
@@ -102,6 +144,26 @@ function ParametersPage() {
             <span style={common.cardName}>{parameter.name}</span>
             {parameter.unit && <span style={common.cardType}>{parameter.unit}</span>}
             {parameter.description && <span style={common.cardType}>{parameter.description}</span>}
+          </div>
+          <div style={common.cardRight}>
+            <span style={parameter.active ? common.badgeActive : common.badgeInactive}>
+              {parameter.active ? 'Active' : 'Inactive'}
+            </span>
+            {parameter.active ? (
+              <button
+                style={common.deactivateButton}
+                onClick={() => handleDeactivate(parameter.id)}
+              >
+                Deactivate
+              </button>
+            ) : (
+              <button
+                style={common.activateButton}
+                onClick={() => handleActivate(parameter.id)}
+              >
+                Activate
+              </button>
+            )}
           </div>
         </div>
         ))}
