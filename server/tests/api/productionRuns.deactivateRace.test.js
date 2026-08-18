@@ -2,7 +2,12 @@
  * @file productionRuns.deactivateRace.test.js
  * @description Tests for the deactivate-vs-create race
  * between POST /api/production-runs and the `active: false` path of
- * PUT /api/operators/:id, /api/machines/:id and /api/recipes/:id.
+ * PUT /api/operators/:id, /api/machines/:id, /api/recipes/:id and
+ * /api/products/:id — the four entities a ProductionRun references directly,
+ * and therefore the four that POST takes a FOR SHARE lock on. Material and
+ * Parameter are deliberately absent: run creation never touches those tables,
+ * so their guards have no counterpart lock to race against (see the file header
+ * of lib/deactivationGuards.js for why that residual race is accepted).
  *
  * Both sides used to be plain check-then-write against a table the other one
  * writes, so an interleaving let BOTH guards pass and produced a state neither
@@ -83,12 +88,14 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 const lockForUpdate = {
     operator: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Operator" WHERE "id" = ${id} FOR UPDATE`,
     machine: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Machine" WHERE "id" = ${id} FOR UPDATE`,
-    recipe: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Recipe" WHERE "id" = ${id} FOR UPDATE`
+    recipe: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Recipe" WHERE "id" = ${id} FOR UPDATE`,
+    product: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${id} FOR UPDATE`
 }
 const lockForShare = {
     operator: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Operator" WHERE "id" = ${id} FOR SHARE`,
     machine: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Machine" WHERE "id" = ${id} FOR SHARE`,
-    recipe: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Recipe" WHERE "id" = ${id} FOR SHARE`
+    recipe: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Recipe" WHERE "id" = ${id} FOR SHARE`,
+    product: (tx, id) => tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${id} FOR SHARE`
 }
 
 const ENTITIES = [
@@ -109,6 +116,12 @@ const ENTITIES = [
         route: 'recipes',
         postError: 'Recipe is inactive',
         putError: 'Cannot deactivate this recipe while a run is in progress'
+    },
+    {
+        key: 'product',
+        route: 'products',
+        postError: 'Product is inactive',
+        putError: 'Cannot deactivate this product while a run is in progress'
     }
 ]
 
@@ -147,7 +160,8 @@ async function strandedRuns(fixture) {
             OR: [
                 { operator: { active: false } },
                 { machine: { active: false } },
-                { recipe: { active: false } }
+                { recipe: { active: false } },
+                { product: { active: false } }
             ]
         },
         select: { id: true }

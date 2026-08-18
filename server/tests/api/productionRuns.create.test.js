@@ -7,8 +7,9 @@
  * productionRuns.stockRace.test.js, not here.
  *
  * Fixtures created directly via prisma with the VT-RUNS prefix: an inactive
- * operator, an inactive machine, a product NOT linked to any machine, and a
- * recipe belonging to that unlinked product. A validPayload() built from
+ * operator, an inactive machine, an inactive product that IS linked to the
+ * baseline machine, a product NOT linked to any machine, and a recipe
+ * belonging to that unlinked product. A validPayload() built from
  * baseline ids is the reference point — every failure test breaks exactly
  * one field, so a 400 can only mean the field under test caused it.
  */
@@ -26,6 +27,7 @@ let inactiveMachine
 let unlinkedProduct
 let recipeOfUnlinkedProduct
 let inactiveRecipe
+let inactiveLinkedProduct
 
 async function cleanup(machineId) {
     // in_progress runs on the baseline machine can only be leftovers from a
@@ -34,7 +36,12 @@ async function cleanup(machineId) {
     await prisma.productionRun.deleteMany({ where: { machineId, status: 'in_progress' } })
     // FK order: RecipeProduct references both recipe and product.
     await prisma.recipeProduct.deleteMany({ where: { recipe: { name: { startsWith: PREFIX } } } })
+    // Also by PRODUCT: one fixture links a prefixed product to the BASELINE
+    // recipe, so the recipe-side query above cannot reach it and the product
+    // delete below would fail on the foreign key.
+    await prisma.recipeProduct.deleteMany({ where: { product: { code: { startsWith: PREFIX } } } })
     await prisma.recipe.deleteMany({ where: { name: { startsWith: PREFIX } } })
+    await prisma.machineProduct.deleteMany({ where: { product: { code: { startsWith: PREFIX } } } })
     await prisma.product.deleteMany({ where: { code: { startsWith: PREFIX } } })
     await prisma.machine.deleteMany({ where: { code: { startsWith: PREFIX } } })
     await prisma.operator.deleteMany({ where: { name: { startsWith: PREFIX } } })
@@ -57,6 +64,18 @@ beforeAll(async () => {
     })
     inactiveRecipe = await prisma.recipe.create({
         data: { name: `${PREFIX} inactive recipe`, active: false, products: { create: [{ productId: baseline.product.id }] } }
+    })
+    // Linked to the machine AND to the baseline recipe on purpose: without both,
+    // a rejection could be the "not assigned to this machine" or the "recipe
+    // does not belong to this product" guard rather than the `active` check.
+    inactiveLinkedProduct = await prisma.product.create({
+        data: { name: `${PREFIX} inactive product`, code: `${PREFIX}-P3`, unit: 'kg', active: false }
+    })
+    await prisma.machineProduct.create({
+        data: { machineId: baseline.machine.id, productId: inactiveLinkedProduct.id }
+    })
+    await prisma.recipeProduct.create({
+        data: { recipeId: baseline.recipe.id, productId: inactiveLinkedProduct.id }
     })
 })
 
@@ -287,6 +306,12 @@ describe('POST /api/production-runs — relational validation (PR #24)', () => {
         const res = await post({ ...validPayload(), productId: unlinkedProduct.id })
         expect(res.status).toBe(400)
         expect(res.body.error).toBe('This product is not assigned to the selected machine')
+    })
+
+    it('rejects an inactive product with 400', async () => {
+        const res = await post({ ...validPayload(), productId: inactiveLinkedProduct.id })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Product is inactive')
     })
 
     it('rejects an unknown recipeId with 400', async () => {
