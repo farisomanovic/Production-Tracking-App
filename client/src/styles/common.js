@@ -201,4 +201,49 @@ export const common = {
     fontSize: '0.85rem',
     marginBottom: '1.5rem',
   },
+
+  // ─── Soft-delete lifecycle controls ────────────────────────────────────────
+  // Every master-data admin page now shows the same Active/Inactive badge and
+  // the same activate/deactivate pair, so they live here rather than being
+  // hand-copied into each page's local styles object.
+  // OperatorsPage, MachinesPage, RecipesPage and ProductDetailPage still carry
+  // their own identical copies from before these were shared — migrating them
+  // is tracked separately, not done here, to keep this change reviewable.
+  cardRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  badgeActive: {
+    fontSize: '12px',
+    color: 'var(--color-success-strong)',
+    backgroundColor: 'var(--color-success-surface)',
+    padding: '4px 8px',
+    borderRadius: '12px',
+  },
+  badgeInactive: {
+    fontSize: '12px',
+    color: 'var(--color-danger-strong)',
+    backgroundColor: 'var(--color-danger-surface)',
+    padding: '4px 8px',
+    borderRadius: '12px',
+  },
+  deactivateButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: 'var(--color-danger-surface)',
+    color: 'var(--color-danger-strong)',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
+  activateButton: {
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: 'none',
+    backgroundColor: 'var(--color-success-surface)',
+    color: 'var(--color-success-strong)',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
 }

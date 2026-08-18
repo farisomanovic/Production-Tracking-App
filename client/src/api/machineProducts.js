@@ -10,6 +10,9 @@ import api from './axiosInstance'
  * Fetches the products a machine is allowed to produce.
  *
  * @param {string} machineId - Machine UUID.
+ * @param {Object} [options]
+ * @param {boolean} [options.active] - Filters on the LINKED row, not the link;
+ * pass true for selection dropdowns so retired rows are not offered.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = MachineProduct[]
  * (each including its `product`), sorted by product name.
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
@@ -18,8 +21,10 @@ import api from './axiosInstance'
  * const res = await getMachineProducts('7cd0…')
  * const products = res.data.map(link => link.product)
  */
-export function getMachineProducts(machineId) {
-  return api.get(`/machine-products/machine/${machineId}`)
+export function getMachineProducts(machineId, { active } = {}) {
+  return api.get(`/machine-products/machine/${machineId}`, {
+    params: { ...(active !== undefined && { active }) }
+  })
 }
 
 /**

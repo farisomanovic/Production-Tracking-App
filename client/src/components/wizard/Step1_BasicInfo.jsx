@@ -56,9 +56,12 @@ const [error, setError] = useState(null)
 useEffect(() => {
     async function loadInitial() {
     try {
+        // active: true is the server's job now — it used to be a .filter() on
+        // each rendered list below, which meant every new consumer of these
+        // endpoints had to remember to write it or silently offered retired rows.
         const [operatorsRes, machinesRes] = await Promise.all([
-        getAllOperators(),
-        getAllMachines()
+        getAllOperators({ active: true }),
+        getAllMachines({ active: true })
         ])
         setOperators(operatorsRes.data)
         setMachines(machinesRes.data)
@@ -80,7 +83,11 @@ if (!machineId) return
 async function loadProducts() {
     setLoadingProducts(true)
     try {
-    const response = await getMachineProducts(machineId)
+    // active: true filters on the linked PRODUCT — a machine may still be
+    // linked to a product that has since been retired, and that link stays
+    // (it is how the machine-setup page offers to unlink it), but the wizard
+    // must not offer it for a new run.
+    const response = await getMachineProducts(machineId, { active: true })
     const productList = response.data.map(item => item.product)
     setProducts(productList)
     } catch (err) {
@@ -158,10 +165,11 @@ return (
         onChange={e => setOperatorId(e.target.value)}
         >
         <option value=''>Select operator...</option>
-        {/* Client-side active filter — the API returns inactive operators too
-            (the admin page needs them). The server re-checks on create, so this
-            is UX, not security. */}
-        {operators.filter(op => op.active).map(op => (
+        {/* No .filter() here — the fetch above asked the server for active
+            operators only. The server also re-checks on create, so this is
+            still UX rather than security; what changed is that the rule now
+            lives in one place instead of at every call site. */}
+        {operators.map(op => (
             <option key={op.id} value={op.id}>
                 {op.name}
             </option>
@@ -185,7 +193,7 @@ return (
         }}
         >
         <option value=''>Select machine...</option>
-        {machines.filter(m => m.active).map(machine => (
+        {machines.map(machine => (
             <option key={machine.id} value={machine.id}>
                 {machine.name}
             </option>

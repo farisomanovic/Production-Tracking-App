@@ -8,14 +8,18 @@ import api from './axiosInstance'
 /**
  * Fetches every product.
  *
+ * @param {Object} [options]
+ * @param {boolean} [options.active] - Omit for all rows; true/false to narrow.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = Product[].
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example
- * const res = await getAllProducts()
+ * const res = await getAllProducts({ active: true })
  */
-export function getAllProducts() {
-  return api.get('/products')
+export function getAllProducts({ active } = {}) {
+  return api.get('/products', {
+    params: { ...(active !== undefined && { active }) }
+  })
 }
 
 /**

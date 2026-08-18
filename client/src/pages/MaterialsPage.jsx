@@ -67,6 +67,47 @@ function MaterialsPage() {
   }
 
   /**
+   * Soft-deletes a material (active: false) — hides it from the recipe builder
+   * while every historical MaterialUsage row keeps its foreign key.
+   *
+   * @param {string} id - Material UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleDeactivate('a9d2…')
+   */
+  async function handleDeactivate(id) {
+    try {
+        await updateMaterial(id, { active: false })
+        reload()
+    } catch (err) {
+        // The server refuses with a 409 while a run using this material is in
+        // progress, and getErrorMessage surfaces that reason verbatim.
+        setActionError(getErrorMessage(err, 'Failed to deactivate material'))
+        console.error(err)
+    }
+  }
+
+  /**
+   * Reactivates a soft-deleted material so recipes can use it again.
+   *
+   * @param {string} id - Material UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleActivate('a9d2…')
+   */
+  async function handleActivate(id) {
+    try {
+        await updateMaterial(id, { active: true })
+        reload()
+    } catch (err) {
+        setActionError(getErrorMessage(err, 'Failed to activate material'))
+        console.error(err)
+    }
+  }
+
+  /**
    * Records a stock delivery by atomically adding the entered amount to stock.
    *
    * @param {string} id - Material UUID.
@@ -185,6 +226,26 @@ function MaterialsPage() {
                           onClick={() => setEditingId(material.id)}
                       >
                           + Add delivery
+                      </button>
+                  )}
+              </div>
+              <div style={common.cardRight}>
+                  <span style={material.active ? common.badgeActive : common.badgeInactive}>
+                      {material.active ? 'Active' : 'Inactive'}
+                  </span>
+                  {material.active ? (
+                      <button
+                          style={common.deactivateButton}
+                          onClick={() => handleDeactivate(material.id)}
+                      >
+                          Deactivate
+                      </button>
+                  ) : (
+                      <button
+                          style={common.activateButton}
+                          onClick={() => handleActivate(material.id)}
+                      >
+                          Activate
                       </button>
                   )}
               </div>

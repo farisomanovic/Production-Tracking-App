@@ -1,12 +1,12 @@
 /**
  * @file ProductsPage.jsx
- * @description Admin page for product master data (create + list only — editing
- * has no UI yet even though the API supports it). Machine compatibility and
- * recipes are managed elsewhere.
+ * @description Admin page for product master data (create, list, and
+ * activate/deactivate — editing the other fields has no UI yet even though the
+ * API supports it). Machine compatibility and recipes are managed elsewhere.
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAllProducts, createProduct } from '../api/products'
+import { getAllProducts, createProduct, updateProduct } from '../api/products'
 import { useApi } from '../hooks/useApi'
 import ErrorBanner from '../components/ErrorBanner'
 import { common } from '../styles/common'
@@ -74,6 +74,47 @@ function ProductsPage() {
     } catch (err) {
       setActionError(getErrorMessage(err, 'Failed to create product'))
       console.error(err)
+    }
+  }
+
+  /**
+   * Soft-deletes a product (active: false) — removes it from new-run selection
+   * while every historical ProductionRun keeps its foreign key.
+   *
+   * @param {string} id - Product UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleDeactivate('c771…')
+   */
+  async function handleDeactivate(id) {
+    try {
+        await updateProduct(id, { active: false })
+        reload()
+    } catch (err) {
+        // The server refuses with a 409 while a run of this product is in
+        // progress, and getErrorMessage surfaces that reason verbatim.
+        setActionError(getErrorMessage(err, 'Failed to deactivate product'))
+        console.error(err)
+    }
+  }
+
+  /**
+   * Reactivates a soft-deleted product so new runs can select it again.
+   *
+   * @param {string} id - Product UUID.
+   * @returns {Promise<void>} Resolves after reload or after the error state is set.
+   *
+   * @example
+   * handleActivate('c771…')
+   */
+  async function handleActivate(id) {
+    try {
+        await updateProduct(id, { active: true })
+        reload()
+    } catch (err) {
+        setActionError(getErrorMessage(err, 'Failed to activate product'))
+        console.error(err)
     }
   }
 
@@ -162,7 +203,29 @@ function ProductsPage() {
             {product.lengthM && <span style={common.cardType}>Length: {product.lengthM}m</span>}
             {product.description && <span style={common.cardType}>{product.description}</span>}
           </div>
-          <span style={common.arrow}>›</span>
+          <div style={common.cardRight}>
+            <span style={product.active ? common.badgeActive : common.badgeInactive}>
+              {product.active ? 'Active' : 'Inactive'}
+            </span>
+            {/* stopPropagation because the whole card is a navigation target —
+                without it, deactivating would also open the detail page. */}
+            {product.active ? (
+              <button
+                style={common.deactivateButton}
+                onClick={(e) => { e.stopPropagation(); handleDeactivate(product.id) }}
+              >
+                Deactivate
+              </button>
+            ) : (
+              <button
+                style={common.activateButton}
+                onClick={(e) => { e.stopPropagation(); handleActivate(product.id) }}
+              >
+                Activate
+              </button>
+            )}
+            <span style={common.arrow}>›</span>
+          </div>
         </div>
         ))}
       </div>

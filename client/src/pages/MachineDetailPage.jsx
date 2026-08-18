@@ -55,10 +55,15 @@ function MachineDetailPage() {
       // page waits for the slowest one, not the sum of all five.
       const [machineRes, linkedParamsRes, linkedProductsRes, allParamsRes, allProductsRes] = await Promise.all([
         getMachineById(machineId),
+        // The two LINKED lists stay unfiltered: a parameter or product that was
+        // retired after being linked must still show up here, because this page
+        // is the only place to unlink it. The two ALL lists feed the "add a
+        // link" dropdowns, so they ask for active rows only — linking a machine
+        // to a retired product is never something you want to start doing.
         getMachineParameters(machineId),
         getMachineProducts(machineId),
-        getAllParameters(),
-        getAllProducts()
+        getAllParameters({ active: true }),
+        getAllProducts({ active: true })
       ])
       setMachine(machineRes.data)
       setLinkedParameters(linkedParamsRes.data)

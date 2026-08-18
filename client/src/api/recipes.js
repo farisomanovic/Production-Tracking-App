@@ -7,16 +7,21 @@
 import api from './axiosInstance'
 
 /**
- * Fetches every recipe with product and material composition included.
+ * Fetches recipes with product and material composition included. Unfiltered by
+ * default (the admin page needs inactive rows to offer reactivation).
  *
+ * @param {Object} [options]
+ * @param {boolean} [options.active] - Omit for all rows; true/false to narrow.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = Recipe[] aggregates.
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example
- * const res = await getAllRecipes()
+ * const res = await getAllRecipes({ active: true })
  */
-export function getAllRecipes() {
-  return api.get('/recipes')
+export function getAllRecipes({ active } = {}) {
+  return api.get('/recipes', {
+    params: { ...(active !== undefined && { active }) }
+  })
 }
 
 /**

@@ -6,17 +6,22 @@
 import api from './axiosInstance'
 
 /**
- * Fetches every machine, active and inactive (callers filter for dropdowns).
+ * Fetches machines. Unfiltered by default (the admin page needs inactive rows
+ * to offer reactivation); pass `{ active: true }` for a selection dropdown.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.active] - Omit for all rows; true/false to narrow.
  *
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = Machine[].
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example
- * const res = await getAllMachines()
- * const selectable = res.data.filter(m => m.active)
+ * const res = await getAllMachines({ active: true })
  */
-export function getAllMachines() {
-  return api.get('/machines')
+export function getAllMachines({ active } = {}) {
+  return api.get('/machines', {
+    params: { ...(active !== undefined && { active }) }
+  })
 }
 
 /**

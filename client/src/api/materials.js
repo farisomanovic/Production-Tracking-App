@@ -8,15 +8,19 @@ import api from './axiosInstance'
 /**
  * Fetches every material with current stock quantities.
  *
+ * @param {Object} [options]
+ * @param {boolean} [options.active] - Omit for all rows; true/false to narrow.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = Material[].
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
  *
  * @example
- * const res = await getAllMaterials()
+ * const res = await getAllMaterials({ active: true })
  * const lowStock = res.data.filter(m => m.stockQty < 100)
  */
-export function getAllMaterials() {
-  return api.get('/materials')
+export function getAllMaterials({ active } = {}) {
+  return api.get('/materials', {
+    params: { ...(active !== undefined && { active }) }
+  })
 }
 
 /**

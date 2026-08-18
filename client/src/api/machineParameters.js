@@ -10,6 +10,9 @@ import api from './axiosInstance'
  * Fetches a machine's parameter links in form display order.
  *
  * @param {string} machineId - Machine UUID.
+ * @param {Object} [options]
+ * @param {boolean} [options.active] - Filters on the LINKED row, not the link;
+ * pass true for selection dropdowns so retired rows are not offered.
  * @returns {Promise<import('axios').AxiosResponse>} Resolves with `data` = MachineParameter[]
  * (each including its `parameter`), sorted by displayOrder.
  * @throws {import('axios').AxiosError} On network failure or non-2xx status.
@@ -18,8 +21,10 @@ import api from './axiosInstance'
  * const res = await getMachineParameters('7cd0…')
  * res.data.forEach(mp => console.log(mp.parameter.name, mp.displayOrder))
  */
-export function getMachineParameters(machineId) {
-  return api.get(`/machine-parameters/machine/${machineId}`)
+export function getMachineParameters(machineId, { active } = {}) {
+  return api.get(`/machine-parameters/machine/${machineId}`, {
+    params: { ...(active !== undefined && { active }) }
+  })
 }
 
 /**
