@@ -14,7 +14,7 @@ import {
     UnknownMaterialError,
     InsufficientStockError
 } from '../lib/errors.js'
-import { hasDuplicates, allBelongTo, isFiniteNumber, isValidStatus, VALID_STATUSES } from '../lib/validation.js'
+import { hasDuplicates, allBelongTo, isFiniteNumber, isValidStatus, normalizeOptionalText, VALID_STATUSES } from '../lib/validation.js'
 
 const router = Router()
 
@@ -301,9 +301,10 @@ router.post('/', async (req, res, next) => {
     // one cheap round trip instead of opening a transaction for it, and to
     // produce the 400s for cases the lock can't cover (unknown ids, a product
     // not assigned to the machine).
-    const [operator, machine, machineProductLink, recipe, activeRunOnMachine] = await Promise.all([
+    const [operator, machine, product, machineProductLink, recipe, activeRunOnMachine] = await Promise.all([
         prisma.operator.findUnique({ where: { id: operatorId } }),
         prisma.machine.findUnique({ where: { id: machineId } }),
+        prisma.product.findUnique({ where: { id: productId } }),
         // Existence of this link proves both that productId is real and that
         // the machine is configured to make it — the wizard's dropdowns already
         // enforce this, this is the backstop for direct API calls.
@@ -335,6 +336,16 @@ router.post('/', async (req, res, next) => {
 
     if (!machineProductLink) {
         return res.status(400).json({ error: 'This product is not assigned to the selected machine' })
+    }
+
+    // Below the link check, not above it, and that ordering is deliberate on two
+    // counts. It preserves the existing message for a product id that does not
+    // exist at all (the link cannot exist either, so that case still reads "not
+    // assigned to the selected machine" as it always has), and it is what makes
+    // the non-null read below safe: MachineProduct.productId is a foreign key,
+    // so a link row proves its product row exists.
+    if (!product.active) {
+        return res.status(400).json({ error: 'Product is inactive' })
     }
 
     if (!recipe) {
@@ -372,13 +383,16 @@ router.post('/', async (req, res, next) => {
             // FOR SHARE, so two concurrent run creations never queue behind
             // each other the way FOR UPDATE would make them.
             //
-            // Fixed order (Machine → Operator → Recipe): a deactivate only ever
-            // holds one row lock and requests no second one, so no cycle is
-            // constructible today — this pins the order against future edits,
-            // same reasoning as recipeProducts.js's ORDER BY on its own lock.
+            // Fixed order (Machine → Operator → Recipe → Product): a deactivate
+            // only ever holds one row lock and requests no second one, so no
+            // cycle is constructible today — this pins the order against future
+            // edits, same reasoning as recipeProducts.js's ORDER BY on its own
+            // lock. Product is appended rather than inserted mid-sequence so the
+            // three pre-existing locks keep the order they were verified in.
             await tx.$queryRaw`SELECT "id" FROM "Machine" WHERE "id" = ${machineId} FOR SHARE`
             await tx.$queryRaw`SELECT "id" FROM "Operator" WHERE "id" = ${operatorId} FOR SHARE`
             await tx.$queryRaw`SELECT "id" FROM "Recipe" WHERE "id" = ${recipeId} FOR SHARE`
+            await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${productId} FOR SHARE`
 
             // Now authoritative: under READ COMMITTED each statement takes a
             // fresh snapshot, so a read issued after the lock is granted sees
@@ -402,6 +416,14 @@ router.post('/', async (req, res, next) => {
             if (!lockedRecipe.active) {
                 throw new AppError(400, 'Recipe is inactive')
             }
+            // Only `active` is re-read for the product, not existence: the fast
+            // path already proved the row exists via its MachineProduct link, and
+            // nothing deletes a Product (there is no DELETE route, which is the
+            // whole reason `active` was added).
+            const lockedProduct = await tx.product.findUnique({ where: { id: productId }, select: { active: true } })
+            if (!lockedProduct || !lockedProduct.active) {
+                throw new AppError(400, 'Product is inactive')
+            }
 
             // Deliberately NOT re-checked under lock: the machineProduct link
             // (its unlink race is a separately documented, accepted one — see
@@ -418,8 +440,8 @@ router.post('/', async (req, res, next) => {
                     ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
                     ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
                     ...(energyStart !== undefined && { energyStart }),
-                    ...(notes !== undefined && { notes }),
-                    ...(potentialBuyer !== undefined && { potentialBuyer })
+                    ...(notes !== undefined && { notes: normalizeOptionalText(notes) }),
+                    ...(potentialBuyer !== undefined && { potentialBuyer: normalizeOptionalText(potentialBuyer) })
                 },
                 include: {
                     operator: true,
@@ -584,8 +606,8 @@ router.put('/:id', async (req, res) => {
     // unused) — run headers are uneditable after creation. Either build the
     // edit screen or drop the route. todo.md Group 8 #2.
     const data = {
-        ...(notes !== undefined && { notes }),
-        ...(potentialBuyer !== undefined && { potentialBuyer }),
+        ...(notes !== undefined && { notes: normalizeOptionalText(notes) }),
+        ...(potentialBuyer !== undefined && { potentialBuyer: normalizeOptionalText(potentialBuyer) }),
         ...(parsedWarmupStartTime !== undefined && { warmupStartTime: parsedWarmupStartTime }),
         ...(parsedStableStartTime !== undefined && { stableStartTime: parsedStableStartTime }),
         ...(energyStart !== undefined && { energyStart }),
@@ -840,7 +862,7 @@ router.post('/:id/complete', async (req, res) => {
                 // 'completed' without the quantity would be rejected outright.
                 quantityProduced,
                 ...(energyEnd !== undefined && { energyEnd }),
-                ...(notes !== undefined && { notes }),
+                ...(notes !== undefined && { notes: normalizeOptionalText(notes) }),
                 ...(netWeightPerUnit !== undefined && { netWeightPerUnit }),
                 ...(grossWeightPerUnit !== undefined && { grossWeightPerUnit }),
                 ...(scrapKg !== undefined && { scrapKg })

@@ -9,28 +9,30 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { isNonEmptyString, normalizeName } from '../lib/validation.js'
 import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
+import { parseActiveFilter } from '../lib/queryFilters.js'
 
 const router = Router()
 
 /**
- * Lists ALL operators, including inactive ones, because the admin screen needs
- * them to offer reactivation.
+ * Lists operators, optionally narrowed to active or inactive ones.
  *
- * @param {import('express').Request} req - No params or body used.
- * @param {import('express').Response} res - 200 → Operator[] sorted by name; 500 on DB failure.
+ * Unfiltered by default because the admin screen needs inactive rows to offer
+ * reactivation; the new-run wizard passes `?active=true`.
+ *
+ * @param {import('express').Request} req - Optional query: `active` ("true" | "false").
+ * @param {import('express').Response} res - 200 → Operator[] sorted by name; 400 on a malformed
+ * `active`; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // GET /api/operators
+ * // GET /api/operators?active=true
  * // → 200 [{ id: "b3f1…", name: "Amar", active: true }, …]
  */
 router.get('/', async (req, res) => {
   const operators = await prisma.operator.findMany({
+    where: { ...parseActiveFilter(req.query.active) },
     orderBy: { name: 'asc' }
   })
-  // TODO: dropdown consumers (new-run wizard) need only active operators but
-  // currently filter client-side — an unfiltered caller can still pick an
-  // inactive operator. Consider ?active=true support. todo.md Group 3 #8.
   res.json(operators)
 })
 

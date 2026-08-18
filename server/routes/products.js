@@ -7,7 +7,9 @@
  */
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { isFiniteNumber, isNonEmptyString, isValidUnit, normalizeCode, normalizeName, VALID_UNITS } from '../lib/validation.js'
+import { isFiniteNumber, isNonEmptyString, isValidUnit, normalizeCode, normalizeName, normalizeOptionalText, VALID_UNITS } from '../lib/validation.js'
+import { parseActiveFilter } from '../lib/queryFilters.js'
+import { lockAndAssertNoOpenRun } from '../lib/deactivationGuards.js'
 
 const router = Router()
 
@@ -23,18 +25,23 @@ function dimensionError(res, name, value) {
 }
 
 /**
- * Lists every product.
+ * Lists products, optionally narrowed to active or inactive ones.
  *
- * @param {import('express').Request} req - No params or body used.
- * @param {import('express').Response} res - 200 → Product[] sorted by name; 500 on DB failure.
+ * Unfiltered by default because the admin page needs inactive rows to offer
+ * reactivation; selection dropdowns pass `?active=true`.
+ *
+ * @param {import('express').Request} req - Optional query: `active` ("true" | "false").
+ * @param {import('express').Response} res - 200 → Product[] sorted by name; 400 on a malformed
+ * `active`; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // GET /api/products
- * // → 200 [{ id: "c771…", name: "PP traka 12mm", code: "PP-12", unit: "kg", … }]
+ * // GET /api/products?active=true
+ * // → 200 [{ id: "c771…", name: "PP traka 12mm", code: "PP-12", unit: "kg", active: true, … }]
  */
 router.get('/', async (req, res) => {
     const products = await prisma.product.findMany({
+        where: { ...parseActiveFilter(req.query.active) },
         orderBy: { name: 'asc' }
     })
     res.json(products)
@@ -62,7 +69,9 @@ router.get('/:id', async (req, res) => {
 })
 
 /**
- * Creates a product master record.
+ * Creates a product master record. `active` is deliberately not accepted —
+ * it defaults to true in the schema, and taking it here would let a client
+ * create a pre-deactivated row (same rule as operators.js's POST).
  *
  * @param {import('express').Request} req - `body.name`, `body.unit`, `body.code` (required);
  * dimensions and description optional.
@@ -99,7 +108,7 @@ router.post('/', async (req, res) => {
                 ...(widthMm !== undefined && { widthMm }),
                 ...(thicknessMm !== undefined && { thicknessMm }),
                 ...(lengthM !== undefined && { lengthM }),
-                ...(description !== undefined && { description }),
+                ...(description !== undefined && { description: normalizeOptionalText(description) }),
                 unit }
         })
     } catch (error) {
@@ -115,24 +124,30 @@ router.post('/', async (req, res) => {
 })
 
 /**
- * Partially updates a product. `unit` is write-once — it may be resent with its
- * current value, but never changed; see the guard below for why.
+ * Partially updates a product; `active: false` is the soft-delete path.
+ * `unit` is write-once — it may be resent with its current value, but never
+ * changed; see the guard below for why.
  *
- * @param {import('express').Request} req - `params.id` UUID; any subset of name/code/dimensions/description/unit.
- * @param {import('express').Response} res - 200 → updated Product; 400 blank/non-string name or code, or bad unit;
- * 404 unknown id; 409 duplicate code or an attempt to change unit; 500 on DB failure.
+ * @param {import('express').Request} req - `params.id` UUID; any subset of
+ * name/code/dimensions/description/unit/active.
+ * @param {import('express').Response} res - 200 → updated Product; 400 blank/non-string name or code,
+ * bad unit, or non-boolean active; 404 unknown id; 409 duplicate code, an attempt to change unit,
+ * or a deactivation blocked by an in-progress run; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // PUT /api/products/c771…  { "thicknessMm": 0.55 }
- * // → 200 { id: "c771…", name: "PP traka 12mm", thicknessMm: 0.55, … }
+ * // PUT /api/products/c771…  { "active": false }
+ * // → 200 { id: "c771…", name: "PP traka 12mm", active: false, … }
  */
 router.put('/:id', async (req, res) => {
-    const { name, code, widthMm, thicknessMm, lengthM, description, unit } = req.body
+    const { name, code, widthMm, thicknessMm, lengthM, description, unit, active } = req.body
     for (const [field, value] of Object.entries({ name, code, unit, description })) {
         if (value !== undefined && typeof value !== 'string') {
             return res.status(400).json({ error: `${field} must be a string` })
         }
+    }
+    if (active !== undefined && typeof active !== 'boolean') {
+        return res.status(400).json({ error: 'active must be a boolean' })
     }
     // Both must stay after the typeof loop and before normalizeCode below: the
     // loop owns the non-string message, and normalizeCode turns a blank into
@@ -173,18 +188,27 @@ router.put('/:id', async (req, res) => {
     }
     let product
     try {
-        product = await prisma.product.update({
-            where: { id: req.params.id },
-            data: {
-                // Spread-if-defined keeps omitted fields untouched (partial update).
-                ...(name !== undefined && { name: normalizeName(name) }),
-                ...(code !== undefined && { code: normalizeCode(code) }),
-                ...(widthMm !== undefined && { widthMm }),
-                ...(thicknessMm !== undefined && { thicknessMm }),
-                ...(lengthM !== undefined && { lengthM }),
-                ...(description !== undefined && { description }),
-                ...(unit !== undefined && { unit })
+        // The guard and the update share one transaction so the row stays locked
+        // between them — same shape and same reasoning as operators.js's PUT.
+        product = await prisma.$transaction(async (tx) => {
+            if (active === false) {
+                await lockAndAssertNoOpenRun(tx, 'product', req.params.id,
+                    'Cannot deactivate this product while a run is in progress')
             }
+            return tx.product.update({
+                where: { id: req.params.id },
+                data: {
+                    // Spread-if-defined keeps omitted fields untouched (partial update).
+                    ...(name !== undefined && { name: normalizeName(name) }),
+                    ...(code !== undefined && { code: normalizeCode(code) }),
+                    ...(widthMm !== undefined && { widthMm }),
+                    ...(thicknessMm !== undefined && { thicknessMm }),
+                    ...(lengthM !== undefined && { lengthM }),
+                    ...(description !== undefined && { description: normalizeOptionalText(description) }),
+                    ...(unit !== undefined && { unit }),
+                    ...(active !== undefined && { active })
+                }
+            })
         })
     } catch (error) {
         if (error.code === 'P2002') {

@@ -41,6 +41,23 @@ export function normalizeName(name) {
     return name.trim().replace(/\s+/g, ' ')
 }
 
+// Optional free text (supplier, description, notes, potentialBuyer,
+// Parameter.unit). None of these has a unique constraint to protect, which is
+// why they went unnormalized for so long — but several are de facto GROUPING
+// keys: " PakOm" and "PakOm " render identically in a dropdown and in the XLSX
+// export, and will never group together. Same normalize-then-null shape as
+// normalizeCode above, and for the same reason: a field the user cleared should
+// end up as one value (null), not as any of "", " ", or "\n".
+// Non-string input passes through unchanged — the callers' typeof guard owns
+// that message, same division of labour as normalizeName. That also covers
+// null and undefined without a special case: null normalizes to itself, and
+// undefined stays undefined so the callers' spread-if-defined still skips it.
+export function normalizeOptionalText(value) {
+    if (typeof value !== 'string') return value
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
+}
+
 // Product.unit and Material.unit are meant to be a closed vocabulary, not
 // free text — callers already type-check unit before this runs, so exact
 // case-sensitive membership is the only thing left to enforce.

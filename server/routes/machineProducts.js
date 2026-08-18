@@ -8,23 +8,36 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { machineHasRunInProgress } from '../lib/machineGuards.js'
 import { isNonEmptyString } from '../lib/validation.js'
+import { parseActiveFilter } from '../lib/queryFilters.js'
 
 const router = Router()
 
 /**
  * Lists a machine's product links with product details for display.
  *
- * @param {import('express').Request} req - `params.machineId` is the machine UUID.
- * @param {import('express').Response} res - 200 → MachineProduct[] (with `product`) ordered by product name; 500 on DB failure.
+ * `?active=` filters on the LINKED PRODUCT, not on the link row (links have no
+ * lifecycle of their own — unlinking is a hard DELETE). Both audiences need this
+ * endpoint and they need opposite things: the wizard passes `?active=true` so a
+ * retired product is not offered for a new run, while the machine-setup page
+ * omits it so an already-linked retired product is still visible to unlink.
+ *
+ * @param {import('express').Request} req - `params.machineId` is the machine UUID;
+ * optional query `active` ("true" | "false").
+ * @param {import('express').Response} res - 200 → MachineProduct[] (with `product`) ordered by
+ * product name; 400 on a malformed `active`; 500 on DB failure.
  * @returns {Promise<void>} Sends the response; resolves with nothing.
  *
  * @example
- * // GET /api/machine-products/machine/7cd0…
- * // → 200 [{ id: "88c1…", product: { name: "PP traka 12mm", code: "PP-12" } }]
+ * // GET /api/machine-products/machine/7cd0…?active=true
+ * // → 200 [{ id: "88c1…", product: { name: "PP traka 12mm", code: "PP-12", active: true } }]
  */
 router.get('/machine/:machineId', async (req, res) => {
+    const activeFilter = parseActiveFilter(req.query.active)
     const links = await prisma.machineProduct.findMany({
-        where: { machineId: req.params.machineId },
+        where: {
+            machineId: req.params.machineId,
+            ...(activeFilter.active !== undefined && { product: { active: activeFilter.active } })
+        },
         orderBy: { product: { name: 'asc' } },
         include: { product: true }
     })
